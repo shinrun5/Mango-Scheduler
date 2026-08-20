@@ -11,3 +11,55 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Store {
+  id       Int                @id @default(autoincrement())
+  name     String
+  shiftreq ShiftRequirement[]
+  shift    Shift[]
+}
+
+model ShiftRequirement {
+  id              Int       @id @default(autoincrement())
+  store           Store     @relation(fields: [storeId], references: [id])
+  storeId         Int
+  day             DayOfWeek
+  start           DateTime
+  end             DateTime
+  managerRequired Int       @default(0)
+  seniorRequired  Int       @default(0)
+  regularRequired Int       @default(0)
+  newRequired     Int       @default(0)
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model Shift {
+  id Int @id @default(autoincrement())
+  employee Employee? @relation(fields: [employeeId], references: [id])
+  employeeId Int?
+  store Store @relation(fields: [storeId], references: [id])
+  storeId Int
+  day             DayOfWeek
+  start           DateTime
+  end             DateTime
+}
+
+
+model Employee {
+  id Int @id @default(autoincrement())
+  employeeId Int 
+  name String
+  store Store 
+  shift Shift[] 
+  weeklyLimit Int
+  currentHour Int
+}
