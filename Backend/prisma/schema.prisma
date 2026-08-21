@@ -15,8 +15,9 @@ datasource db {
 model Store {
   id       Int                @id @default(autoincrement())
   name     String
-  shiftreq ShiftRequirement[]
-  shift    Shift[]
+  shiftRequirement ShiftRequirement[]
+  shifts    Shift[]
+  employeeStores EmployeeStore[]
 }
 
 model ShiftRequirement {
@@ -53,13 +54,28 @@ model Shift {
   end             DateTime
 }
 
-
 model Employee {
   id Int @id @default(autoincrement())
-  employeeId Int 
   name String
-  store Store 
   shift Shift[] 
-  weeklyLimit Int
-  currentHour Int
+  hourLimit Int
+  employeeStores EmployeeStore[]
+}
+enum Experience {
+  NEW
+  REGULAR
+  SENIOR
+  MANAGER
+}
+
+model EmployeeStore {
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  employeeId     Int
+  store          Store    @relation(fields: [storeId], references: [id])
+  storeId        Int
+  pin       String   
+  proficiency Experience
+
+  @@id([employeeId, storeId])
+  @@unique([storeId, pin])
 }
