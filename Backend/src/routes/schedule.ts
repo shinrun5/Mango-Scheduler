@@ -70,6 +70,7 @@ router.post('/generate', async (req, res) => {
           r.managerRequired + r.seniorRequired + r.regularRequired + r.newRequired,
         seniorMin: r.managerRequired + r.seniorRequired,
         needOpen: r.needOpen,
+        graceMinutes: r.graceMinutes,
         allowNew: r.newRequired > 0,
       })),
     };

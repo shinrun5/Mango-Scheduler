@@ -16,8 +16,9 @@ from ortools.sat.python import cp_model
 TIER = {"NEW": 0, "REGULAR": 1, "SENIOR": 2, "MANAGER": 3}
 DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
 
-# availability may start up to this many minutes after a slot's start and still count
-GRACE_MIN = 15
+# default grace: how many minutes after a slot's start availability may begin and still
+# count. Per-requirement `graceMinutes` overrides this (night shifts allow a late arrival).
+GRACE_MIN = 0
 
 # objective weights
 W_SHORT = 1000   # an unfilled head / senior / opener requirement
@@ -68,9 +69,9 @@ def solve(payload: dict) -> dict:
             (_to_min(a["start"]), _to_min(a["end"]))
         )
 
-    def covers(emp_id: int, day: str, lo: int, hi: int) -> bool:
+    def covers(emp_id: int, day: str, lo: int, hi: int, grace: int) -> bool:
         for a, b in avail.get((emp_id, day), []):
-            if a <= lo + GRACE_MIN and b >= hi:
+            if a <= lo + grace and b >= hi:
                 return True
         return False
 
@@ -86,6 +87,7 @@ def solve(payload: dict) -> dict:
             "seniorMin": int(r.get("seniorMin", 0)),
             "needOpen": bool(r.get("needOpen", False)),
             "allowNew": bool(r.get("allowNew", True)),
+            "grace": int(r.get("graceMinutes", GRACE_MIN)),
         })
 
     model = cp_model.CpModel()
@@ -100,7 +102,7 @@ def solve(payload: dict) -> dict:
                 continue
             if es["tier"] == "NEW" and not r["allowNew"]:
                 continue
-            if not covers(e["id"], r["day"], r["lo"], r["hi"]):
+            if not covers(e["id"], r["day"], r["lo"], r["hi"], r["grace"]):
                 continue
             x[(e["id"], r["id"])] = model.NewBoolVar(f"x_{e['id']}_{r['id']}")
             elig.append(e["id"])

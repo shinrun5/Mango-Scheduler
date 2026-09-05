@@ -172,20 +172,23 @@ async function main() {
   const reqs: Array<{
     storeId: number; day: Day; start: Date; end: Date;
     managerRequired?: number; seniorRequired?: number; regularRequired?: number; newRequired?: number;
-    needOpen?: boolean;
+    needOpen?: boolean; graceMinutes?: number;
   }> = [];
 
+  // night shifts: arriving up to an hour late is fine (matches scheduler_real.py)
+  const NIGHT_GRACE = 60;
+
   for (const day of WEEKDAYS) {
-    // opener block -- needs someone flagged canOpen
+    // opener block -- needs someone flagged canOpen, on time (no grace)
     reqs.push({ storeId: mango.id, day, start: t('11:30'), end: t('17:00'), regularRequired: 1, needOpen: true });
 
     // night: Thursday wants 2 seniors + a new; other weekdays just want a new allowed
     const nightEnd = mangoClose(day);
     const nHead = day === 'FRIDAY' ? 4 : 3;
     if (day === 'THURSDAY') {
-      reqs.push({ storeId: mango.id, day, start: t('17:00'), end: t(nightEnd), seniorRequired: 2, newRequired: 1 });
+      reqs.push({ storeId: mango.id, day, start: t('17:00'), end: t(nightEnd), seniorRequired: 2, newRequired: 1, graceMinutes: NIGHT_GRACE });
     } else {
-      reqs.push({ storeId: mango.id, day, start: t('17:00'), end: t(nightEnd), regularRequired: nHead - 1, newRequired: 1 });
+      reqs.push({ storeId: mango.id, day, start: t('17:00'), end: t(nightEnd), regularRequired: nHead - 1, newRequired: 1, graceMinutes: NIGHT_GRACE });
     }
   }
   for (const day of ['SATURDAY', 'SUNDAY'] as const) {
@@ -197,7 +200,7 @@ async function main() {
   for (const day of ALL_DAYS) {
     const head = day === 'FRIDAY' ? 2 : 1;
     reqs.push({ storeId: ciao.id, day, start: t('10:45'), end: t('16:00'), regularRequired: head });
-    reqs.push({ storeId: ciao.id, day, start: t('16:00'), end: t(ciaoClose(day)), regularRequired: head });
+    reqs.push({ storeId: ciao.id, day, start: t('16:00'), end: t(ciaoClose(day)), regularRequired: head, graceMinutes: NIGHT_GRACE });
   }
 
   await prisma.shiftRequirement.createMany({ data: reqs });

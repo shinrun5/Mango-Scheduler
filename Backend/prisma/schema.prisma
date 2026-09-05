@@ -37,6 +37,9 @@ model ShiftRequirement {
   newRequired     Int       @default(0)
   // at least one assigned employee must be flagged canOpen
   needOpen        Boolean   @default(false)
+  // availability may begin this many minutes after `start` and still count
+  // (e.g. 60 for night shifts where a late arrival is fine)
+  graceMinutes    Int       @default(0)
 }
 
 enum DayOfWeek {
