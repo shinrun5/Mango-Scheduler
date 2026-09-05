@@ -1,0 +1,65 @@
+import type { DayOfWeek, Employee, EmployeeStore, RecurringAvailability, Shift, Tier } from '../types'
+import { toMinutes, windowsOverlap } from './time'
+
+// Same idea as scheduler_real.py's escalation_candidates(): who could plausibly
+// cover this window, ranked drop-ins (full coverage) before partial ones.
+const GRACE_MIN = 15
+const TIER_RANK: Record<Tier, number> = { NEW: 0, REGULAR: 1, SENIOR: 2, MANAGER: 3 }
+
+export interface Candidate {
+  employeeId: number
+  name: string
+  tier: Tier
+  canOpen: boolean
+  coversFull: boolean
+}
+
+export function computeCandidates(args: {
+  storeId: number
+  day: DayOfWeek
+  start: string
+  end: string
+  /** Already in this slot (or the person being replaced) — never offered as an alternate. */
+  excludeEmployeeIds: Set<number>
+  employees: Employee[]
+  employeeStores: EmployeeStore[]
+  availability: RecurringAvailability[]
+  shifts: Shift[]
+}): Candidate[] {
+  const { storeId, day, start, end, excludeEmployeeIds, employees, employeeStores, availability, shifts } = args
+  const lo = toMinutes(start)
+  const hi = toMinutes(end)
+
+  const linkByEmployee = new Map(
+    employeeStores.filter((es) => es.storeId === storeId).map((es) => [es.employeeId, es]),
+  )
+
+  const out: Candidate[] = []
+  for (const emp of employees) {
+    if (excludeEmployeeIds.has(emp.id)) continue
+    const link = linkByEmployee.get(emp.id)
+    if (!link) continue // not eligible at this store at all
+
+    const windows = availability.filter((a) => a.employeeId === emp.id && a.day === day)
+    let coversFull = false
+    let coversAny = false
+    for (const w of windows) {
+      const a = toMinutes(w.start)
+      const b = toMinutes(w.end)
+      if (a <= lo + GRACE_MIN && b >= hi) coversFull = true
+      if (windowsOverlap(a, b, lo, hi)) coversAny = true
+    }
+    if (!coversAny) continue // no stated availability overlapping this window at all
+
+    // already committed to an overlapping shift elsewhere (or here) that day?
+    const busy = shifts.some(
+      (s) => s.employeeId === emp.id && s.day === day && windowsOverlap(toMinutes(s.start), toMinutes(s.end), lo, hi),
+    )
+    if (busy) continue
+
+    out.push({ employeeId: emp.id, name: emp.name, tier: link.proficiency, canOpen: link.canOpen, coversFull })
+  }
+
+  out.sort((a, b) => Number(b.coversFull) - Number(a.coversFull) || TIER_RANK[b.tier] - TIER_RANK[a.tier])
+  return out
+}
