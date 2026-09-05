@@ -1,0 +1,22 @@
+{
+  "solveSeconds": 5,
+  "employees": [
+    { "id": 1, "name": "Ana",  "hourLimit": 40, "maxShifts": 5,
+      "stores": [{ "storeId": 1, "tier": "SENIOR",  "canOpen": true }] },
+    { "id": 2, "name": "Ben",  "hourLimit": 40, "maxShifts": 5,
+      "stores": [{ "storeId": 1, "tier": "REGULAR", "canOpen": false }] },
+    { "id": 3, "name": "Cleo", "hourLimit": 40, "maxShifts": 5,
+      "stores": [{ "storeId": 1, "tier": "NEW",     "canOpen": false }] }
+  ],
+  "availability": [
+    { "employeeId": 1, "day": "MONDAY", "start": "10:00", "end": "23:00" },
+    { "employeeId": 2, "day": "MONDAY", "start": "10:00", "end": "23:00" },
+    { "employeeId": 3, "day": "MONDAY", "start": "16:00", "end": "23:00" }
+  ],
+  "requirements": [
+    { "id": 100, "storeId": 1, "day": "MONDAY", "start": "11:00", "end": "17:00",
+      "head": 1, "seniorMin": 0, "needOpen": true,  "allowNew": false },
+    { "id": 101, "storeId": 1, "day": "MONDAY", "start": "17:00", "end": "22:30",
+      "head": 2, "seniorMin": 1, "needOpen": false, "allowNew": true }
+  ]
+}
