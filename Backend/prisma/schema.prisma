@@ -16,6 +16,9 @@ datasource db {
 model Store {
   id       Int                @id @default(autoincrement())
   name     String
+  // false => opening is not a gated skill here; every employee at this store
+  // counts as an opener regardless of their EmployeeStore.canOpen flag
+  requiresOpenerSkill Boolean @default(true)
   shiftRequirement ShiftRequirement[]
   shifts    Shift[]
   employeeStores EmployeeStore[]
@@ -32,6 +35,8 @@ model ShiftRequirement {
   seniorRequired  Int       @default(0)
   regularRequired Int       @default(0)
   newRequired     Int       @default(0)
+  // at least one assigned employee must be flagged canOpen
+  needOpen        Boolean   @default(false)
 }
 
 enum DayOfWeek {
@@ -58,9 +63,20 @@ model Shift {
 model Employee {
   id Int @id @default(autoincrement())
   name String
-  shift Shift[] 
+  shift Shift[]
   hourLimit Int
+  maxShifts Int @default(6)   // max distinct days worked per week
   employeeStores EmployeeStore[]
+  recurringAvailability RecurringAvailability[]
+}
+
+model RecurringAvailability {
+  id         Int       @id @default(autoincrement())
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  day        DayOfWeek
+  start      DateTime
+  end        DateTime
 }
 enum Experience {
   NEW
@@ -74,8 +90,9 @@ model EmployeeStore {
   employeeId     Int
   store          Store    @relation(fields: [storeId], references: [id])
   storeId        Int
-  pin       String   
+  pin       String
   proficiency Experience
+  canOpen   Boolean  @default(false)   // trusted to open the store (not tier-derived)
 
   @@id([employeeId, storeId])
   @@unique([storeId, pin])
