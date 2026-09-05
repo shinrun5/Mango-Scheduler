@@ -4,14 +4,15 @@ import { GapCard, ShiftCard, type CardPerson } from '../components/ScheduleCards
 import { Header } from '../components/Header'
 import { api } from '../lib/api'
 import { type Candidate, computeCandidates } from '../lib/candidates'
-import { DAYS, DAY_LABEL, timeRange, toHHMM24, withTime } from '../lib/time'
+import { computeGapCards, type GapCardData } from '../lib/gaps'
+import { effectiveCanOpen, windowGrace, windowNeedsOpener } from '../lib/openers'
+import { DAYS, DAY_LABEL, timeRange, to12Hour, toHHMM24, toMinutes, withTime } from '../lib/time'
 import type {
   DayOfWeek,
   Employee,
   EmployeeStore,
   GenerateScheduleResult,
   RecurringAvailability,
-  ScheduleGap,
   Shift,
   ShiftRequirement,
   Store,
@@ -48,6 +49,9 @@ interface PickerState {
   shiftId: number | null
   requirementId: number | null
   excludeIds: Set<number>
+  requireOpener: boolean
+  graceMinutes: number
+  personName: string | null
   candidates: Candidate[]
   title: string
   subtitle: string
@@ -78,45 +82,17 @@ export function Dashboard() {
     }
   }
 
-  function openPickerFor(args: {
-    e: MouseEvent<HTMLButtonElement>
-    storeId: number
-    day: DayOfWeek
-    start: string
-    end: string
-    shiftId: number | null
-    requirementId: number | null
-    excludeIds: Set<number>
-    title: string
-    subtitle: string
-  }) {
-    if (!board) return
-    const { e, storeId, day, start, end, excludeIds, ...rest } = args
-    const candidates = computeCandidates({
-      storeId,
-      day,
-      start,
-      end,
-      excludeEmployeeIds: excludeIds,
-      employees: board.employees,
-      employeeStores: board.employeeStores,
-      availability: board.availability,
-      shifts: board.shifts,
-    })
-    setPicker({
-      anchorRect: e.currentTarget.getBoundingClientRect(),
-      storeId,
-      day,
-      start,
-      end,
-      excludeIds,
-      candidates,
-      ...rest,
-    })
-  }
-
-  function candidatesForWindow(storeId: number, day: DayOfWeek, start: string, end: string, excludeIds: Set<number>) {
+  function candidatesForWindow(
+    storeId: number,
+    day: DayOfWeek,
+    start: string,
+    end: string,
+    excludeIds: Set<number>,
+    requireOpener = false,
+    graceMinutes = 0,
+  ) {
     if (!board) return []
+    const store = board.stores.find((s) => s.id === storeId)
     return computeCandidates({
       storeId,
       day,
@@ -127,17 +103,65 @@ export function Dashboard() {
       employeeStores: board.employeeStores,
       availability: board.availability,
       shifts: board.shifts,
+      requireOpener,
+      storeRequiresOpenerSkill: store?.requiresOpenerSkill ?? true,
+      graceMinutes,
     })
   }
 
-  /** Shorten the tapped shift to end at splitTime, then hand the rest of the window to someone else. */
-  async function handleSplit(splitTime: string, employeeId: number) {
-    if (!picker || !board || picker.shiftId === null) return
+  function openPickerFor(args: {
+    e: MouseEvent<HTMLButtonElement>
+    storeId: number
+    day: DayOfWeek
+    start: string
+    end: string
+    shiftId: number | null
+    requirementId: number | null
+    personName: string | null
+    excludeIds: Set<number>
+    requireOpener: boolean
+    graceMinutes: number
+    title: string
+    subtitle: string
+  }) {
+    if (!board) return
+    const { e, storeId, day, start, end, excludeIds, requireOpener, graceMinutes, ...rest } = args
+    const candidates = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes)
+    setPicker({
+      anchorRect: e.currentTarget.getBoundingClientRect(),
+      storeId,
+      day,
+      start,
+      end,
+      excludeIds,
+      requireOpener,
+      graceMinutes,
+      candidates,
+      ...rest,
+    })
+  }
+
+  /** Commit a last-resort split. tail: hand [T,end] to someone (and, for an existing
+   * shift, shorten the original to end at T). head: hand [start,T] to someone (gaps only). */
+  async function commitSplit({
+    which,
+    splitAt,
+    employeeId,
+  }: {
+    which: 'head' | 'tail'
+    splitAt: string
+    employeeId: number
+  }) {
+    if (!picker || !board) return
     const { shiftId, storeId, day, start, end } = picker
     setPicker(null)
     try {
-      await api.updateShift(shiftId, { end: withTime(end, splitTime) })
-      await api.createShift({ employeeId, storeId, day, start: withTime(start, splitTime), end })
+      if (which === 'tail') {
+        if (shiftId !== null) await api.updateShift(shiftId, { end: withTime(end, splitAt) })
+        await api.createShift({ employeeId, storeId, day, start: withTime(start, splitAt), end })
+      } else {
+        await api.createShift({ employeeId, storeId, day, start, end: withTime(end, splitAt) })
+      }
       setBoard(await loadBoard())
     } catch (e) {
       setError(String(e))
@@ -146,8 +170,7 @@ export function Dashboard() {
 
   async function handlePick(employeeId: number) {
     if (!picker || !board) return
-    const { shiftId, storeId, day, start, end, requirementId } = picker
-    const pickedLink = board.employeeStores.find((es) => es.employeeId === employeeId && es.storeId === storeId)
+    const { shiftId, storeId, day, start, end } = picker
     setPicker(null)
     try {
       if (shiftId !== null) {
@@ -155,10 +178,8 @@ export function Dashboard() {
       } else {
         await api.createShift({ employeeId, storeId, day, start, end })
       }
+      // gap cards are derived from real coverage on the next render, so just reload
       setBoard(await loadBoard())
-      if (requirementId !== null) {
-        setLastResult((prev) => decrementGap(prev, requirementId, pickedLink))
-      }
     } catch (e) {
       setError(String(e))
     }
@@ -180,11 +201,16 @@ export function Dashboard() {
     )
   }
 
-  const view = buildView(board, lastResult)
+  const view = buildView(board)
+  const solved = lastResult !== null || board.shifts.length > 0
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
-      <Header gapCount={lastResult?.unfilled ?? null} generating={generating} onGenerate={handleGenerate} />
+      <Header
+        gapCount={solved ? view.totalShort : null}
+        generating={generating}
+        onGenerate={handleGenerate}
+      />
       <div className="flex flex-1 flex-col gap-8 p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">No stores set up yet.</p>}
         {view.stores.map((store) => (
@@ -214,7 +240,12 @@ export function Dashboard() {
                           start={w.start}
                           end={w.end}
                           people={w.people}
-                          onPersonClick={(person, e) =>
+                          onPersonClick={(person, e) => {
+                            const needsOpener = windowNeedsOpener(board.requirements, store.id, day, w.start, w.end)
+                            const staysBehindCanOpen = w.people
+                              .filter((p) => p.employeeId !== person.employeeId)
+                              .some((p) => effectiveCanOpen(board.employeeStores, board.stores, p.employeeId, store.id))
+                            const requireOpener = needsOpener && !staysBehindCanOpen
                             openPickerFor({
                               e,
                               storeId: store.id,
@@ -223,17 +254,23 @@ export function Dashboard() {
                               end: w.end,
                               shiftId: person.shiftId,
                               requirementId: null,
+                              personName: person.name,
                               excludeIds: new Set(w.people.map((p) => p.employeeId)),
+                              requireOpener,
+                              graceMinutes: windowGrace(board.requirements, store.id, day, w.start, w.end),
                               title: `Instead of ${person.name}`,
-                              subtitle: timeRange(w.start, w.end),
+                              subtitle: requireOpener
+                                ? `${timeRange(w.start, w.end)} · must be able to open`
+                                : timeRange(w.start, w.end),
                             })
-                          }
+                          }}
                         />
                       ))}
-                      {gaps.map((g) => (
+                      {gaps.map((g, gi) => (
                         <GapCard
-                          key={g.requirementId}
+                          key={`${g.requirementId}:${gi}`}
                           label={g.label}
+                          window={timeRange(g.start, g.end)}
                           detail={g.detail}
                           onClick={(e) => {
                             const already = board.shifts.filter(
@@ -244,6 +281,11 @@ export function Dashboard() {
                                 s.end === g.end &&
                                 s.employeeId !== null,
                             )
+                            const needsOpener = windowNeedsOpener(board.requirements, store.id, day, g.start, g.end)
+                            const alreadyCanOpen = already.some((s) =>
+                              effectiveCanOpen(board.employeeStores, board.stores, s.employeeId as number, store.id),
+                            )
+                            const requireOpener = needsOpener && !alreadyCanOpen
                             openPickerFor({
                               e,
                               storeId: store.id,
@@ -252,9 +294,14 @@ export function Dashboard() {
                               end: g.end,
                               shiftId: null,
                               requirementId: g.requirementId,
+                              personName: null,
                               excludeIds: new Set(already.map((s) => s.employeeId as number)),
+                              requireOpener,
+                              graceMinutes: windowGrace(board.requirements, store.id, day, g.start, g.end),
                               title: 'Who can cover this?',
-                              subtitle: `${timeRange(g.start, g.end)} — ${g.detail}`,
+                              subtitle: requireOpener
+                                ? `${timeRange(g.start, g.end)} — ${g.detail} · must be able to open`
+                                : `${timeRange(g.start, g.end)} — ${g.detail}`,
                             })
                           }}
                         />
@@ -274,52 +321,37 @@ export function Dashboard() {
       </div>
       {picker && (
         <AssignPopover
+          key={`${picker.storeId}-${picker.day}-${picker.start}-${picker.shiftId ?? 'gap'}`}
           title={picker.title}
           subtitle={picker.subtitle}
           candidates={picker.candidates}
           anchorRect={picker.anchorRect}
           onPick={handlePick}
           onClose={() => setPicker(null)}
-          split={
-            picker.shiftId !== null
-              ? {
-                  minTime: toHHMM24(picker.start),
-                  maxTime: toHHMM24(picker.end),
-                  getCandidates: (splitTime) =>
-                    candidatesForWindow(
-                      picker.storeId,
-                      picker.day,
-                      withTime(picker.start, splitTime),
-                      picker.end,
-                      picker.excludeIds,
-                    ),
-                  onSplit: handleSplit,
-                }
-              : undefined
-          }
+          split={{
+            windowStart: toHHMM24(picker.start),
+            windowEnd: toHHMM24(picker.end),
+            headStaysWith: picker.personName,
+            candidatesFor: (fromHHMM, toHHMM) => {
+              // the head sub-window covers open time, so it inherits the opener
+              // requirement and the late-arrival grace; the tail is a mid-window handoff
+              const isHead = fromHHMM === toHHMM24(picker.start)
+              return candidatesForWindow(
+                picker.storeId,
+                picker.day,
+                withTime(picker.start, fromHHMM),
+                withTime(picker.start, toHHMM),
+                picker.excludeIds,
+                isHead && picker.requireOpener,
+                isHead ? picker.graceMinutes : 0,
+              )
+            },
+            commit: commitSplit,
+          }}
         />
       )}
     </div>
   )
-}
-
-function decrementGap(
-  prev: GenerateScheduleResult | null,
-  requirementId: number,
-  pickedLink: EmployeeStore | undefined,
-): GenerateScheduleResult | null {
-  if (!prev) return prev
-  const isSenior = pickedLink?.proficiency === 'SENIOR' || pickedLink?.proficiency === 'MANAGER'
-  const isOpener = pickedLink?.canOpen ?? false
-  const gaps = prev.gaps
-    .map((g): ScheduleGap => {
-      if (g.requirementId !== requirementId) return g
-      if (g.kind === 'senior' && !isSenior) return g
-      if (g.kind === 'open' && !isOpener) return g
-      return { ...g, shortBy: g.shortBy - 1 }
-    })
-    .filter((g) => g.shortBy > 0)
-  return { ...prev, gaps, unfilled: gaps.reduce((sum, g) => sum + g.shortBy, 0) }
 }
 
 interface ViewStore {
@@ -329,46 +361,29 @@ interface ViewStore {
   days: {
     day: DayOfWeek
     windows: { start: string; end: string; people: CardPerson[] }[]
-    gaps: { requirementId: number; start: string; end: string; label: string; detail: string }[]
+    gaps: GapCardData[]
   }[]
 }
 
 const ACCENT_CLASSES = ['bg-green', 'bg-sky', 'bg-grape', 'bg-orange'] as const
-const GAP_KIND_LABEL: Record<ScheduleGap['kind'], string> = { head: 'person', senior: 'senior', open: 'opener' }
 
-function buildView(
-  { stores, employees, employeeStores, shifts, requirements }: BoardData,
-  lastResult: GenerateScheduleResult | null,
-): { stores: ViewStore[] } {
+function buildView({
+  stores,
+  employees,
+  employeeStores,
+  shifts,
+  requirements,
+}: BoardData): { stores: ViewStore[]; totalShort: number } {
   const employeeName = new Map(employees.map((e) => [e.id, e.name]))
-  const canOpenAt = new Map(employeeStores.map((es) => [`${es.employeeId}:${es.storeId}`, es.canOpen]))
-  const requirementById = new Map(requirements.map((r) => [r.id, r]))
 
-  // group gap entries by requirement (a requirement can be short on more than one kind at once)
-  const gapsByRequirement = new Map<number, ScheduleGap[]>()
-  for (const g of lastResult?.gaps ?? []) {
-    const list = gapsByRequirement.get(g.requirementId) ?? []
-    list.push(g)
-    gapsByRequirement.set(g.requirementId, list)
-  }
-  const gapsByStoreDay = new Map<
-    string,
-    { requirementId: number; start: string; end: string; label: string; detail: string }[]
-  >()
-  for (const [requirementId, kinds] of gapsByRequirement) {
-    const req = requirementById.get(requirementId)
-    if (!req) continue
-    const key = `${req.storeId}:${req.day}`
-    const detail = kinds
-      .map((k) => `${k.shortBy} more ${GAP_KIND_LABEL[k.kind]}${k.shortBy === 1 ? '' : 's'} needed`)
-      .join('; ')
-    const list = gapsByStoreDay.get(key) ?? []
-    list.push({ requirementId, start: req.start, end: req.end, label: 'COVERAGE GAP', detail })
-    gapsByStoreDay.set(key, list)
-  }
+  // gap cards reflect ACTUAL current coverage (incl. manual fills/splits), not the
+  // solver's original report -- so nothing needs to be decremented by hand.
+  const gapsByStoreDay =
+    shifts.length > 0 ? computeGapCards(requirements, shifts, employeeStores, stores) : new Map<string, GapCardData[]>()
+  let totalShort = 0
+  for (const list of gapsByStoreDay.values()) for (const g of list) totalShort += g.shortBy
 
   const viewStores: ViewStore[] = stores.map((store, i) => {
-    const isOpenerStore = store.requiresOpenerSkill
     const byDay = new Map<DayOfWeek, Map<string, { start: string; end: string; people: CardPerson[] }>>()
 
     for (const shift of shifts) {
@@ -378,21 +393,41 @@ function buildView(
       byDay.set(shift.day, dayMap)
       const group = dayMap.get(key) ?? { start: shift.start, end: shift.end, people: [] as CardPerson[] }
       dayMap.set(key, group)
+
+      // if this shift sits inside a wider requirement window, flag the mismatched edges
+      const s = toMinutes(shift.start)
+      const e = toMinutes(shift.end)
+      const ref = requirements.find(
+        (r) =>
+          r.storeId === store.id &&
+          r.day === shift.day &&
+          toMinutes(r.start) <= s &&
+          e <= toMinutes(r.end) &&
+          (toMinutes(r.start) < s || e < toMinutes(r.end)),
+      )
+      const note = ref
+        ? {
+            comesIn: toMinutes(ref.start) !== s ? to12Hour(toHHMM24(shift.start)) : undefined,
+            leaves: toMinutes(ref.end) !== e ? to12Hour(toHHMM24(shift.end)) : undefined,
+          }
+        : undefined
+
       group.people.push({
         shiftId: shift.id,
         employeeId: shift.employeeId,
         name: employeeName.get(shift.employeeId) ?? `#${shift.employeeId}`,
-        isOpener: false, // resolved below, once we know the earliest window
+        isOpener: false, // resolved below, from ShiftRequirement.needOpen
+        note,
       })
     }
 
     const days = DAYS.filter((d) => byDay.has(d) || gapsByStoreDay.has(`${store.id}:${d}`)).map((day) => {
       const dayMap = byDay.get(day)
       const windows = dayMap ? [...dayMap.values()].sort((a, b) => a.start.localeCompare(b.start)) : []
-      const openerWindow = windows[0]
-      if (isOpenerStore && openerWindow) {
-        for (const p of openerWindow.people) {
-          p.isOpener = canOpenAt.get(`${p.employeeId}:${store.id}`) ?? false
+      for (const w of windows) {
+        if (!windowNeedsOpener(requirements, store.id, day, w.start, w.end)) continue
+        for (const p of w.people) {
+          p.isOpener = effectiveCanOpen(employeeStores, stores, p.employeeId, store.id)
         }
       }
       return { day, windows, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [] }
@@ -401,5 +436,5 @@ function buildView(
     return { id: store.id, name: store.name, accentClass: ACCENT_CLASSES[i % ACCENT_CLASSES.length], days }
   })
 
-  return { stores: viewStores }
+  return { stores: viewStores, totalShort }
 }

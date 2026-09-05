@@ -36,6 +36,16 @@ export function to12Hour(hhmm24: string): string {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`
 }
 
+/** "HH:MM" 24h <-> minutes-since-midnight. */
+export function clockToMin(hhmm24: string): number {
+  const [h = 0, m = 0] = hhmm24.split(':').map(Number)
+  return h * 60 + m
+}
+
+export function minToClock(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+}
+
 /** Display form of a shift's wall-clock time, e.g. "5:00 PM". */
 export function hhmm(iso: string): string {
   return to12Hour(toHHMM24(iso))

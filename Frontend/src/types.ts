@@ -61,6 +61,7 @@ export interface ShiftRequirement {
   regularRequired: number
   newRequired: number
   needOpen: boolean
+  graceMinutes: number
 }
 
 export interface ScheduleGap {

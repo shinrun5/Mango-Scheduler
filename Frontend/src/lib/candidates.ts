@@ -3,7 +3,6 @@ import { toMinutes, windowsOverlap } from './time'
 
 // Same idea as scheduler_real.py's escalation_candidates(): who could plausibly
 // cover this window, ranked drop-ins (full coverage) before partial ones.
-const GRACE_MIN = 15
 const TIER_RANK: Record<Tier, number> = { NEW: 0, REGULAR: 1, SENIOR: 2, MANAGER: 3 }
 
 export interface Candidate {
@@ -25,8 +24,18 @@ export function computeCandidates(args: {
   employeeStores: EmployeeStore[]
   availability: RecurringAvailability[]
   shifts: Shift[]
+  /** This window's only opener is being removed and nobody else staying behind can
+   * open -- restrict candidates to people who (effectively) can. */
+  requireOpener?: boolean
+  /** Needed to interpret requireOpener correctly: if the store doesn't gate opening
+   * at all, everyone qualifies regardless of their personal canOpen flag. */
+  storeRequiresOpenerSkill?: boolean
+  /** Availability may begin this many minutes after `start` and still fully cover
+   * (matches the requirement's grace; night shifts allow a late arrival). */
+  graceMinutes?: number
 }): Candidate[] {
   const { storeId, day, start, end, excludeEmployeeIds, employees, employeeStores, availability, shifts } = args
+  const grace = args.graceMinutes ?? 0
   const lo = toMinutes(start)
   const hi = toMinutes(end)
 
@@ -39,6 +48,7 @@ export function computeCandidates(args: {
     if (excludeEmployeeIds.has(emp.id)) continue
     const link = linkByEmployee.get(emp.id)
     if (!link) continue // not eligible at this store at all
+    if (args.requireOpener && !(link.canOpen || !args.storeRequiresOpenerSkill)) continue
 
     const windows = availability.filter((a) => a.employeeId === emp.id && a.day === day)
     let coversFull = false
@@ -46,7 +56,7 @@ export function computeCandidates(args: {
     for (const w of windows) {
       const a = toMinutes(w.start)
       const b = toMinutes(w.end)
-      if (a <= lo + GRACE_MIN && b >= hi) coversFull = true
+      if (a <= lo + grace && b >= hi) coversFull = true
       if (windowsOverlap(a, b, lo, hi)) coversAny = true
     }
     if (!coversAny) continue // no stated availability overlapping this window at all
