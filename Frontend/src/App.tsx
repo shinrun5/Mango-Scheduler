@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
 import { MyShifts } from './pages/MyShifts'
 import { Register } from './pages/Register'
+import { Requests } from './pages/Requests'
 import { Workers } from './pages/Workers'
 
 function RootRedirect() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route element={<ManagerLayout />}>
             <Route path="/schedule" element={<Dashboard />} />
             <Route path="/workers" element={<Workers />} />
+            <Route path="/requests" element={<Requests />} />
           </Route>
         </Route>
 

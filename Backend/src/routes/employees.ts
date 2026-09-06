@@ -172,6 +172,7 @@ router.delete("/:id", ...manager, async (req, res) => {
     if (!employee) return res.status(404).json({ error: "Employee not found" });
 
     await prisma.$transaction([
+      prisma.shiftChangeRequest.deleteMany({ where: { requestedById: id } }),
       prisma.recurringAvailability.deleteMany({ where: { employeeId: id } }),
       prisma.employeeStore.deleteMany({ where: { employeeId: id } }),
       prisma.shift.updateMany({ where: { employeeId: id }, data: { employeeId: null } }),

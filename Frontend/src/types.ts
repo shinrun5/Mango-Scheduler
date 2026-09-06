@@ -109,6 +109,28 @@ export interface RosterWorker {
   stores: RosterStoreLink[]
 }
 
+export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
+export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
+
+export interface ChangeRequest {
+  id: number
+  type: ChangeType
+  status: RequestStatus
+  note: string | null
+  createdAt: string
+  resolvedAt: string | null
+  shift: {
+    id: number
+    storeId: number
+    day: DayOfWeek
+    start: string
+    end: string
+    employeeId: number | null
+  }
+  requestedBy: { id: number; name: string }
+  targetEmployee: { id: number; name: string } | null
+}
+
 export interface MyShiftsResponse {
   published: boolean
   publishedAt: string | null

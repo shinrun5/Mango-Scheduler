@@ -22,6 +22,22 @@ router.get('/mine', requireAuth, async (req, res) => {
   res.json({ published: true, publishedAt: schedule.publishedAt, shifts });
 });
 
+// Unassigned shifts the caller could pick up (at a store they work, once posted).
+router.get('/open', requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const schedule = await prisma.schedule.findUnique({ where: { id: 1 } });
+  if (!schedule?.publishedAt) return res.json([]);
+
+  const links = await prisma.employeeStore.findMany({ where: { employeeId }, select: { storeId: true } });
+  const shifts = await prisma.shift.findMany({
+    where: { employeeId: null, storeId: { in: links.map((l) => l.storeId) } },
+    orderBy: [{ day: 'asc' }, { start: 'asc' }],
+  });
+  res.json(shifts);
+});
+
 router.post('/', async (req, res) => {
   const { employeeId, storeId, day, start, end } = req.body;
 

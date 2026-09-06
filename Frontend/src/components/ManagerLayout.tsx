@@ -1,5 +1,7 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 const tab = ({ isActive }: { isActive: boolean }) =>
@@ -10,6 +12,16 @@ const tab = ({ isActive }: { isActive: boolean }) =>
 /** Shared chrome for the manager pages: logo, nav tabs, logout. */
 export function ManagerLayout() {
   const { user, logout } = useAuth()
+  const location = useLocation()
+  const [pending, setPending] = useState(0)
+
+  // refresh the pending-requests badge on every navigation
+  useEffect(() => {
+    api
+      .getChangeRequests('PENDING')
+      .then((r) => setPending(r.length))
+      .catch(() => {})
+  }, [location.pathname])
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -25,6 +37,9 @@ export function ManagerLayout() {
             </NavLink>
             <NavLink to="/workers" className={tab}>
               Workers
+            </NavLink>
+            <NavLink to="/requests" className={tab}>
+              Requests{pending > 0 ? ` (${pending})` : ''}
             </NavLink>
           </div>
         </div>

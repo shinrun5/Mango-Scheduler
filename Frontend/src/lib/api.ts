@@ -1,5 +1,7 @@
 import type {
   AuthUser,
+  ChangeRequest,
+  ChangeType,
   DayOfWeek,
   Employee,
   EmployeeStore,
@@ -108,6 +110,23 @@ export const api = {
     return data.user
   },
   me: () => getJSON<{ user: AuthUser }>('/auth/me').then((d) => d.user),
+
+  // --- shift-change requests ---
+  getOpenShifts: () => getJSON<Shift[]>('/shifts/open'),
+  getSwapTargets: (shiftId: number) =>
+    getJSON<{ id: number; name: string }[]>(`/change-requests/swap-targets?shiftId=${shiftId}`),
+  getMyChangeRequests: () => getJSON<ChangeRequest[]>('/change-requests/mine'),
+  createChangeRequest: (input: {
+    type: ChangeType
+    shiftId: number
+    targetEmployeeId?: number
+    note?: string
+  }) => sendJSON<ChangeRequest>('/change-requests', 'POST', input),
+  cancelChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/cancel`, 'POST', {}),
+  getChangeRequests: (status?: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED') =>
+    getJSON<ChangeRequest[]>(`/change-requests${status ? `?status=${status}` : ''}`),
+  approveChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/approve`, 'POST', {}),
+  denyChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/deny`, 'POST', {}),
   logout: async () => {
     try {
       await sendJSON('/auth/logout', 'POST', {})

@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 import authRoutes from './routes/auth.js';
+import changeRequestRoutes from './routes/changeRequests.js';
 import employeeRoutes from './routes/employees.js';
 import storeRoutes from './routes/stores.js';
 import shiftRoutes from './routes/shifts.js';
@@ -23,6 +24,7 @@ api.use('/shiftrequirements', shiftRequirementRoutes);
 api.use('/employeeStores', employeeStoreRoutes);
 api.use('/availability', availabilityRoutes);
 api.use('/schedule', scheduleRoutes);
+api.use('/change-requests', changeRequestRoutes);
 app.use('/api', api);
 
 // last-resort JSON error handler so API clients never get an HTML error page

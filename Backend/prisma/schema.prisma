@@ -71,6 +71,37 @@ model Shift {
   day             DayOfWeek
   start           DateTime
   end             DateTime
+  changeRequests ShiftChangeRequest[]
+}
+
+enum ChangeType {
+  DROP    // give up my shift -> it becomes unassigned
+  SWAP    // hand my shift to a specific coworker
+  PICKUP  // claim an unassigned shift
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+}
+
+// An employee-initiated change to a posted shift, awaiting manager approval.
+model ShiftChangeRequest {
+  id               Int           @id @default(autoincrement())
+  type             ChangeType
+  status           RequestStatus @default(PENDING)
+  shift            Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  shiftId          Int
+  requestedBy      Employee      @relation("RequestsMade", fields: [requestedById], references: [id])
+  requestedById    Int
+  targetEmployee   Employee?     @relation("RequestsTargeted", fields: [targetEmployeeId], references: [id])
+  targetEmployeeId Int?
+  note             String?
+  createdAt        DateTime      @default(now())
+  resolvedAt       DateTime?
+  resolvedById     Int?          // User id of the manager who approved/denied
 }
 
 model Employee {
@@ -82,6 +113,8 @@ model Employee {
   standby Boolean @default(false)   // on-call: never auto-scheduled, only manually assignable
   employeeStores EmployeeStore[]
   recurringAvailability RecurringAvailability[]
+  changeRequestsMade     ShiftChangeRequest[] @relation("RequestsMade")
+  changeRequestsTargeted ShiftChangeRequest[] @relation("RequestsTargeted")
   // account link: an Employee starts with no login; a manager issues an
   // inviteCode, the person registers with it, and a User row gets linked here
   user       User?

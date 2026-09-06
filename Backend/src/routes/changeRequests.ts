@@ -1,0 +1,194 @@
+import { Router } from 'express';
+import { Prisma } from '@prisma/client';
+import prisma from '../lib/prisma.js';
+import { requireAuth, requireRole } from '../lib/auth.js';
+
+const router = Router();
+const manager = [requireAuth, requireRole('MANAGER')] as const;
+
+const INCLUDE = { shift: true, requestedBy: true, targetEmployee: true } as const;
+type FullRequest = Prisma.ShiftChangeRequestGetPayload<{ include: typeof INCLUDE }>;
+
+/** Flatten a request + its relations into the shape the frontend uses. */
+function shape(r: FullRequest) {
+  return {
+    id: r.id,
+    type: r.type,
+    status: r.status,
+    note: r.note,
+    createdAt: r.createdAt,
+    resolvedAt: r.resolvedAt,
+    shift: {
+      id: r.shift.id,
+      storeId: r.shift.storeId,
+      day: r.shift.day,
+      start: r.shift.start,
+      end: r.shift.end,
+      employeeId: r.shift.employeeId,
+    },
+    requestedBy: { id: r.requestedBy.id, name: r.requestedBy.name },
+    targetEmployee: r.targetEmployee ? { id: r.targetEmployee.id, name: r.targetEmployee.name } : null,
+  };
+}
+
+async function linkExists(employeeId: number, storeId: number) {
+  return prisma.employeeStore.findUnique({ where: { employeeId_storeId: { employeeId, storeId } } });
+}
+
+// GET /change-requests/swap-targets?shiftId=  -- coworkers at that shift's store
+router.get('/swap-targets', requireAuth, async (req, res) => {
+  const me = req.user?.employeeId ?? -1;
+  const shiftId = Number(req.query.shiftId);
+  if (!Number.isInteger(shiftId)) return res.status(400).json({ error: 'shiftId is required' });
+
+  const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
+  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+
+  const links = await prisma.employeeStore.findMany({
+    where: { storeId: shift.storeId, employeeId: { not: me } },
+    include: { employee: { select: { id: true, name: true } } },
+    orderBy: { employee: { name: 'asc' } },
+  });
+  res.json(links.map((l) => ({ id: l.employee.id, name: l.employee.name })));
+});
+
+// GET /change-requests/mine  -- the caller's own requests
+router.get('/mine', requireAuth, async (req, res) => {
+  const me = req.user?.employeeId;
+  if (!me) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const rows = await prisma.shiftChangeRequest.findMany({
+    where: { requestedById: me },
+    orderBy: { createdAt: 'desc' },
+    include: INCLUDE,
+  });
+  res.json(rows.map(shape));
+});
+
+// POST /change-requests  { type, shiftId, targetEmployeeId?, note? }  (employee)
+router.post('/', requireAuth, async (req, res) => {
+  const me = req.user?.employeeId;
+  if (!me) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const { type, shiftId, targetEmployeeId, note } = req.body ?? {};
+  if (!['DROP', 'SWAP', 'PICKUP'].includes(type)) {
+    return res.status(400).json({ error: 'type must be DROP, SWAP or PICKUP' });
+  }
+  if (!Number.isInteger(shiftId)) return res.status(400).json({ error: 'shiftId is required' });
+
+  const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
+  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+
+  const openPending = await prisma.shiftChangeRequest.findFirst({ where: { shiftId, status: 'PENDING' } });
+  if (openPending) return res.status(409).json({ error: 'There is already a pending request for this shift' });
+
+  let target: number | null = null;
+
+  if (type === 'DROP' || type === 'SWAP') {
+    if (shift.employeeId !== me) return res.status(403).json({ error: 'That is not your shift' });
+  }
+  if (type === 'SWAP') {
+    if (!Number.isInteger(targetEmployeeId)) {
+      return res.status(400).json({ error: 'targetEmployeeId is required for a swap' });
+    }
+    if (!(await linkExists(targetEmployeeId, shift.storeId))) {
+      return res.status(400).json({ error: "That coworker doesn't work at this store" });
+    }
+    target = targetEmployeeId;
+  }
+  if (type === 'PICKUP') {
+    if (shift.employeeId !== null) return res.status(409).json({ error: 'That shift is already assigned' });
+    if (!(await linkExists(me, shift.storeId))) {
+      return res.status(400).json({ error: "You don't work at this store" });
+    }
+  }
+
+  const created = await prisma.shiftChangeRequest.create({
+    data: { type, shiftId, requestedById: me, targetEmployeeId: target, note: note ?? null },
+    include: INCLUDE,
+  });
+  res.status(201).json(shape(created));
+});
+
+// POST /change-requests/:id/cancel  (the requester, while still pending)
+router.post('/:id/cancel', requireAuth, async (req, res) => {
+  const me = req.user?.employeeId;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id } });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (r.requestedById !== me) return res.status(403).json({ error: 'Not your request' });
+  if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
+
+  const updated = await prisma.shiftChangeRequest.update({
+    where: { id },
+    data: { status: 'CANCELLED' },
+    include: INCLUDE,
+  });
+  res.json(shape(updated));
+});
+
+// GET /change-requests?status=PENDING  (manager)
+router.get('/', ...manager, async (req, res) => {
+  const status = req.query.status;
+  const valid = ['PENDING', 'APPROVED', 'DENIED', 'CANCELLED'];
+  const where = typeof status === 'string' && valid.includes(status) ? { status: status as never } : {};
+
+  const rows = await prisma.shiftChangeRequest.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    include: INCLUDE,
+  });
+  res.json(rows.map(shape));
+});
+
+// POST /change-requests/:id/approve  (manager) — re-validates, then mutates the Shift
+router.post('/:id/approve', ...manager, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
+
+  if ((r.type === 'DROP' || r.type === 'SWAP') && r.shift.employeeId !== r.requestedById) {
+    return res.status(409).json({ error: 'The requester no longer holds this shift' });
+  }
+  if (r.type === 'PICKUP' && r.shift.employeeId !== null) {
+    return res.status(409).json({ error: 'That shift is no longer open' });
+  }
+
+  const newEmployeeId =
+    r.type === 'DROP' ? null : r.type === 'SWAP' ? r.targetEmployeeId : r.requestedById;
+
+  await prisma.$transaction([
+    prisma.shift.update({ where: { id: r.shiftId }, data: { employeeId: newEmployeeId } }),
+    prisma.shiftChangeRequest.update({
+      where: { id },
+      data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id },
+    }),
+  ]);
+
+  const updated = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
+  res.json(shape(updated!));
+});
+
+// POST /change-requests/:id/deny  (manager)
+router.post('/:id/deny', ...manager, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id } });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
+
+  const updated = await prisma.shiftChangeRequest.update({
+    where: { id },
+    data: { status: 'DENIED', resolvedAt: new Date(), resolvedById: req.user!.id },
+    include: INCLUDE,
+  });
+  res.json(shape(updated));
+});
+
+export default router;
