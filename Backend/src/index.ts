@@ -1,4 +1,4 @@
-import express, { type NextFunction, type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response, Router } from 'express';
 import authRoutes from './routes/auth.js';
 import employeeRoutes from './routes/employees.js';
 import storeRoutes from './routes/stores.js';
@@ -12,14 +12,18 @@ const app = express();
 const PORT = 3000;
 app.use(express.json());
 
-app.use('/auth', authRoutes);
-app.use('/employees', employeeRoutes);
-app.use('/stores', storeRoutes);
-app.use('/shifts', shiftRoutes);
-app.use('/shiftrequirements', shiftRequirementRoutes);
-app.use('/employeeStores', employeeStoreRoutes);
-app.use('/availability', availabilityRoutes);
-app.use('/schedule', scheduleRoutes);
+// everything the frontend calls lives under /api so it never collides with a
+// client-side route (the Vite dev proxy forwards /api and nothing else)
+const api = Router();
+api.use('/auth', authRoutes);
+api.use('/employees', employeeRoutes);
+api.use('/stores', storeRoutes);
+api.use('/shifts', shiftRoutes);
+api.use('/shiftrequirements', shiftRequirementRoutes);
+api.use('/employeeStores', employeeStoreRoutes);
+api.use('/availability', availabilityRoutes);
+api.use('/schedule', scheduleRoutes);
+app.use('/api', api);
 
 // last-resort JSON error handler so API clients never get an HTML error page
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

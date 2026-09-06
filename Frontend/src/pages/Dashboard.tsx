@@ -4,6 +4,7 @@ import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { computeGapCards, type GapCardData } from '../lib/gaps'
 import { effectiveCanOpen } from '../lib/openers'
@@ -66,6 +67,7 @@ export function Dashboard() {
   const [lastResult, setLastResult] = useState<GenerateScheduleResult | null>(null)
   const [picker, setPicker] = useState<PickerState | null>(null)
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
+  const { user, logout } = useAuth()
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
@@ -267,6 +269,8 @@ export function Dashboard() {
         gapCount={solved ? view.totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
+        userEmail={user?.email}
+        onLogout={() => void logout()}
       />
       <div className="flex flex-1 flex-col gap-8 p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">No stores set up yet.</p>}

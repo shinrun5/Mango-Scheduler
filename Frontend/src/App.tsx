@@ -1,5 +1,39 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { homePathForRole, useAuth } from './lib/auth'
+import { Availability } from './pages/Availability'
 import { Dashboard } from './pages/Dashboard'
+import { Login } from './pages/Login'
+import { Register } from './pages/Register'
+
+function RootRedirect() {
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center font-body text-muted-ink">Loading…</div>
+    )
+  }
+  return <Navigate to={user ? homePathForRole(user.role) : '/login'} replace />
+}
 
 export default function App() {
-  return <Dashboard />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        <Route element={<ProtectedRoute role="MANAGER" />}>
+          <Route path="/schedule" element={<Dashboard />} />
+        </Route>
+
+        <Route element={<ProtectedRoute role="EMPLOYEE" />}>
+          <Route path="/availability" element={<Availability />} />
+        </Route>
+
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }

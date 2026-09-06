@@ -6,10 +6,14 @@ export function Header({
   gapCount,
   generating,
   onGenerate,
+  userEmail,
+  onLogout,
 }: {
   gapCount: number | null
   generating: boolean
   onGenerate: () => void
+  userEmail?: string
+  onLogout?: () => void
 }) {
   return (
     <div className="flex flex-shrink-0 items-center justify-between border-b-[3px] border-ink bg-paper px-8 py-4.5">
@@ -30,6 +34,19 @@ export function Header({
           <SparkleIcon size={16} />
           {generating ? 'Generating…' : 'Generate Schedule'}
         </Button>
+        {onLogout && (
+          <div className="flex items-center gap-2 border-l-2 border-ink/15 pl-3.5">
+            {userEmail && (
+              <span className="font-body text-xs font-semibold text-muted-ink">{userEmail}</span>
+            )}
+            <button
+              onClick={onLogout}
+              className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+            >
+              Log out
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

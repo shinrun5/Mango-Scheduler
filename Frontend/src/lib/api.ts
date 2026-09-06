@@ -1,35 +1,120 @@
 import type {
+  AuthUser,
   DayOfWeek,
   Employee,
   EmployeeStore,
   GenerateScheduleResult,
   RecurringAvailability,
+  Session,
   Shift,
   ShiftRequirement,
   Store,
 } from '../types'
+import { getSession, setSession } from './session'
 
-// Dev requests hit the Vite proxy (see vite.config.ts) and land on the Express
-// backend at localhost:3000; no base URL needed since paths match 1:1.
+// Every backend route is under /api (see Backend/src/index.ts). In dev the Vite
+// proxy forwards /api to localhost:3000; in prod it's the same origin.
+const BASE = '/api'
 
-async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(path)
-  if (!res.ok) throw new Error(`${path} -> ${res.status}`)
-  return res.json() as Promise<T>
+/** Thrown when a request needs a valid session and refreshing it failed. The
+ * router listens for this to bounce the user to /login. */
+export class AuthError extends Error {
+  constructor(message = 'Your session has expired') {
+    super(message)
+    this.name = 'AuthError'
+  }
 }
 
-async function sendJSON<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
-  const res = await fetch(path, {
+// one in-flight refresh at a time; concurrent 401s all await the same promise
+let refreshing: Promise<boolean> | null = null
+
+async function tryRefresh(): Promise<boolean> {
+  const session = getSession()
+  if (!session?.refresh_token) return false
+  if (!refreshing) {
+    refreshing = fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: session.refresh_token }),
+    })
+      .then(async (res) => {
+        if (!res.ok) return false
+        const data = await res.json()
+        if (!data?.session) return false
+        setSession(data.session as Session)
+        return true
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshing = null
+      })
+  }
+  return refreshing
+}
+
+async function request<T>(path: string, init: RequestInit = {}, allowRetry = true): Promise<T> {
+  const session = getSession()
+  const hadToken = Boolean(session?.access_token)
+  const headers = new Headers(init.headers)
+  if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`)
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers })
+
+  if (res.status === 401 && hadToken) {
+    if (allowRetry && (await tryRefresh())) return request<T>(path, init, false)
+    setSession(null)
+    // let the app (AuthProvider) drop the user so the router bounces to /login
+    window.dispatchEvent(new Event('auth:expired'))
+    throw new AuthError()
+  }
+
+  const isJSON = res.headers.get('content-type')?.includes('application/json')
+  const data = isJSON ? await res.json() : null
+  if (!res.ok) throw new Error(data?.error ?? `${init.method ?? 'GET'} ${path} -> ${res.status}`)
+  return data as T
+}
+
+function getJSON<T>(path: string): Promise<T> {
+  return request<T>(path)
+}
+
+function sendJSON<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
+  return request<T>(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data?.error ?? `${method} ${path} -> ${res.status}`)
-  return data as T
 }
 
 export const api = {
+  // --- auth ---
+  login: async (email: string, password: string): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/login', 'POST', { email, password })
+    setSession(data.session)
+    return data.user
+  },
+  register: async (email: string, password: string, inviteCode: string): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register', 'POST', {
+      email,
+      password,
+      inviteCode,
+    })
+    setSession(data.session)
+    return data.user
+  },
+  me: () => getJSON<{ user: AuthUser }>('/auth/me').then((d) => d.user),
+  logout: async () => {
+    try {
+      await sendJSON('/auth/logout', 'POST', {})
+    } catch {
+      // best-effort; we clear locally regardless
+    }
+    setSession(null)
+  },
+
+  // --- schedule board ---
   getStores: () => getJSON<Store[]>('/stores'),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
@@ -49,10 +134,7 @@ export const api = {
     sendJSON<Shift>('/shifts', 'POST', input),
 
   /** Take someone off a shift entirely (may leave the slot short). */
-  async deleteShift(shiftId: number): Promise<void> {
-    const res = await fetch(`/shifts/${shiftId}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error(`DELETE /shifts/${shiftId} -> ${res.status}`)
-  },
+  deleteShift: (shiftId: number) => request<void>(`/shifts/${shiftId}`, { method: 'DELETE' }),
 
   /** Change how many people a slot needs (holidays, etc.). */
   updateRequirement: (

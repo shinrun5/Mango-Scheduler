@@ -12,6 +12,23 @@ export type DayOfWeek =
 
 export type Tier = 'NEW' | 'REGULAR' | 'SENIOR' | 'MANAGER'
 
+export type Role = 'MANAGER' | 'EMPLOYEE'
+
+/** The current account, as returned by /auth/login, /auth/register and /auth/me. */
+export interface AuthUser {
+  id: number
+  email: string
+  role: Role
+  employeeId: number | null
+}
+
+/** Supabase token pair from /auth/login and /auth/register. */
+export interface Session {
+  access_token: string
+  refresh_token: string
+  expires_at?: number
+}
+
 export interface Store {
   id: number
   name: string
