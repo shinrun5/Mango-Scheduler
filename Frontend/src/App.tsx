@@ -1,9 +1,11 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { EmployeeLayout } from './components/EmployeeLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { homePathForRole, useAuth } from './lib/auth'
 import { Availability } from './pages/Availability'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
+import { MyShifts } from './pages/MyShifts'
 import { Register } from './pages/Register'
 
 function RootRedirect() {
@@ -28,7 +30,10 @@ export default function App() {
         </Route>
 
         <Route element={<ProtectedRoute role="EMPLOYEE" />}>
-          <Route path="/availability" element={<Availability />} />
+          <Route element={<EmployeeLayout />}>
+            <Route path="/my-shifts" element={<MyShifts />} />
+            <Route path="/availability" element={<Availability />} />
+          </Route>
         </Route>
 
         <Route path="/" element={<RootRedirect />} />

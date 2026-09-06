@@ -52,6 +52,16 @@ enum DayOfWeek {
   SUNDAY
 }
 
+// Singleton (row id = 1): when the current week's schedule was last posted for
+// employees to see. Null / missing = not posted yet. Manager edits to Shift rows
+// are always live once posted -- this is just the "employees can look now" gate.
+model Schedule {
+  id            Int       @id @default(1)
+  publishedAt   DateTime?
+  publishedById Int?
+  updatedAt     DateTime  @updatedAt
+}
+
 model Shift {
   id Int @id @default(autoincrement())
   employee Employee? @relation(fields: [employeeId], references: [id])

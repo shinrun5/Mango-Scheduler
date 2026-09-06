@@ -4,6 +4,7 @@ import type {
   Employee,
   EmployeeStore,
   GenerateScheduleResult,
+  MyShiftsResponse,
   RecurringAvailability,
   Session,
   Shift,
@@ -130,6 +131,12 @@ export const api = {
 
   generateSchedule: (solveSeconds = 5) =>
     sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { solveSeconds }),
+
+  // --- publish state ---
+  getScheduleStatus: () => getJSON<{ publishedAt: string | null }>('/schedule/status'),
+  publishSchedule: () => sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', {}),
+  unpublishSchedule: () => sendJSON<{ publishedAt: string | null }>('/schedule/unpublish', 'POST', {}),
+  getMyShifts: () => getJSON<MyShiftsResponse>('/shifts/mine'),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
   updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string }) =>

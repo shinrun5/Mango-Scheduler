@@ -1,8 +1,35 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
+import { requireAuth, requireRole } from '../lib/auth.js';
 import { callSolver } from '../lib/solverClient.js';
 
 const router = Router();
+
+// --- publish state (singleton row id = 1) ---
+// Manager edits are always live once posted; this is just the "employees may look" gate.
+
+router.get('/status', requireAuth, async (_req, res) => {
+  const schedule = await prisma.schedule.findUnique({ where: { id: 1 } });
+  res.json({ publishedAt: schedule?.publishedAt ?? null });
+});
+
+router.post('/publish', requireAuth, requireRole('MANAGER'), async (req, res) => {
+  const schedule = await prisma.schedule.upsert({
+    where: { id: 1 },
+    create: { id: 1, publishedAt: new Date(), publishedById: req.user!.id },
+    update: { publishedAt: new Date(), publishedById: req.user!.id },
+  });
+  res.json({ publishedAt: schedule.publishedAt });
+});
+
+router.post('/unpublish', requireAuth, requireRole('MANAGER'), async (_req, res) => {
+  const schedule = await prisma.schedule.upsert({
+    where: { id: 1 },
+    create: { id: 1, publishedAt: null },
+    update: { publishedAt: null },
+  });
+  res.json({ publishedAt: schedule.publishedAt });
+});
 
 // The DateTime columns hold a wall-clock time (e.g. 11:30), so read the clock
 // face in UTC and ignore the date part.

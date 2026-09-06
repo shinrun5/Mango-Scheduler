@@ -89,6 +89,12 @@ export interface ScheduleGap {
   shortBy: number
 }
 
+export interface MyShiftsResponse {
+  published: boolean
+  publishedAt: string | null
+  shifts: Shift[]
+}
+
 export interface GenerateScheduleResult {
   created: number
   optimal: boolean

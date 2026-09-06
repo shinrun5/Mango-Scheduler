@@ -84,3 +84,14 @@ export function timeRange(startIso: string, endIso: string): string {
 export function timeRangeCompact(startIso: string, endIso: string): string {
   return `${to12HourCompact(toHHMM24(startIso))}–${to12HourCompact(toHHMM24(endIso))}`
 }
+
+/** For real timestamps (not the 1970 wall-clock values): "just now", "5m ago",
+ * "3h ago", then a short date. */
+export function relativeTime(iso: string): string {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}

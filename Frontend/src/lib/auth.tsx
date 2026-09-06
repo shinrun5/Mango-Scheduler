@@ -71,5 +71,5 @@ export function useAuth(): AuthState {
 
 /** Where a logged-in user of this role belongs by default. */
 export function homePathForRole(role: AuthUser['role']): string {
-  return role === 'MANAGER' ? '/schedule' : '/availability'
+  return role === 'MANAGER' ? '/schedule' : '/my-shifts'
 }

@@ -1,17 +1,26 @@
 import { Button } from './Button'
 import { FruitAvatar } from './FruitAvatar'
 import { SparkleIcon, WarningIcon } from './icons'
+import { relativeTime } from '../lib/time'
 
 export function Header({
   gapCount,
   generating,
   onGenerate,
+  publishedAt,
+  onPublish,
+  onUnpublish,
+  publishBusy,
   userEmail,
   onLogout,
 }: {
   gapCount: number | null
   generating: boolean
   onGenerate: () => void
+  publishedAt?: string | null
+  onPublish?: () => void
+  onUnpublish?: () => void
+  publishBusy?: boolean
   userEmail?: string
   onLogout?: () => void
 }) {
@@ -30,10 +39,33 @@ export function Header({
             </span>
           </div>
         )}
+
+        {onPublish &&
+          (publishedAt ? (
+            <div className="flex items-center gap-2 rounded-full border-2 border-green bg-paper px-3 py-1.5">
+              <div className="h-2 w-2 rounded-full bg-green" />
+              <span className="font-body text-xs font-extrabold text-ink">
+                Posted · {relativeTime(publishedAt)}
+              </span>
+              <button
+                onClick={onUnpublish}
+                disabled={publishBusy}
+                className="font-body text-[11px] font-bold text-muted-ink underline disabled:opacity-50"
+              >
+                unpost
+              </button>
+            </div>
+          ) : (
+            <Button variant="secondary" onClick={onPublish} disabled={publishBusy}>
+              {publishBusy ? 'Posting…' : 'Post schedule'}
+            </Button>
+          ))}
+
         <Button onClick={onGenerate} disabled={generating}>
           <SparkleIcon size={16} />
           {generating ? 'Generating…' : 'Generate Schedule'}
         </Button>
+
         {onLogout && (
           <div className="flex items-center gap-2 border-l-2 border-ink/15 pl-3.5">
             {userEmail && (

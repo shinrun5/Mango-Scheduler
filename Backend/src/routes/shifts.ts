@@ -1,7 +1,26 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
+import { requireAuth } from '../lib/auth.js';
 
 const router = Router();
+
+// The signed-in employee's own shifts -- but only once the schedule is posted.
+// Placed before "/:id" so "mine" isn't parsed as an id.
+router.get('/mine', requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const schedule = await prisma.schedule.findUnique({ where: { id: 1 } });
+  if (!schedule?.publishedAt) {
+    return res.json({ published: false, publishedAt: null, shifts: [] });
+  }
+
+  const shifts = await prisma.shift.findMany({
+    where: { employeeId },
+    orderBy: [{ day: 'asc' }, { start: 'asc' }],
+  });
+  res.json({ published: true, publishedAt: schedule.publishedAt, shifts });
+});
 
 router.post('/', async (req, res) => {
   const { employeeId, storeId, day, start, end } = req.body;

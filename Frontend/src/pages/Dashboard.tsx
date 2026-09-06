@@ -67,11 +67,26 @@ export function Dashboard() {
   const [lastResult, setLastResult] = useState<GenerateScheduleResult | null>(null)
   const [picker, setPicker] = useState<PickerState | null>(null)
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
+  const [publishedAt, setPublishedAt] = useState<string | null>(null)
+  const [publishBusy, setPublishBusy] = useState(false)
   const { user, logout } = useAuth()
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
+    api.getScheduleStatus().then((s) => setPublishedAt(s.publishedAt)).catch(() => {})
   }, [])
+
+  async function togglePublish(next: boolean) {
+    setPublishBusy(true)
+    try {
+      const s = next ? await api.publishSchedule() : await api.unpublishSchedule()
+      setPublishedAt(s.publishedAt)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setPublishBusy(false)
+    }
+  }
 
   async function handleGenerate() {
     setGenerating(true)
@@ -269,6 +284,10 @@ export function Dashboard() {
         gapCount={solved ? view.totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
+        publishedAt={publishedAt}
+        onPublish={() => void togglePublish(true)}
+        onUnpublish={() => void togglePublish(false)}
+        publishBusy={publishBusy}
         userEmail={user?.email}
         onLogout={() => void logout()}
       />

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/Button'
-import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { DAY_LABEL, DAYS, to12Hour, toHHMM24 } from '../lib/time'
@@ -25,7 +24,7 @@ function signature(rows: Row[]): string {
 }
 
 export function Availability() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const linked = user?.employeeId != null
 
   const [rows, setRows] = useState<Row[]>([])
@@ -99,23 +98,7 @@ export function Availability() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream">
-      <div className="flex items-center justify-between border-b-[3px] border-ink bg-paper px-8 py-4.5">
-        <div className="flex items-center gap-2.5">
-          <FruitAvatar kind="apple" size={32} />
-          <span className="font-heading text-[22px] font-extrabold text-ink">Fruit Crew</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-body text-xs font-semibold text-muted-ink">{user?.email}</span>
-          <button
-            onClick={() => void logout()}
-            className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
-          >
-            Log out
-          </button>
-        </div>
-      </div>
-
+    <>
       <div className="mx-auto w-full max-w-2xl flex-1 p-6">
         <h1 className="font-heading text-lg font-bold text-ink">My Availability</h1>
         <p className="mt-1 mb-4 font-body text-sm text-muted-ink">
@@ -218,6 +201,6 @@ export function Availability() {
           </Button>
         </div>
       )}
-    </div>
+    </>
   )
 }
