@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { EmployeeLayout } from './components/EmployeeLayout'
+import { ManagerLayout } from './components/ManagerLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { homePathForRole, useAuth } from './lib/auth'
 import { Availability } from './pages/Availability'
@@ -7,6 +8,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
 import { MyShifts } from './pages/MyShifts'
 import { Register } from './pages/Register'
+import { Workers } from './pages/Workers'
 
 function RootRedirect() {
   const { user, loading } = useAuth()
@@ -26,7 +28,10 @@ export default function App() {
         <Route path="/register" element={<Register />} />
 
         <Route element={<ProtectedRoute role="MANAGER" />}>
-          <Route path="/schedule" element={<Dashboard />} />
+          <Route element={<ManagerLayout />}>
+            <Route path="/schedule" element={<Dashboard />} />
+            <Route path="/workers" element={<Workers />} />
+          </Route>
         </Route>
 
         <Route element={<ProtectedRoute role="EMPLOYEE" />}>

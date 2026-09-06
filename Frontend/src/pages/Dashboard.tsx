@@ -4,7 +4,6 @@ import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { api } from '../lib/api'
-import { useAuth } from '../lib/auth'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { computeGapCards, type GapCardData } from '../lib/gaps'
 import { effectiveCanOpen } from '../lib/openers'
@@ -69,7 +68,6 @@ export function Dashboard() {
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
-  const { user, logout } = useAuth()
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
@@ -278,8 +276,17 @@ export function Dashboard() {
   const view = buildView(board)
   const solved = lastResult !== null || board.shifts.length > 0
 
+  const weekLoad = board.employees
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      count: new Set(board.shifts.filter((s) => s.employeeId === e.id).map((s) => s.day)).size,
+      max: e.maxShifts,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+
   return (
-    <div className="flex min-h-screen flex-col bg-cream">
+    <>
       <Header
         gapCount={solved ? view.totalShort : null}
         generating={generating}
@@ -288,9 +295,32 @@ export function Dashboard() {
         onPublish={() => void togglePublish(true)}
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
-        userEmail={user?.email}
-        onLogout={() => void logout()}
       />
+
+      {solved && weekLoad.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-8 py-2.5">
+          <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+            Shifts this week
+          </span>
+          {weekLoad.map((l) => (
+            <span
+              key={l.id}
+              title={l.count > l.max ? `over their ${l.max}-day limit` : undefined}
+              className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                l.count > l.max
+                  ? 'border-coral bg-coral-bg text-coral-dark'
+                  : l.count === 0
+                    ? 'border-ink/20 text-muted-ink'
+                    : 'border-ink bg-paper text-ink'
+              }`}
+            >
+              {l.name} · {l.count}
+              {l.count > l.max ? `/${l.max}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-1 flex-col gap-8 p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">No stores set up yet.</p>}
         {view.stores.map((store) => (
@@ -460,7 +490,7 @@ export function Dashboard() {
           onClose={() => setSlotEditor(null)}
         />
       )}
-    </div>
+    </>
   )
 }
 

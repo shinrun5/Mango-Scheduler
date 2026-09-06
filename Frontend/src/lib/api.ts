@@ -6,8 +6,10 @@ import type {
   GenerateScheduleResult,
   MyShiftsResponse,
   RecurringAvailability,
+  RosterWorker,
   Session,
   Shift,
+  Tier,
   ShiftRequirement,
   Store,
 } from '../types'
@@ -122,6 +124,22 @@ export const api = {
   getShifts: () => getJSON<Shift[]>('/shifts'),
   getShiftRequirements: () => getJSON<ShiftRequirement[]>('/shiftrequirements'),
   getAvailability: () => getJSON<RecurringAvailability[]>('/availability'),
+
+  // --- manager: workers ---
+  getRoster: () => getJSON<RosterWorker[]>('/employees/roster'),
+  createWorker: (input: {
+    name: string
+    hourLimit: number
+    maxShifts: number
+    standby?: boolean
+    store?: { storeId: number; proficiency: Tier; canOpen?: boolean; primary?: boolean }
+  }) => sendJSON<RosterWorker>('/employees', 'POST', input),
+  updateWorker: (id: number, patch: { name: string; hourLimit: number; maxShifts: number; standby?: boolean }) =>
+    sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
+  deleteWorker: (id: number) =>
+    request<{ message: string; accountLeftUnlinked: string | null }>(`/employees/${id}`, { method: 'DELETE' }),
+  inviteWorker: (id: number) =>
+    sendJSON<{ employeeId: number; inviteCode: string }>(`/employees/${id}/invite`, 'POST', {}),
 
   // --- employee self-service ---
   getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),

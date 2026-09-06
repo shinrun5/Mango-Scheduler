@@ -89,6 +89,26 @@ export interface ScheduleGap {
   shortBy: number
 }
 
+export interface RosterStoreLink {
+  storeId: number
+  proficiency: Tier
+  canOpen: boolean
+  primary: boolean
+  pin: string
+}
+
+/** A worker as shown on the manager's Workers screen (GET /employees/roster). */
+export interface RosterWorker {
+  id: number
+  name: string
+  hourLimit: number
+  maxShifts: number
+  standby: boolean
+  inviteCode: string | null
+  account: { email: string } | null
+  stores: RosterStoreLink[]
+}
+
 export interface MyShiftsResponse {
   published: boolean
   publishedAt: string | null
