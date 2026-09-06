@@ -9,6 +9,7 @@
     "start": "tsx src/index.ts",
     "seed": "tsx prisma/seed.ts",
     "create-manager": "tsx prisma/createManager.ts",
+    "delete-user": "tsx prisma/deleteUser.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "prisma": {
