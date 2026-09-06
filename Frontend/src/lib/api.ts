@@ -122,6 +122,12 @@ export const api = {
   getShiftRequirements: () => getJSON<ShiftRequirement[]>('/shiftrequirements'),
   getAvailability: () => getJSON<RecurringAvailability[]>('/availability'),
 
+  // --- employee self-service ---
+  getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),
+  /** Replace the signed-in employee's whole week. start/end are "HH:MM". */
+  saveMyAvailability: (windows: { day: DayOfWeek; start: string; end: string }[]) =>
+    sendJSON<RecurringAvailability[]>('/availability/mine', 'PUT', { windows }),
+
   generateSchedule: (solveSeconds = 5) =>
     sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { solveSeconds }),
 
