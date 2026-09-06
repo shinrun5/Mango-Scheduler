@@ -24,6 +24,8 @@ GRACE_MIN = 0
 W_SHORT = 1000   # an unfilled head / senior / opener requirement
 W_OVER = 30      # staffing a slot beyond its headcount
 W_SPREAD = 8     # gap between the busiest and least-busy employee
+W_CROSS = 50     # sending someone to a store that isn't their primary (yields to any shortage)
+W_CONTINUITY = 15  # BONUS for one person covering adjacent slots (a full day > a split)
 
 
 def _to_min(hhmm: str) -> int:
@@ -60,6 +62,7 @@ def solve(payload: dict) -> dict:
             emp_store[(e["id"], s["storeId"])] = {
                 "tier": s.get("tier", "REGULAR"),
                 "canOpen": bool(s.get("canOpen", False)),
+                "primary": bool(s.get("primary", True)),
             }
 
     # (empId, day) -> list[(startMin, endMin)]
@@ -107,6 +110,34 @@ def solve(payload: dict) -> dict:
             x[(e["id"], r["id"])] = model.NewBoolVar(f"x_{e['id']}_{r['id']}")
             elig.append(e["id"])
         elig_by_req[r["id"]] = elig
+
+    # assignments that send someone to a non-primary store (soft-discouraged)
+    cross_store = [
+        x[(eid, r["id"])]
+        for r in reqs
+        for eid in elig_by_req[r["id"]]
+        if not emp_store[(eid, r["storeId"])]["primary"]
+    ]
+
+    # continuity: reward the same person covering back-to-back slots at a store/day
+    # (one long shift reads cleaner than a morning + a night handed to two people)
+    reqs_by_store_day: dict[tuple[int, str], list[dict]] = {}
+    for r in reqs:
+        reqs_by_store_day.setdefault((r["storeId"], r["day"]), []).append(r)
+    continuity: list[cp_model.IntVar] = []
+    for slots in reqs_by_store_day.values():
+        slots.sort(key=lambda r: r["lo"])
+        for a, b in zip(slots, slots[1:]):
+            if a["hi"] != b["lo"]:
+                continue  # not adjacent
+            for eid in elig_by_req[a["id"]]:
+                if eid not in elig_by_req[b["id"]]:
+                    continue
+                both = model.NewBoolVar(f"cont_{eid}_{a['id']}_{b['id']}")
+                model.Add(both <= x[(eid, a["id"])])
+                model.Add(both <= x[(eid, b["id"])])
+                model.Add(both >= x[(eid, a["id"])] + x[(eid, b["id"])] - 1)
+                continuity.append(both)
 
     shortages: list[cp_model.IntVar] = []
     overs: list[cp_model.IntVar] = []
@@ -198,7 +229,13 @@ def solve(payload: dict) -> dict:
     else:
         model.Add(spread == 0)
 
-    model.Minimize(W_SHORT * sum(shortages) + W_OVER * sum(overs) + W_SPREAD * spread)
+    model.Minimize(
+        W_SHORT * sum(shortages)
+        + W_OVER * sum(overs)
+        + W_SPREAD * spread
+        + W_CROSS * sum(cross_store)
+        - W_CONTINUITY * sum(continuity)
+    )
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = solve_seconds

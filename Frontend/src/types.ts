@@ -23,6 +23,7 @@ export interface Employee {
   name: string
   hourLimit: number
   maxShifts: number
+  standby: boolean
 }
 
 export interface EmployeeStore {
@@ -31,6 +32,7 @@ export interface EmployeeStore {
   pin: string
   proficiency: Tier
   canOpen: boolean
+  primary: boolean
 }
 
 export interface Shift {

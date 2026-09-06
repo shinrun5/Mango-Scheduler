@@ -1,12 +1,13 @@
 import { type MouseEvent, useEffect, useState } from 'react'
 import { AssignPopover } from '../components/AssignPopover'
-import { GapCard, ShiftCard, type CardPerson } from '../components/ScheduleCards'
+import { DayCard, type DayPerson } from '../components/ScheduleCards'
+import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { api } from '../lib/api'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { computeGapCards, type GapCardData } from '../lib/gaps'
-import { effectiveCanOpen, windowGrace, windowNeedsOpener } from '../lib/openers'
-import { DAYS, DAY_LABEL, timeRange, to12Hour, toHHMM24, toMinutes, withTime } from '../lib/time'
+import { effectiveCanOpen } from '../lib/openers'
+import { DAYS, DAY_LABEL, timeRange, to12Hour, toHHMM24, toMinutes, windowsOverlap, withTime } from '../lib/time'
 import type {
   DayOfWeek,
   Employee,
@@ -45,14 +46,15 @@ interface PickerState {
   day: DayOfWeek
   start: string
   end: string
-  /** Reassigning an existing row (PUT) vs filling an empty slot (POST). */
-  shiftId: number | null
+  /** the person's merged shift rows (empty = filling an open slot -> POST) */
+  shiftIds: number[]
   requirementId: number | null
   excludeIds: Set<number>
   requireOpener: boolean
   graceMinutes: number
   personName: string | null
   candidates: Candidate[]
+  candidatesAll: Candidate[]
   title: string
   subtitle: string
 }
@@ -63,6 +65,7 @@ export function Dashboard() {
   const [generating, setGenerating] = useState(false)
   const [lastResult, setLastResult] = useState<GenerateScheduleResult | null>(null)
   const [picker, setPicker] = useState<PickerState | null>(null)
+  const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
@@ -90,6 +93,7 @@ export function Dashboard() {
     excludeIds: Set<number>,
     requireOpener = false,
     graceMinutes = 0,
+    ignoreAvailability = false,
   ) {
     if (!board) return []
     const store = board.stores.find((s) => s.id === storeId)
@@ -106,6 +110,7 @@ export function Dashboard() {
       requireOpener,
       storeRequiresOpenerSkill: store?.requiresOpenerSkill ?? true,
       graceMinutes,
+      ignoreAvailability,
     })
   }
 
@@ -115,7 +120,7 @@ export function Dashboard() {
     day: DayOfWeek
     start: string
     end: string
-    shiftId: number | null
+    shiftIds: number[]
     requirementId: number | null
     personName: string | null
     excludeIds: Set<number>
@@ -127,6 +132,7 @@ export function Dashboard() {
     if (!board) return
     const { e, storeId, day, start, end, excludeIds, requireOpener, graceMinutes, ...rest } = args
     const candidates = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes)
+    const candidatesAll = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes, true)
     setPicker({
       anchorRect: e.currentTarget.getBoundingClientRect(),
       storeId,
@@ -137,12 +143,21 @@ export function Dashboard() {
       requireOpener,
       graceMinutes,
       candidates,
+      candidatesAll,
       ...rest,
     })
   }
 
   /** Commit a last-resort split. tail: hand [T,end] to someone (and, for an existing
    * shift, shorten the original to end at T). head: hand [start,T] to someone (gaps only). */
+  /** Collapse a person's (possibly merged) shift rows into a single row [from, to]. */
+  async function collapseTo(shiftIds: number[], from: string, to: string) {
+    const [first, ...rest] = shiftIds
+    if (first === undefined) return
+    await api.updateShift(first, { start: from, end: to })
+    await Promise.all(rest.map((id) => api.deleteShift(id)))
+  }
+
   async function commitSplit({
     which,
     splitAt,
@@ -153,11 +168,11 @@ export function Dashboard() {
     employeeId: number
   }) {
     if (!picker || !board) return
-    const { shiftId, storeId, day, start, end } = picker
+    const { shiftIds, storeId, day, start, end } = picker
     setPicker(null)
     try {
       if (which === 'tail') {
-        if (shiftId !== null) await api.updateShift(shiftId, { end: withTime(end, splitAt) })
+        if (shiftIds.length > 0) await collapseTo(shiftIds, start, withTime(end, splitAt))
         await api.createShift({ employeeId, storeId, day, start: withTime(start, splitAt), end })
       } else {
         await api.createShift({ employeeId, storeId, day, start, end: withTime(end, splitAt) })
@@ -170,15 +185,57 @@ export function Dashboard() {
 
   async function handlePick(employeeId: number) {
     if (!picker || !board) return
-    const { shiftId, storeId, day, start, end } = picker
+    const { shiftIds, storeId, day, start, end } = picker
     setPicker(null)
     try {
-      if (shiftId !== null) {
-        await api.updateShift(shiftId, { employeeId })
+      if (shiftIds.length > 0) {
+        await Promise.all(shiftIds.map((id) => api.updateShift(id, { employeeId })))
       } else {
         await api.createShift({ employeeId, storeId, day, start, end })
       }
       // gap cards are derived from real coverage on the next render, so just reload
+      setBoard(await loadBoard())
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  async function handleRemove() {
+    if (!picker || picker.shiftIds.length === 0) return
+    const { shiftIds } = picker
+    setPicker(null)
+    try {
+      await Promise.all(shiftIds.map((id) => api.deleteShift(id)))
+      setBoard(await loadBoard())
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  async function handleEditHours(startHHMM: string, endHHMM: string) {
+    if (!picker || picker.shiftIds.length === 0) return
+    const { shiftIds, start, end } = picker
+    setPicker(null)
+    try {
+      await collapseTo(shiftIds, withTime(start, startHHMM), withTime(end, endHHMM))
+      setBoard(await loadBoard())
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  function openSlotEditor(e: MouseEvent<HTMLButtonElement>, requirements: ShiftRequirement[]) {
+    if (requirements.length === 0) return
+    setSlotEditor({ anchorRect: e.currentTarget.getBoundingClientRect(), requirements })
+  }
+
+  async function handleSaveRequirement(
+    requirementId: number,
+    patch: { regularRequired: number; needOpen: boolean },
+  ) {
+    setSlotEditor(null)
+    try {
+      await api.updateRequirement(requirementId, patch)
       setBoard(await loadBoard())
     } catch (e) {
       setError(String(e))
@@ -225,79 +282,93 @@ export function Dashboard() {
                   className="grid gap-3.5"
                   style={{ gridTemplateColumns: `repeat(${store.days.length}, minmax(0, 1fr))` }}
                 >
-                  {store.days.map(({ day, windows, gaps }) => (
-                    <div key={day} className="flex flex-col gap-2">
-                      <span
-                        className={`text-center font-heading text-xs font-bold ${
-                          gaps.length ? 'text-coral-dark' : 'text-ink'
-                        }`}
-                      >
-                        {DAY_LABEL[day]}
-                      </span>
-                      {windows.map((w, i) => (
-                        <ShiftCard
-                          key={i}
-                          start={w.start}
-                          end={w.end}
-                          people={w.people}
+                  {store.days.map((d) => {
+                    const opStart = d.requirements.length
+                      ? Math.min(...d.requirements.map((r) => toMinutes(r.start)))
+                      : 0
+                    const needsOpen = d.requirements.some((r) => r.needOpen)
+                    const graceAt = (isoStart: string) =>
+                      d.requirements.find(
+                        (r) => toMinutes(r.start) <= toMinutes(isoStart) && toMinutes(isoStart) < toMinutes(r.end),
+                      )?.graceMinutes ?? 0
+
+                    return (
+                      <div key={d.day} className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => openSlotEditor(e, d.requirements)}
+                          className={`text-center font-heading text-xs font-bold transition-opacity hover:opacity-60 ${
+                            d.gaps.length ? 'text-coral-dark' : 'text-ink'
+                          }`}
+                        >
+                          {DAY_LABEL[d.day]}
+                        </button>
+                        <DayCard
+                          people={d.people}
+                          gaps={d.gaps}
                           onPersonClick={(person, e) => {
-                            const needsOpener = windowNeedsOpener(board.requirements, store.id, day, w.start, w.end)
-                            const staysBehindCanOpen = w.people
-                              .filter((p) => p.employeeId !== person.employeeId)
-                              .some((p) => effectiveCanOpen(board.employeeStores, board.stores, p.employeeId, store.id))
-                            const requireOpener = needsOpener && !staysBehindCanOpen
+                            const requireOpener =
+                              person.isOpener &&
+                              !d.people.some((p) => p.employeeId !== person.employeeId && p.isOpener)
                             openPickerFor({
                               e,
                               storeId: store.id,
-                              day,
-                              start: w.start,
-                              end: w.end,
-                              shiftId: person.shiftId,
+                              day: d.day,
+                              start: person.start,
+                              end: person.end,
+                              shiftIds: person.shiftIds,
                               requirementId: null,
                               personName: person.name,
-                              excludeIds: new Set(w.people.map((p) => p.employeeId)),
+                              excludeIds: new Set(
+                                d.people
+                                  .filter((p) =>
+                                    windowsOverlap(
+                                      toMinutes(p.start),
+                                      toMinutes(p.end),
+                                      toMinutes(person.start),
+                                      toMinutes(person.end),
+                                    ),
+                                  )
+                                  .map((p) => p.employeeId),
+                              ),
                               requireOpener,
-                              graceMinutes: windowGrace(board.requirements, store.id, day, w.start, w.end),
+                              graceMinutes: graceAt(person.start),
                               title: `Instead of ${person.name}`,
                               subtitle: requireOpener
-                                ? `${timeRange(w.start, w.end)} · must be able to open`
-                                : timeRange(w.start, w.end),
+                                ? `${timeRange(person.start, person.end)} · must be able to open`
+                                : timeRange(person.start, person.end),
                             })
                           }}
-                        />
-                      ))}
-                      {gaps.map((g, gi) => (
-                        <GapCard
-                          key={`${g.requirementId}:${gi}`}
-                          label={g.label}
-                          window={timeRange(g.start, g.end)}
-                          detail={g.detail}
-                          onClick={(e) => {
+                          onGapClick={(g, e) => {
                             const already = board.shifts.filter(
                               (s) =>
                                 s.storeId === store.id &&
-                                s.day === day &&
-                                s.start === g.start &&
-                                s.end === g.end &&
-                                s.employeeId !== null,
+                                s.day === d.day &&
+                                s.employeeId !== null &&
+                                windowsOverlap(
+                                  toMinutes(s.start),
+                                  toMinutes(s.end),
+                                  toMinutes(g.start),
+                                  toMinutes(g.end),
+                                ),
                             )
-                            const needsOpener = windowNeedsOpener(board.requirements, store.id, day, g.start, g.end)
                             const alreadyCanOpen = already.some((s) =>
                               effectiveCanOpen(board.employeeStores, board.stores, s.employeeId as number, store.id),
                             )
-                            const requireOpener = needsOpener && !alreadyCanOpen
+                            const requireOpener =
+                              needsOpen && toMinutes(g.start) <= opStart && !alreadyCanOpen
                             openPickerFor({
                               e,
                               storeId: store.id,
-                              day,
+                              day: d.day,
                               start: g.start,
                               end: g.end,
-                              shiftId: null,
+                              shiftIds: [],
                               requirementId: g.requirementId,
                               personName: null,
                               excludeIds: new Set(already.map((s) => s.employeeId as number)),
                               requireOpener,
-                              graceMinutes: windowGrace(board.requirements, store.id, day, g.start, g.end),
+                              graceMinutes: graceAt(g.start),
                               title: 'Who can cover this?',
                               subtitle: requireOpener
                                 ? `${timeRange(g.start, g.end)} — ${g.detail} · must be able to open`
@@ -305,9 +376,9 @@ export function Dashboard() {
                             })
                           }}
                         />
-                      ))}
-                    </div>
-                  ))}
+                      </div>
+                    )
+                  })}
                 </div>
               </>
             )}
@@ -321,13 +392,20 @@ export function Dashboard() {
       </div>
       {picker && (
         <AssignPopover
-          key={`${picker.storeId}-${picker.day}-${picker.start}-${picker.shiftId ?? 'gap'}`}
+          key={`${picker.storeId}-${picker.day}-${picker.start}-${picker.shiftIds.join(',') || 'gap'}`}
           title={picker.title}
           subtitle={picker.subtitle}
           candidates={picker.candidates}
+          candidatesAll={picker.candidatesAll}
           anchorRect={picker.anchorRect}
           onPick={handlePick}
           onClose={() => setPicker(null)}
+          onRemove={picker.shiftIds.length > 0 ? handleRemove : undefined}
+          editHours={
+            picker.shiftIds.length > 0
+              ? { start: toHHMM24(picker.start), end: toHHMM24(picker.end), onSave: handleEditHours }
+              : undefined
+          }
           split={{
             windowStart: toHHMM24(picker.start),
             windowEnd: toHHMM24(picker.end),
@@ -350,6 +428,15 @@ export function Dashboard() {
           }}
         />
       )}
+      {slotEditor && (
+        <SlotEditor
+          anchorRect={slotEditor.anchorRect}
+          requirements={slotEditor.requirements}
+          storeName={board.stores.find((s) => s.id === slotEditor.requirements[0]?.storeId)?.name ?? ''}
+          onSave={handleSaveRequirement}
+          onClose={() => setSlotEditor(null)}
+        />
+      )}
     </div>
   )
 }
@@ -360,8 +447,9 @@ interface ViewStore {
   accentClass: string
   days: {
     day: DayOfWeek
-    windows: { start: string; end: string; people: CardPerson[] }[]
+    people: DayPerson[]
     gaps: GapCardData[]
+    requirements: ShiftRequirement[]
   }[]
 }
 
@@ -376,61 +464,70 @@ function buildView({
 }: BoardData): { stores: ViewStore[]; totalShort: number } {
   const employeeName = new Map(employees.map((e) => [e.id, e.name]))
 
-  // gap cards reflect ACTUAL current coverage (incl. manual fills/splits), not the
-  // solver's original report -- so nothing needs to be decremented by hand.
+  // gaps reflect ACTUAL current coverage, not the solver's original report
   const gapsByStoreDay =
     shifts.length > 0 ? computeGapCards(requirements, shifts, employeeStores, stores) : new Map<string, GapCardData[]>()
   let totalShort = 0
   for (const list of gapsByStoreDay.values()) for (const g of list) totalShort += g.shortBy
 
   const viewStores: ViewStore[] = stores.map((store, i) => {
-    const byDay = new Map<DayOfWeek, Map<string, { start: string; end: string; people: CardPerson[] }>>()
-
+    // per day: employeeId -> their shift rows, later merged into contiguous spans
+    const byDay = new Map<DayOfWeek, Map<number, Shift[]>>()
     for (const shift of shifts) {
       if (shift.storeId !== store.id || shift.employeeId === null) continue
-      const key = `${shift.start}|${shift.end}`
-      const dayMap = byDay.get(shift.day) ?? new Map()
+      const dayMap = byDay.get(shift.day) ?? new Map<number, Shift[]>()
       byDay.set(shift.day, dayMap)
-      const group = dayMap.get(key) ?? { start: shift.start, end: shift.end, people: [] as CardPerson[] }
-      dayMap.set(key, group)
-
-      // if this shift sits inside a wider requirement window, flag the mismatched edges
-      const s = toMinutes(shift.start)
-      const e = toMinutes(shift.end)
-      const ref = requirements.find(
-        (r) =>
-          r.storeId === store.id &&
-          r.day === shift.day &&
-          toMinutes(r.start) <= s &&
-          e <= toMinutes(r.end) &&
-          (toMinutes(r.start) < s || e < toMinutes(r.end)),
-      )
-      const note = ref
-        ? {
-            comesIn: toMinutes(ref.start) !== s ? to12Hour(toHHMM24(shift.start)) : undefined,
-            leaves: toMinutes(ref.end) !== e ? to12Hour(toHHMM24(shift.end)) : undefined,
-          }
-        : undefined
-
-      group.people.push({
-        shiftId: shift.id,
-        employeeId: shift.employeeId,
-        name: employeeName.get(shift.employeeId) ?? `#${shift.employeeId}`,
-        isOpener: false, // resolved below, from ShiftRequirement.needOpen
-        note,
-      })
+      const list = dayMap.get(shift.employeeId) ?? []
+      list.push(shift)
+      dayMap.set(shift.employeeId, list)
     }
 
     const days = DAYS.filter((d) => byDay.has(d) || gapsByStoreDay.has(`${store.id}:${d}`)).map((day) => {
-      const dayMap = byDay.get(day)
-      const windows = dayMap ? [...dayMap.values()].sort((a, b) => a.start.localeCompare(b.start)) : []
-      for (const w of windows) {
-        if (!windowNeedsOpener(requirements, store.id, day, w.start, w.end)) continue
-        for (const p of w.people) {
-          p.isOpener = effectiveCanOpen(employeeStores, stores, p.employeeId, store.id)
+      const dayReqs = requirements
+        .filter((r) => r.storeId === store.id && r.day === day)
+        .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+      // the store's operating window that day, and its opening time
+      const opStart = dayReqs.length ? Math.min(...dayReqs.map((r) => toMinutes(r.start))) : 0
+      const opEnd = dayReqs.length ? Math.max(...dayReqs.map((r) => toMinutes(r.end))) : 0
+      const needsOpen = dayReqs.some((r) => r.needOpen)
+
+      const people: DayPerson[] = []
+      for (const [employeeId, rows] of byDay.get(day) ?? []) {
+        rows.sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+        // merge back-to-back / overlapping rows into spans
+        const spans: { start: string; end: string; shiftIds: number[] }[] = []
+        for (const s of rows) {
+          const last = spans[spans.length - 1]
+          if (last && toMinutes(s.start) <= toMinutes(last.end)) {
+            if (toMinutes(s.end) > toMinutes(last.end)) last.end = s.end
+            last.shiftIds.push(s.id)
+          } else {
+            spans.push({ start: s.start, end: s.end, shiftIds: [s.id] })
+          }
+        }
+        for (const span of spans) {
+          const ss = toMinutes(span.start)
+          const se = toMinutes(span.end)
+          const fullDay = ss <= opStart && se >= opEnd
+          const isOpener =
+            needsOpen && ss <= opStart && effectiveCanOpen(employeeStores, stores, employeeId, store.id)
+          const comesIn = ss > opStart ? to12Hour(toHHMM24(span.start)) : undefined
+          const leaves = se < opEnd ? to12Hour(toHHMM24(span.end)) : undefined
+          people.push({
+            employeeId,
+            name: employeeName.get(employeeId) ?? `#${employeeId}`,
+            shiftIds: span.shiftIds,
+            start: span.start,
+            end: span.end,
+            fullDay,
+            isOpener,
+            note: comesIn || leaves ? { comesIn, leaves } : undefined,
+          })
         }
       }
-      return { day, windows, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [] }
+      people.sort((a, b) => toMinutes(a.start) - toMinutes(b.start) || a.name.localeCompare(b.name))
+
+      return { day, people, gaps: gapsByStoreDay.get(`${store.id}:${day}`) ?? [], requirements: dayReqs }
     })
 
     return { id: store.id, name: store.name, accentClass: ACCENT_CLASSES[i % ACCENT_CLASSES.length], days }

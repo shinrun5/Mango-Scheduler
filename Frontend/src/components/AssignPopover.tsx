@@ -45,8 +45,17 @@ function CandidateList({
         >
           <FruitAvatar kind={fruitFor(c.employeeId)} size={22} />
           <span className="font-body text-xs font-bold text-ink">{c.name}</span>
-          {!c.coversFull && (
-            <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-coral-dark">partial</span>
+          {c.standby && (
+            <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">
+              on-call
+            </span>
+          )}
+          {!c.available ? (
+            <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">not free</span>
+          ) : (
+            !c.coversFull && (
+              <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-coral-dark">partial</span>
+            )
           )}
         </button>
       ))}
@@ -58,24 +67,42 @@ export function AssignPopover({
   title,
   subtitle,
   candidates,
+  candidatesAll,
   anchorRect,
   onPick,
   onClose,
+  onRemove,
+  editHours,
   split,
 }: {
   title: string
   subtitle?: string
   candidates: Candidate[]
+  /** Same list but including people whose availability doesn't cover the window. */
+  candidatesAll: Candidate[]
   anchorRect: DOMRect
   onPick: (employeeId: number) => void
   onClose: () => void
+  /** Present only for an existing person's shift — take them off it, gap or not. */
+  onRemove?: () => void
+  /** Present only for an existing shift — change just this person's own start/end. */
+  editHours?: { start: string; end: string; onSave: (startHHMM24: string, endHHMM24: string) => void }
   split?: SplitConfig
 }) {
+  const [showAll, setShowAll] = useState(false)
   const [splitTime, setSplitTime] = useState(() =>
     split ? defaultSplit(split.windowStart, split.windowEnd) : '',
   )
+  const [editStart, setEditStart] = useState(editHours?.start ?? '')
+  const [editEnd, setEditEnd] = useState(editHours?.end ?? '')
+  const editDirty = !!editHours && (editStart !== editHours.start || editEnd !== editHours.end)
+  const editValid = editStart !== '' && editEnd !== '' && editStart < editEnd
+
+  // Keep the whole popover on screen: cap its height and clamp its top so it never
+  // runs off the bottom (or top) edge; tall content scrolls inside.
+  const maxHeight = Math.min(560, window.innerHeight - 24)
   const left = Math.min(Math.max(anchorRect.left, 8), window.innerWidth - WIDTH - 8)
-  const top = Math.min(anchorRect.bottom + 8, window.innerHeight - 60)
+  const top = Math.max(8, Math.min(anchorRect.bottom + 8, window.innerHeight - 8 - maxHeight))
 
   // Splitting is a last resort — only offered when nobody can cover the whole window.
   const someoneCoversWhole = candidates.some((c) => c.coversFull)
@@ -87,8 +114,8 @@ export function AssignPopover({
       {/* click-outside catcher */}
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="fixed z-50 flex flex-col gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
-        style={{ top, left, width: WIDTH }}
+        className="fixed z-50 flex flex-col gap-3 overflow-y-auto rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[4px_4px_0_var(--color-ink)]"
+        style={{ top, left, width: WIDTH, maxHeight }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-2">
@@ -96,8 +123,46 @@ export function AssignPopover({
             <span className="font-heading text-sm font-bold text-ink">{title}</span>
             {subtitle && <span className="font-body text-[11px] font-semibold text-muted-ink">{subtitle}</span>}
           </div>
-          <CandidateList candidates={candidates} onPick={onPick} empty="Nobody else is available for this window." />
+          <CandidateList
+            candidates={showAll ? candidatesAll : candidates}
+            onPick={onPick}
+            empty="Nobody else is available for this window."
+          />
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="self-start font-body text-[10px] font-bold text-sky-dark transition-opacity hover:opacity-70"
+          >
+            {showAll ? '← only who’s free' : 'add someone not free (last-minute) →'}
+          </button>
         </div>
+
+        {editHours && (
+          <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
+            <span className="font-body text-[11px] font-bold text-muted-ink">Adjust this person's hours</span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="time"
+                value={editStart}
+                onChange={(e) => setEditStart(e.target.value)}
+                className="rounded-lg border-2 border-ink px-1.5 py-0.5 font-body text-xs font-bold text-ink"
+              />
+              <span className="font-body text-xs font-bold text-muted-ink">–</span>
+              <input
+                type="time"
+                value={editEnd}
+                onChange={(e) => setEditEnd(e.target.value)}
+                className="rounded-lg border-2 border-ink px-1.5 py-0.5 font-body text-xs font-bold text-ink"
+              />
+              <button
+                disabled={!editDirty || !editValid}
+                onClick={() => editHours.onSave(editStart, editEnd)}
+                className="ml-auto rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-40"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
 
         {showSplit && split && (
           <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
@@ -144,6 +209,15 @@ export function AssignPopover({
               </>
             )}
           </div>
+        )}
+
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="border-t-2 border-dashed border-cream pt-2.5 text-left font-body text-[11px] font-bold text-coral-dark transition-opacity hover:opacity-70"
+          >
+            Take off this shift (leave it open)
+          </button>
         )}
       </div>
     </>

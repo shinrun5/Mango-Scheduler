@@ -11,6 +11,9 @@ export interface Candidate {
   tier: Tier
   canOpen: boolean
   coversFull: boolean
+  standby: boolean
+  /** false = no stated availability overlapping this window (only surfaced in override mode) */
+  available: boolean
 }
 
 export function computeCandidates(args: {
@@ -33,6 +36,9 @@ export function computeCandidates(args: {
   /** Availability may begin this many minutes after `start` and still fully cover
    * (matches the requirement's grace; night shifts allow a late arrival). */
   graceMinutes?: number
+  /** Last-minute override: include people whose stated availability doesn't cover this
+   * window (still excludes double-booked). Their `available` flag is false. */
+  ignoreAvailability?: boolean
 }): Candidate[] {
   const { storeId, day, start, end, excludeEmployeeIds, employees, employeeStores, availability, shifts } = args
   const grace = args.graceMinutes ?? 0
@@ -59,7 +65,10 @@ export function computeCandidates(args: {
       if (a <= lo + grace && b >= hi) coversFull = true
       if (windowsOverlap(a, b, lo, hi)) coversAny = true
     }
-    if (!coversAny) continue // no stated availability overlapping this window at all
+    // the normal list only offers people who can cover the WHOLE window; someone who
+    // merely overlaps it (e.g. a night-only person vs a morning shift) shows up only
+    // under "add someone not free", tagged partial
+    if (!coversFull && !args.ignoreAvailability) continue
 
     // already committed to an overlapping shift elsewhere (or here) that day?
     const busy = shifts.some(
@@ -67,9 +76,24 @@ export function computeCandidates(args: {
     )
     if (busy) continue
 
-    out.push({ employeeId: emp.id, name: emp.name, tier: link.proficiency, canOpen: link.canOpen, coversFull })
+    out.push({
+      employeeId: emp.id,
+      name: emp.name,
+      tier: link.proficiency,
+      canOpen: link.canOpen,
+      coversFull,
+      standby: emp.standby,
+      available: coversAny,
+    })
   }
 
-  out.sort((a, b) => Number(b.coversFull) - Number(a.coversFull) || TIER_RANK[b.tier] - TIER_RANK[a.tier])
+  // available first, then on-call last; full coverage before partial; senior first
+  out.sort(
+    (a, b) =>
+      Number(b.available) - Number(a.available) ||
+      Number(a.standby) - Number(b.standby) ||
+      Number(b.coversFull) - Number(a.coversFull) ||
+      TIER_RANK[b.tier] - TIER_RANK[a.tier],
+  )
   return out
 }

@@ -1,7 +1,27 @@
+import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import prisma from "../lib/prisma.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
+
+// POST /employees/:id/invite  (manager only)
+// Issues a fresh single-use code the employee uses at POST /auth/register to
+// claim their account. Regenerating replaces any unclaimed code.
+router.post("/:id/invite", requireAuth, requireRole("MANAGER"), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "A valid numeric id is required" });
+  }
+
+  const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
+  if (!employee) return res.status(404).json({ error: "Employee not found" });
+  if (employee.user) return res.status(409).json({ error: "This employee already has an account" });
+
+  const inviteCode = randomBytes(9).toString("base64url");
+  await prisma.employee.update({ where: { id }, data: { inviteCode } });
+  res.json({ employeeId: id, inviteCode });
+});
 
 router.post("/", async (req, res) => {
   const { name, hourLimit } = req.body;

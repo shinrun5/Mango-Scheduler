@@ -61,7 +61,8 @@ router.delete('/:id', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const id = parseInt(req.params.id);
-  const { storeId, day, start, end, managerRequired, seniorRequired, regularRequired, newRequired } = req.body;
+  const { storeId, day, start, end, managerRequired, seniorRequired, regularRequired, newRequired, needOpen, graceMinutes } =
+    req.body;
 
   if (isNaN(id)) {
     return res.status(400).json({ error: 'A valid numeric id is required' });
@@ -70,7 +71,7 @@ router.put('/:id', async (req, res) => {
   try {
     const updatedShiftRequirement = await prisma.shiftRequirement.update({
       where: { id },
-      data: { storeId, day, start, end, managerRequired, seniorRequired, regularRequired, newRequired },
+      data: { storeId, day, start, end, managerRequired, seniorRequired, regularRequired, newRequired, needOpen, graceMinutes },
     });
     res.json(updatedShiftRequirement);
   } catch (error) {

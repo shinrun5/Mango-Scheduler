@@ -27,7 +27,8 @@ router.post('/generate', async (req, res) => {
   try {
     const [stores, employees, availability, requirements] = await Promise.all([
       prisma.store.findMany(),
-      prisma.employee.findMany({ include: { employeeStores: true } }),
+      // standby (on-call) people are never auto-scheduled — the manager assigns them by hand
+      prisma.employee.findMany({ where: { standby: false }, include: { employeeStores: true } }),
       prisma.recurringAvailability.findMany(),
       prisma.shiftRequirement.findMany(),
     ]);
@@ -52,6 +53,7 @@ router.post('/generate', async (req, res) => {
           storeId: es.storeId,
           tier: es.proficiency,
           canOpen: es.canOpen || anyoneOpens.has(es.storeId),
+          primary: es.primary,
         })),
       })),
       availability: availability.map((a) => ({

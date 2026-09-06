@@ -1,20 +1,19 @@
 /**
- * The real Mango Mango / Ciao Poke roster, ported from
- * scheduling-prototype/scheduler_real.py (read that file's comments for the full
- * story). 13 employees, real per-store hours, real availability.
+ * Next week's roster for Mango Mango / Ciao Poke (availability supplied by the owner).
  *
  *   npx tsx prisma/seed.ts   (or: npm run seed)
  *
- * Known simplifications vs. the Python prototype -- schema/engine gaps, not bugs:
- *  - No no-back-to-back flag (Rey), no min-shifts floor (Abby), no full/half-day
- *    caps (Kai: 1 full + 2 half/wk) -- these columns don't exist yet.
- *  - No locked/manager-forced shifts -- Cindy's real Friday split (Ciao morning ->
- *    Mango night) isn't pinned; the solver decides Friday freely instead.
- *  - "Allow NEW here but don't require one" isn't representable -- our schema's
- *    newRequired IS the allow-New signal (see [[scheduling-algorithm-approach]]), so
- *    Mango night rows carry newRequired=1 as the closest approximation. On the two
- *    days Rachel L. (the one NEW hire) can't actually cover it, that shows up as a
- *    real, correctly-reported gap -- a decent demo of the escalation path, not a bug.
+ * Store rules are unchanged from the real-roster seed (see git history); only the
+ * people and their availability differ.
+ *
+ * Soft preferences that the engine CANNOT model, applied by hand here:
+ *  - Daniel: "preferably not" Sat/Sun -> those days left out of his availability.
+ *    If that leaves a weekend slot short, the gap is the signal that he's needed.
+ *  - Rey: "no consecutive shifts" -> not enforceable; "2-3 days max" -> maxShifts 3.
+ *  - Cynthia: "wishes to work Friday with Rey" -> both are free Friday; not pinned.
+ *  - Kai: "one shift, no full day" -> maxShifts 1 + only a single window on each of
+ *    his two possible days, so he physically can't be given a full day.
+ * Also unchanged: no back-to-back / min-shifts / full-half-day caps, no locked shifts.
  */
 import prisma from '../src/lib/prisma.js';
 
@@ -26,105 +25,132 @@ const WEEKDAYS = ALL_DAYS.slice(0, 5);
 type Day = (typeof ALL_DAYS)[number];
 type Tier = 'NEW' | 'REGULAR' | 'SENIOR' | 'MANAGER';
 
-// hour markers from scheduler_real.py, converted to HH:MM
-const FULL_M: [string, string] = ['11:30', '23:30']; // "full day" at Mango
-const FULL_C: [string, string] = ['10:45', '22:30']; // "full day" at Ciao
-const FULL_B: [string, string] = ['10:00', '23:30']; // "full day", either store
-const NIGHT_M: [string, string] = ['16:30', '23:30']; // "night" at Mango (grace covers the 17:00 start)
+// reusable availability windows
+const FULL_M: [string, string] = ['11:30', '23:30']; // whole day at Mango
+const FULL_C: [string, string] = ['10:45', '22:30']; // whole day at Ciao
+const FULL_B: [string, string] = ['10:00', '23:30']; // whole day, either store
+const NIGHT: [string, string] = ['16:30', '23:30']; // a night shift (grace covers the 17:00 / 16:00 starts)
+const AFTER_530: [string, string] = ['17:30', '23:30'];
+const MORNING: [string, string] = ['10:00', '17:00']; // covers Mango opener + Ciao morning
+const TIL_4: [string, string] = ['10:00', '16:00'];
 
 interface EmployeeSeed {
   name: string;
   maxShifts?: number;
-  links: Array<{ store: 'Mango' | 'Ciao'; tier: Tier; canOpen?: boolean }>;
+  standby?: boolean; // on-call: solver ignores them, manager can still assign by hand
+  links: Array<{ store: 'Mango' | 'Ciao'; tier: Tier; canOpen?: boolean; primary?: boolean }>;
   avail: Partial<Record<Day, [string, string][]>>;
 }
 
+const ALL_WEEK_WIDE: Partial<Record<Day, [string, string][]>> = Object.fromEntries(
+  ALL_DAYS.map((d) => [d, [['10:00', '22:30']] as [string, string][]]),
+);
+
 const EMPLOYEES: EmployeeSeed[] = [
-  // --- Mango Mango ---
+  // --- Mango ---
   {
     name: 'Jasmine',
     links: [{ store: 'Mango', tier: 'REGULAR' }],
-    avail: {
-      MONDAY: [NIGHT_M], TUESDAY: [NIGHT_M], WEDNESDAY: [NIGHT_M], FRIDAY: [NIGHT_M],
-      SATURDAY: [FULL_M], SUNDAY: [FULL_M],
-    },
+    avail: { TUESDAY: [AFTER_530], WEDNESDAY: [AFTER_530], THURSDAY: [AFTER_530], SUNDAY: [FULL_M] },
   },
   {
     name: 'Julia',
     links: [{ store: 'Mango', tier: 'SENIOR', canOpen: true }],
-    avail: { TUESDAY: [NIGHT_M] },
+    avail: { WEDNESDAY: [NIGHT], FRIDAY: [NIGHT] },
   },
   {
-    // next week: prefers not to work; Mon only
     name: 'Mysha',
     maxShifts: 1,
     links: [{ store: 'Mango', tier: 'REGULAR' }],
-    avail: { MONDAY: [FULL_M] },
+    avail: { MONDAY: [NIGHT] },
   },
   {
     name: 'Owen',
     links: [{ store: 'Mango', tier: 'SENIOR', canOpen: true }],
-    avail: { WEDNESDAY: [FULL_M], THURSDAY: [FULL_M], FRIDAY: [FULL_M], SATURDAY: [FULL_M], SUNDAY: [FULL_M] },
+    avail: { WEDNESDAY: [NIGHT], FRIDAY: [FULL_M], SATURDAY: [FULL_M], SUNDAY: [FULL_M] },
   },
   {
     name: 'Rachel L.',
     links: [{ store: 'Mango', tier: 'NEW' }],
+    avail: { FRIDAY: [FULL_M], SATURDAY: [FULL_M], SUNDAY: [MORNING] },
+  },
+  {
+    name: 'Rey', // "2-3 days max"; "no consecutive shifts" not enforceable
+    maxShifts: 3,
+    links: [{ store: 'Mango', tier: 'SENIOR', canOpen: true }],
     avail: {
-      MONDAY: [['14:30', '23:30']], TUESDAY: [['14:30', '23:30']],
-      WEDNESDAY: [['17:30', '23:30']], THURSDAY: [['17:30', '23:30']],
+      MONDAY: [FULL_M], TUESDAY: [FULL_M], WEDNESDAY: [FULL_M],
+      THURSDAY: [['11:30', '17:00']], // whole week EXCEPT Thursday night
       FRIDAY: [FULL_M], SATURDAY: [FULL_M], SUNDAY: [FULL_M],
     },
   },
   {
-    name: 'Rachel X.',
-    links: [{ store: 'Mango', tier: 'SENIOR', canOpen: true }],
-    avail: { MONDAY: [FULL_M] },
+    name: 'Cynthia', // senior, can open; wishes to work Friday with Rey.
+    // Can cover Poke too, but Mango is her home -- the solver only sends her to Poke to close a gap.
+    links: [
+      { store: 'Mango', tier: 'SENIOR', canOpen: true },
+      { store: 'Ciao', tier: 'REGULAR', primary: false },
+    ],
+    avail: { WEDNESDAY: [FULL_M], THURSDAY: [['11:30', '22:30']], FRIDAY: [FULL_M], SATURDAY: [FULL_M] },
   },
   {
-    name: 'Rey',
-    links: [{ store: 'Mango', tier: 'SENIOR', canOpen: true }],
-    avail: { TUESDAY: [FULL_M], THURSDAY: [NIGHT_M], FRIDAY: [NIGHT_M], SATURDAY: [FULL_M], SUNDAY: [FULL_M] },
+    name: 'Yuxin', // new hire at Mango. As a trainee: night shifts only, no opening,
+    // and barred from the weekend whole-day slot -- so "full Sat" / "Sun after 4" go unused.
+    links: [{ store: 'Mango', tier: 'NEW' }],
+    avail: {
+      TUESDAY: [['15:00', '22:30']], FRIDAY: [['15:00', '23:00']],
+      SATURDAY: [['11:30', '23:00']], SUNDAY: [['16:00', '22:30']],
+    },
   },
-  // --- Ciao Poke (all can open -- Store.requiresOpenerSkill=false covers it) ---
+  // --- Ciao Poke ---
   {
-    name: 'Abby',
+    name: 'Kai', // Friday OR Saturday, one shift, no full day
+    maxShifts: 1,
     links: [{ store: 'Ciao', tier: 'REGULAR' }],
-    avail: { THURSDAY: [['10:00', '16:30']], SATURDAY: [['10:00', '16:30']] },
+    avail: { FRIDAY: [['16:00', '22:00']], SATURDAY: [['10:45', '16:00']] },
   },
   {
-    name: 'Kai',
+    name: 'Abby', // Mon & Thu mornings
     links: [{ store: 'Ciao', tier: 'REGULAR' }],
-    avail: { FRIDAY: [FULL_C], SATURDAY: [FULL_C] },
+    avail: { MONDAY: [['10:45', '16:00']], THURSDAY: [['10:45', '16:00']] },
+  },
+  {
+    name: 'Leo', // Mon morning; Wed 2:30->close; Fri 2:00->close; Sunday
+    links: [{ store: 'Ciao', tier: 'REGULAR' }],
+    avail: {
+      MONDAY: [['10:45', '16:00']],
+      WEDNESDAY: [['14:30', '21:30']], // Ciao closes 21:30
+      FRIDAY: [['14:00', '22:00']], // Ciao closes 22:00 Fri
+      SUNDAY: [['10:45', '21:30']],
+    },
   },
   {
     name: 'Michael',
     links: [{ store: 'Ciao', tier: 'REGULAR' }],
-    avail: { WEDNESDAY: [['10:00', '13:00']], THURSDAY: [['10:00', '16:30']], FRIDAY: [FULL_C] },
+    avail: { THURSDAY: [FULL_C], SATURDAY: [FULL_C] },
   },
   {
-    name: 'Leo',
+    name: 'Danny', // on-call backup for Poke -- never auto-scheduled, always in the manual picker
+    standby: true,
     links: [{ store: 'Ciao', tier: 'REGULAR' }],
-    avail: { MONDAY: [FULL_C], WEDNESDAY: [['13:00', '22:30']], FRIDAY: [['14:00', '22:30']], SUNDAY: [FULL_C] },
+    avail: ALL_WEEK_WIDE,
   },
   // --- both stores ---
   {
-    name: 'Cindy', // a trusted opener at Mango despite being a Regular, not tier-derived
+    name: 'Cindy',
     links: [
       { store: 'Mango', tier: 'REGULAR', canOpen: true },
       { store: 'Ciao', tier: 'REGULAR' },
     ],
-    avail: { MONDAY: [FULL_B], TUESDAY: [FULL_B], WEDNESDAY: [FULL_B], FRIDAY: [FULL_B], SUNDAY: [FULL_B] },
+    avail: { MONDAY: [FULL_B], WEDNESDAY: [NIGHT], THURSDAY: [MORNING], FRIDAY: [TIL_4] },
   },
   {
-    name: 'Daniel', // the owner/manager, works both stores
+    name: 'Daniel', // owner; "preferably not" Sat/Sun -> omitted
     links: [
       { store: 'Mango', tier: 'MANAGER', canOpen: true },
       { store: 'Ciao', tier: 'MANAGER' },
     ],
-    avail: {
-      WEDNESDAY: [['19:00', '23:30']], THURSDAY: [FULL_B], FRIDAY: [['18:00', '23:30']],
-      SATURDAY: [FULL_B], SUNDAY: [FULL_B],
-    },
+    avail: { MONDAY: [FULL_B], TUESDAY: [FULL_B], THURSDAY: [FULL_B] },
   },
 ];
 
@@ -149,7 +175,7 @@ async function main() {
   let pin = 1000;
   for (const p of EMPLOYEES) {
     const emp = await prisma.employee.create({
-      data: { name: p.name, hourLimit: 60, maxShifts: p.maxShifts ?? 6 },
+      data: { name: p.name, hourLimit: 60, maxShifts: p.maxShifts ?? 6, standby: p.standby ?? false },
     });
     for (const link of p.links) {
       pin += 1;
@@ -160,6 +186,7 @@ async function main() {
           pin: String(pin),
           proficiency: link.tier,
           canOpen: link.canOpen ?? false,
+          primary: link.primary ?? true,
         },
       });
     }
@@ -179,8 +206,11 @@ async function main() {
   const NIGHT_GRACE = 60;
 
   for (const day of WEEKDAYS) {
-    // opener block -- needs someone flagged canOpen, on time (no grace)
-    reqs.push({ storeId: mango.id, day, start: t('11:30'), end: t('17:00'), regularRequired: 1, needOpen: true });
+    // opener block -- 1 person Mon-Thu, 2 on Friday; at least one can open, on time (no grace)
+    reqs.push({
+      storeId: mango.id, day, start: t('11:30'), end: t('17:00'),
+      regularRequired: day === 'FRIDAY' ? 2 : 1, needOpen: true,
+    });
 
     // night: Thursday wants 2 seniors + a new; other weekdays just want a new allowed
     const nightEnd = mangoClose(day);

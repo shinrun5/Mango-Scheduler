@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "seed": "tsx prisma/seed.ts",
+    "create-manager": "tsx prisma/createManager.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "prisma": {
@@ -27,6 +28,8 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^6.19.3",
-    "express": "^5.2.1"
+    "@supabase/supabase-js": "^2.115.0",
+    "express": "^5.2.1",
+    "jose": "^6.2.12"
   }
 }

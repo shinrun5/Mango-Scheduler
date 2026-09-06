@@ -11,7 +11,10 @@ export interface GapCardData {
   shortBy: number
 }
 
-const phrase = (n: number, noun: string) => `${n} more ${noun}${n === 1 ? '' : 's'} needed`
+const phrase = (n: number, noun: string) => {
+  const plural = noun === 'person' ? 'people' : `${noun}s`
+  return `${n} more ${n === 1 ? noun : plural} needed`
+}
 
 /**
  * Work out what a requirement is *actually* still missing, given the current shifts

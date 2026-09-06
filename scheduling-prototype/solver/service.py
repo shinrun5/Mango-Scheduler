@@ -19,6 +19,7 @@ class EmployeeStore(BaseModel):
     storeId: int
     tier: str = "REGULAR"
     canOpen: bool = False
+    primary: bool = True  # False -> a cross-store assignment here is soft-penalised
 
 
 class Employee(BaseModel):

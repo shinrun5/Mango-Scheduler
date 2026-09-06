@@ -47,4 +47,22 @@ export const api = {
   /** Manually fill an open slot, or hand off the tail of a split shift, with a new row. */
   createShift: (input: { employeeId: number; storeId: number; day: DayOfWeek; start: string; end: string }) =>
     sendJSON<Shift>('/shifts', 'POST', input),
+
+  /** Take someone off a shift entirely (may leave the slot short). */
+  async deleteShift(shiftId: number): Promise<void> {
+    const res = await fetch(`/shifts/${shiftId}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`DELETE /shifts/${shiftId} -> ${res.status}`)
+  },
+
+  /** Change how many people a slot needs (holidays, etc.). */
+  updateRequirement: (
+    id: number,
+    patch: Partial<{
+      managerRequired: number
+      seniorRequired: number
+      regularRequired: number
+      newRequired: number
+      needOpen: boolean
+    }>,
+  ) => sendJSON<ShiftRequirement>(`/shiftrequirements/${id}`, 'PUT', patch),
 }

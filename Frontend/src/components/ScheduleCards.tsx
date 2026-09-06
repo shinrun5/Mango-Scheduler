@@ -2,88 +2,91 @@ import type { MouseEvent } from 'react'
 import { FruitAvatar } from './FruitAvatar'
 import { StarBadgeIcon, WarningIcon } from './icons'
 import { fruitFor } from '../lib/fruit'
-import { timeRange } from '../lib/time'
+import type { GapCardData } from '../lib/gaps'
+import { timeRangeCompact } from '../lib/time'
 
-export interface CardPerson {
-  shiftId: number
+export interface DayPerson {
   employeeId: number
   name: string
+  /** one or more DB shift rows, merged into a single contiguous span */
+  shiftIds: number[]
+  start: string
+  end: string
+  /** span runs open-to-close -> shown as "Full Day" instead of a time range */
+  fullDay: boolean
   isOpener: boolean
-  /** Set when this person's hours differ from the slot's nominal window (e.g. after a
-   * split): they come in after open, or leave before close. Values are 12h display strings. */
+  /** set when the person isn't there the whole operating day (came in late / left early) */
   note?: { comesIn?: string; leaves?: string }
 }
 
-export function ShiftCard({
-  start,
-  end,
-  people,
-  onPersonClick,
-}: {
-  start: string
-  end: string
-  people: CardPerson[]
-  /** Tap a person to see who else could cover this shift instead. */
-  onPersonClick?: (person: CardPerson, e: MouseEvent<HTMLButtonElement>) => void
-}) {
-  return (
-    <div className="flex flex-col gap-1.5 rounded-2xl border-[2.5px] border-ink bg-paper px-2.5 py-2 shadow-[3px_3px_0_var(--color-ink)]">
-      <span className="font-body text-[10px] font-extrabold uppercase tracking-wide text-muted-ink">
-        {timeRange(start, end)}
-      </span>
-      {people.map((p) => (
-        <button
-          key={p.employeeId}
-          type="button"
-          onClick={(e) => onPersonClick?.(p, e)}
-          className="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg text-left transition-opacity hover:opacity-70"
-        >
-          <div className="relative h-[26px] w-[26px] shrink-0">
-            <FruitAvatar kind={fruitFor(p.employeeId)} size={26} />
-            {p.isOpener && (
-              <div className="absolute -bottom-1 -right-1">
-                <StarBadgeIcon size={12} />
-              </div>
-            )}
-          </div>
-          <span className="font-body text-xs font-bold text-ink">{p.name}</span>
-          {p.note?.comesIn && (
-            <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold text-muted-ink">
-              in {p.note.comesIn}
-            </span>
-          )}
-          {p.note?.leaves && (
-            <span className="shrink-0 rounded-full bg-coral-bg px-1.5 py-px font-body text-[9px] font-bold text-coral-dark">
-              til {p.note.leaves}
-            </span>
-          )}
-        </button>
-      ))}
-    </div>
-  )
-}
+// every row is the same 3 columns (avatar · name · time) so the times line up
+// regardless of name length and never wrap onto a second line
+const ROW = 'grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-1.5 rounded-lg px-1 py-0.5 text-left'
 
-export function GapCard({
-  label,
-  window,
-  detail,
-  onClick,
+/** One card per store/day: a line per person (full-day shifts shown as one span) plus
+ * any coverage gaps, all in time order. */
+export function DayCard({
+  people,
+  gaps,
+  onPersonClick,
+  onGapClick,
 }: {
-  label: string
-  window: string
-  detail: string
-  onClick?: (e: MouseEvent<HTMLButtonElement>) => void
+  people: DayPerson[]
+  gaps: GapCardData[]
+  onPersonClick: (person: DayPerson, e: MouseEvent<HTMLButtonElement>) => void
+  onGapClick: (gap: GapCardData, e: MouseEvent<HTMLButtonElement>) => void
 }) {
+  const rows = [
+    ...people.map((p) => ({ start: p.start, kind: 'person' as const, p })),
+    ...gaps.map((g) => ({ start: g.start, kind: 'gap' as const, g })),
+  ].sort((a, b) => a.start.localeCompare(b.start))
+
+  if (rows.length === 0) return null
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-[2.5px] border-dashed border-coral bg-coral-bg p-3 text-center transition-opacity hover:opacity-80"
-    >
-      <WarningIcon size={20} />
-      <span className="font-body text-[10px] font-extrabold text-coral-dark">{label}</span>
-      <span className="font-body text-[10px] font-bold text-coral-dark">{window}</span>
-      <span className="font-body text-[9px] font-semibold text-coral-dark/80">{detail}</span>
-    </button>
+    <div className="flex flex-col gap-1 rounded-2xl border-[2.5px] border-ink bg-paper px-2 py-1.5 shadow-[3px_3px_0_var(--color-ink)]">
+      {rows.map((row) =>
+        row.kind === 'person' ? (
+          <button
+            key={`p${row.p.employeeId}-${row.p.start}`}
+            type="button"
+            onClick={(e) => onPersonClick(row.p, e)}
+            className={`${ROW} transition-colors hover:bg-cream`}
+          >
+            <div className="relative h-[22px] w-[22px]">
+              <FruitAvatar kind={fruitFor(row.p.employeeId)} size={22} />
+              {row.p.isOpener && (
+                <div className="absolute -bottom-1 -right-1">
+                  <StarBadgeIcon size={11} />
+                </div>
+              )}
+            </div>
+            <span className="truncate font-body text-xs font-bold text-ink">{row.p.name}</span>
+            <span
+              className={`whitespace-nowrap font-body text-[10px] font-semibold ${
+                row.p.note?.leaves ? 'text-coral-dark' : 'text-muted-ink'
+              }`}
+            >
+              {row.p.fullDay ? 'Full Day' : timeRangeCompact(row.p.start, row.p.end)}
+            </span>
+          </button>
+        ) : (
+          <button
+            key={`g${row.g.requirementId}-${row.g.start}`}
+            type="button"
+            onClick={(e) => onGapClick(row.g, e)}
+            className={`${ROW} border border-dashed border-coral bg-coral-bg transition-opacity hover:opacity-80`}
+          >
+            <div className="flex h-[22px] w-[22px] items-center justify-center">
+              <WarningIcon size={13} />
+            </div>
+            <span className="truncate font-body text-[10px] font-bold text-coral-dark">{row.g.detail}</span>
+            <span className="whitespace-nowrap font-body text-[10px] font-semibold text-coral-dark">
+              {timeRangeCompact(row.g.start, row.g.end)}
+            </span>
+          </button>
+        ),
+      )}
+    </div>
   )
 }

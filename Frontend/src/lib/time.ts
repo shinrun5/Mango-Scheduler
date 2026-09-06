@@ -36,6 +36,14 @@ export function to12Hour(hhmm24: string): string {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`
 }
 
+/** Raw 24h "HH:MM" -> compact "h:mma" / "h:mmp" (half the width of to12Hour). */
+export function to12HourCompact(hhmm24: string): string {
+  const [h24 = 0, m = 0] = hhmm24.split(':').map(Number)
+  const period = h24 < 12 ? 'a' : 'p'
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  return `${h12}:${String(m).padStart(2, '0')}${period}`
+}
+
 /** "HH:MM" 24h <-> minutes-since-midnight. */
 export function clockToMin(hhmm24: string): number {
   const [h = 0, m = 0] = hhmm24.split(':').map(Number)
@@ -70,4 +78,9 @@ export function windowsOverlap(aStart: number, aEnd: number, bStart: number, bEn
 
 export function timeRange(startIso: string, endIso: string): string {
   return `${hhmm(startIso)}–${hhmm(endIso)}`
+}
+
+/** Compact form for tight columns, e.g. "11:30a–10:30p". */
+export function timeRangeCompact(startIso: string, endIso: string): string {
+  return `${to12HourCompact(toHHMM24(startIso))}–${to12HourCompact(toHHMM24(endIso))}`
 }

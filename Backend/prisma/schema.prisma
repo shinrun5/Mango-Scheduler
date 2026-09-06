@@ -69,8 +69,31 @@ model Employee {
   shift Shift[]
   hourLimit Int
   maxShifts Int @default(6)   // max distinct days worked per week
+  standby Boolean @default(false)   // on-call: never auto-scheduled, only manually assignable
   employeeStores EmployeeStore[]
   recurringAvailability RecurringAvailability[]
+  // account link: an Employee starts with no login; a manager issues an
+  // inviteCode, the person registers with it, and a User row gets linked here
+  user       User?
+  inviteCode String?  @unique
+}
+
+enum Role {
+  MANAGER
+  EMPLOYEE
+}
+
+// Our own identity row. `authId` is the only reference to Supabase Auth --
+// every app relation hangs off User.id so the auth provider can be swapped
+// without re-modelling anything.
+model User {
+  id         Int      @id @default(autoincrement())
+  authId     String   @unique   // Supabase auth.users.id (UUID)
+  email      String   @unique
+  role       Role     @default(EMPLOYEE)
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employeeId Int?      @unique
+  createdAt  DateTime @default(now())
 }
 
 model RecurringAvailability {
@@ -96,6 +119,7 @@ model EmployeeStore {
   pin       String
   proficiency Experience
   canOpen   Boolean  @default(false)   // trusted to open the store (not tier-derived)
+  primary   Boolean  @default(true)    // false = the solver only sends them here to close a gap
 
   @@id([employeeId, storeId])
   @@unique([storeId, pin])
