@@ -5,7 +5,7 @@ import type { Role } from '../types'
 
 /** Guards its child routes: bounces to /login when signed out, and to the user's
  * own home when their role doesn't match `role`. */
-export function ProtectedRoute({ role }: { role?: Role }) {
+export function ProtectedRoute({ role }: { role?: Role | Role[] }) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
@@ -15,6 +15,7 @@ export function ProtectedRoute({ role }: { role?: Role }) {
     )
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
-  if (role && user.role !== role) return <Navigate to={homePathForRole(user.role)} replace />
+  const allowed = role === undefined || (Array.isArray(role) ? role.includes(user.role) : user.role === role)
+  if (!allowed) return <Navigate to={homePathForRole(user.role)} replace />
   return <Outlet />
 }

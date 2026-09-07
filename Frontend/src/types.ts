@@ -12,7 +12,7 @@ export type DayOfWeek =
 
 export type Tier = 'NEW' | 'REGULAR' | 'SENIOR' | 'MANAGER'
 
-export type Role = 'MANAGER' | 'EMPLOYEE'
+export type Role = 'OWNER' | 'MANAGER' | 'EMPLOYEE'
 
 /** The current account, as returned by /auth/login, /auth/register and /auth/me. */
 export interface AuthUser {

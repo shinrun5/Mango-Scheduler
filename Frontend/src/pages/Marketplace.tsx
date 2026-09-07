@@ -16,11 +16,11 @@ export function Marketplace() {
 
   const refresh = useCallback(
     () =>
-      Promise.all([api.getMarketplace(), api.getStores(), api.getScheduleStatus().catch(() => null)]).then(
-        ([m, s, st]) => {
+      Promise.all([api.getMarketplace(), api.getStores(), api.getMyShifts().catch(() => null)]).then(
+        ([m, s, mine]) => {
           setData(m)
           setStores(s)
-          setWeekStart(st?.weekStart ?? null)
+          setWeekStart(mine?.weekStart ?? null)
         },
       ),
     [],

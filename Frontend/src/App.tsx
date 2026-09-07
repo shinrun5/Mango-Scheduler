@@ -33,7 +33,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        <Route element={<ProtectedRoute role="MANAGER" />}>
+        <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} />}>
           <Route element={<ManagerLayout />}>
             <Route path="/schedule" element={<Dashboard />} />
             <Route path="/workers" element={<Workers />} />

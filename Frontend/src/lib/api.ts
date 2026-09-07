@@ -194,27 +194,33 @@ export const api = {
   saveMyAvailability: (windows: { day: DayOfWeek; start: string; end: string }[]) =>
     sendJSON<RecurringAvailability[]>('/availability/mine', 'PUT', { windows }),
 
-  generateSchedule: (opts?: { saveFirst?: boolean; saveLabel?: string }) =>
-    sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { solveSeconds: 5, ...opts }),
+  generateSchedule: (storeId: number, opts?: { saveFirst?: boolean; saveLabel?: string }) =>
+    sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { storeId, solveSeconds: 5, ...opts }),
 
-  // --- publish state + calendar week ---
-  getScheduleStatus: () =>
-    getJSON<{ publishedAt: string | null; weekStart: string }>('/schedule/status'),
-  publishSchedule: () => sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', {}),
-  unpublishSchedule: () => sendJSON<{ publishedAt: string | null }>('/schedule/unpublish', 'POST', {}),
-  setScheduleWeek: (weekStart: string) =>
-    sendJSON<{ weekStart: string }>('/schedule/week', 'PUT', { weekStart }),
+  // --- publish state + calendar week (per store) ---
+  getScheduleStatus: (storeId: number) =>
+    getJSON<{ publishedAt: string | null; weekStart: string }>(`/schedule/status?storeId=${storeId}`),
+  publishSchedule: (storeId: number) =>
+    sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', { storeId }),
+  unpublishSchedule: (storeId: number) =>
+    sendJSON<{ publishedAt: string | null }>('/schedule/unpublish', 'POST', { storeId }),
+  setScheduleWeek: (storeId: number, weekStart: string) =>
+    sendJSON<{ weekStart: string }>('/schedule/week', 'PUT', { storeId, weekStart }),
   getMyShifts: () => getJSON<MyShiftsResponse>('/shifts/mine'),
 
-  // --- schedule history (snapshots) ---
-  saveSnapshot: (label?: string) =>
-    sendJSON<SnapshotMeta & { shiftCount: number }>('/schedule/snapshots', 'POST', { label }),
-  getSnapshots: () => getJSON<SnapshotMeta[]>('/schedule/snapshots'),
-  getSnapshot: (id: number) => getJSON<SnapshotDetail>(`/schedule/snapshots/${id}`),
-  restoreSnapshot: (id: number) =>
-    sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', {}),
-  deleteSnapshot: (id: number) =>
-    request<{ message: string }>(`/schedule/snapshots/${id}`, { method: 'DELETE' }),
+  // --- schedule history (per-store snapshots) ---
+  saveSnapshot: (storeId: number, label?: string) =>
+    sendJSON<SnapshotMeta & { shiftCount: number }>('/schedule/snapshots', 'POST', { storeId, label }),
+  getSnapshots: (storeId: number) =>
+    getJSON<SnapshotMeta[]>(`/schedule/snapshots?storeId=${storeId}`),
+  getSnapshot: (storeId: number, id: number) =>
+    getJSON<SnapshotDetail>(`/schedule/snapshots/${id}?storeId=${storeId}`),
+  restoreSnapshot: (storeId: number, id: number) =>
+    sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', {
+      storeId,
+    }),
+  deleteSnapshot: (storeId: number, id: number) =>
+    request<{ message: string }>(`/schedule/snapshots/${id}?storeId=${storeId}`, { method: 'DELETE' }),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
   updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string }) =>

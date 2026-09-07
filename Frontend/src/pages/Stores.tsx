@@ -2,9 +2,12 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { RequirementsEditor } from '../components/RequirementsEditor'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { EmployeeStore, ShiftRequirement, Store } from '../types'
 
 export function Stores() {
+  const { user } = useAuth()
+  const isOwner = user?.role === 'OWNER'
   const [stores, setStores] = useState<Store[]>([])
   const [links, setLinks] = useState<EmployeeStore[]>([])
   const [reqs, setReqs] = useState<ShiftRequirement[]>([])
@@ -49,7 +52,9 @@ export function Stores() {
       </p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <AddStore onAdd={(name, requiresOpenerSkill) => act(() => api.createStore({ name, requiresOpenerSkill }))} />
+      {isOwner && (
+        <AddStore onAdd={(name, requiresOpenerSkill) => act(() => api.createStore({ name, requiresOpenerSkill }))} />
+      )}
 
       {loading ? (
         <p className="mt-3 font-body text-sm text-muted-ink">Loading…</p>
@@ -91,14 +96,16 @@ export function Stores() {
                     >
                       Edit
                     </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Delete ${s.name}?`)) void act(() => api.deleteStore(s.id))
-                      }}
-                      className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
-                    >
-                      Delete
-                    </button>
+                    {isOwner && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Delete ${s.name}?`)) void act(() => api.deleteStore(s.id))
+                        }}
+                        className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
                 {showNeeds === s.id && (

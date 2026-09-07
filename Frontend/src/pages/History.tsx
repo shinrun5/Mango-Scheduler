@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useStore } from '../lib/store-context'
 import { DAY_LABEL, DAYS, dayDate, relativeTime, to12Hour, weekRangeLabel } from '../lib/time'
 import type { SnapshotDetail, SnapshotMeta } from '../types'
 
 export function History() {
+  const { storeId } = useStore()
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [selected, setSelected] = useState<SnapshotDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -11,20 +13,23 @@ export function History() {
   const [busy, setBusy] = useState(false)
 
   function refresh() {
+    if (storeId == null) return Promise.resolve()
     return api
-      .getSnapshots()
+      .getSnapshots(storeId)
       .then(setSnapshots)
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load history'))
   }
 
   useEffect(() => {
+    if (storeId == null) return
     refresh().finally(() => setLoading(false))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId])
 
   async function open(id: number) {
     setError(null)
     try {
-      setSelected(await api.getSnapshot(id))
+      setSelected(await api.getSnapshot(storeId!, id))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open that schedule')
     }
@@ -35,7 +40,7 @@ export function History() {
     setBusy(true)
     setError(null)
     try {
-      const { restored } = await api.restoreSnapshot(id)
+      const { restored } = await api.restoreSnapshot(storeId!, id)
       window.alert(`Restored ${restored} shifts. Review it on the Schedule tab, then re-post.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not restore')
@@ -47,7 +52,7 @@ export function History() {
   async function del(id: number) {
     if (!window.confirm('Delete this saved schedule?')) return
     try {
-      await api.deleteSnapshot(id)
+      await api.deleteSnapshot(storeId!, id)
       if (selected?.id === id) setSelected(null)
       await refresh()
     } catch (e) {

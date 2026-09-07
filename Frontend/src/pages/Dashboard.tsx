@@ -4,6 +4,7 @@ import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
 import { Header } from '../components/Header'
 import { api } from '../lib/api'
+import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { computeGapCards, type GapCardData } from '../lib/gaps'
 import { effectiveCanOpen } from '../lib/openers'
@@ -81,22 +82,28 @@ export function Dashboard() {
   const [publishBusy, setPublishBusy] = useState(false)
   const [weekStart, setWeekStart] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { storeId, stores } = useStore()
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
+  }, [])
+
+  useEffect(() => {
+    if (storeId == null) return
     api
-      .getScheduleStatus()
+      .getScheduleStatus(storeId)
       .then((s) => {
         setPublishedAt(s.publishedAt)
         setWeekStart(s.weekStart)
       })
       .catch(() => {})
-  }, [])
+  }, [storeId])
 
   async function togglePublish(next: boolean) {
+    if (storeId == null) return
     setPublishBusy(true)
     try {
-      const s = next ? await api.publishSchedule() : await api.unpublishSchedule()
+      const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
       setPublishedAt(s.publishedAt)
     } catch (e) {
       setError(String(e))
@@ -106,9 +113,9 @@ export function Dashboard() {
   }
 
   async function changeWeek(deltaWeeks: number) {
-    if (!weekStart) return
+    if (!weekStart || storeId == null) return
     try {
-      const { weekStart: next } = await api.setScheduleWeek(shiftWeekYMD(weekStart, deltaWeeks))
+      const { weekStart: next } = await api.setScheduleWeek(storeId, shiftWeekYMD(weekStart, deltaWeeks))
       setWeekStart(next)
     } catch (e) {
       setError(String(e))
@@ -116,11 +123,12 @@ export function Dashboard() {
   }
 
   async function saveToHistory() {
+    if (storeId == null) return
     setSaving(true)
     setError(null)
     try {
       const label = window.prompt('Label this saved schedule (optional):') ?? undefined
-      await api.saveSnapshot(label || undefined)
+      await api.saveSnapshot(storeId, label || undefined)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -129,14 +137,16 @@ export function Dashboard() {
   }
 
   async function handleGenerate() {
+    if (storeId == null) return
     setGenerating(true)
     setError(null)
     try {
       // never lose the current schedule to a regenerate — auto-save it first
-      const result = await api.generateSchedule({ saveFirst: (board?.shifts.length ?? 0) > 0 })
+      const hadShifts = (board?.shifts.filter((s) => s.storeId === storeId).length ?? 0) > 0
+      const result = await api.generateSchedule(storeId, { saveFirst: hadShifts })
       setLastResult(result)
       setBoard(await loadBoard())
-      const s = await api.getScheduleStatus()
+      const s = await api.getScheduleStatus(storeId)
       setPublishedAt(s.publishedAt)
     } catch (e) {
       setError(String(e))
@@ -318,14 +328,35 @@ export function Dashboard() {
     )
   }
 
-  const view = buildView(board)
-  const solved = lastResult !== null || board.shifts.length > 0
+  if (storeId == null) {
+    return (
+      <div className="flex h-screen items-center justify-center font-body text-muted-ink">
+        {stores.length === 0 ? 'No stores yet.' : 'Pick a store above.'}
+      </div>
+    )
+  }
 
+  // just the selected store
+  const storeShifts = board.shifts.filter((s) => s.storeId === storeId)
+  const full = buildView(board)
+  const view = { ...full, stores: full.stores.filter((s) => s.id === storeId) }
+  const solved = lastResult !== null || storeShifts.length > 0
+  const totalShort =
+    view.stores[0]?.days.reduce(
+      (n, d) => n + d.gaps.reduce((m, g) => m + g.shortBy, 0),
+      0,
+    ) ?? 0
+
+  // employees who work the selected store, with their shift-day count there
+  const storeEmpIds = new Set(
+    board.employeeStores.filter((es) => es.storeId === storeId).map((es) => es.employeeId),
+  )
   const weekLoad = board.employees
+    .filter((e) => storeEmpIds.has(e.id))
     .map((e) => ({
       id: e.id,
       name: e.name,
-      count: new Set(board.shifts.filter((s) => s.employeeId === e.id).map((s) => s.day)).size,
+      count: new Set(storeShifts.filter((s) => s.employeeId === e.id).map((s) => s.day)).size,
       max: e.maxShifts,
     }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
@@ -335,7 +366,7 @@ export function Dashboard() {
       <Header
         weekStart={weekStart ?? undefined}
         onWeekChange={(d) => void changeWeek(d)}
-        gapCount={solved ? view.totalShort : null}
+        gapCount={solved ? totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
         onSave={solved ? () => void saveToHistory() : undefined}

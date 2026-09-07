@@ -18,6 +18,7 @@ const admin = supabaseAdmin();
 
 const user = await prisma.user.findUnique({ where: { email } });
 if (user) {
+  await prisma.managerStore.deleteMany({ where: { userId: user.id } });
   await prisma.user.delete({ where: { id: user.id } });
   console.log(`deleted User id ${user.id} (${email})`);
 } else {
