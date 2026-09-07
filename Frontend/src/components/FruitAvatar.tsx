@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import type { Fruit } from '../lib/fruit'
 
-// Ported from scheduling-prototype/design/StyleGuide.dc.html — keep in sync with
+// Ported from design/StyleGuide.dc.html — keep in sync with
 // that reference sheet. Placeholder character art; see [[frontend-design-direction]]
 // in project memory for the plan to replace these with real illustration.
 

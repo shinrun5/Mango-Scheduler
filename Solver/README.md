@@ -6,15 +6,16 @@ FastAPI wrapper around a general CP-SAT scheduling engine. The Express backend
 ## Run
 
 ```bash
-cd scheduling-prototype
-.venv/bin/uvicorn solver.service:app --reload --port 8000
+cd Solver
+uvicorn service:app --reload --port 8000
 ```
 
 First time / fresh venv:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r solver/requirements.txt
+.venv/bin/pip install -r requirements.txt
+.venv/bin/uvicorn service:app --reload --port 8000
 ```
 
 ## Endpoints
@@ -27,7 +28,7 @@ Quick check:
 ```bash
 curl -s -X POST http://localhost:8000/solve \
   -H 'Content-Type: application/json' \
-  --data-binary @solver/sample_payload.json | python3 -m json.tool
+  --data-binary @sample_payload.json | python3 -m json.tool
 ```
 
 ## Contract

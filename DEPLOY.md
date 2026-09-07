@@ -60,7 +60,7 @@ One project, two services:
 
 ### 2. Solver service
 - **Add service → GitHub repo → this repo** (same repo again)
-- **Settings → Root Directory**: `/scheduling-prototype` (picks up its own `railway.json`)
+- **Settings → Root Directory**: `/Solver` (picks up its own `railway.json`)
 - No variables needed
 - **Do not** generate a public domain — the API reaches it on the private network
 - `railway.json` sets `sleepApplication: true`, so it scales to zero and wakes

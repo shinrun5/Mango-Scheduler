@@ -1,3 +1,0 @@
-# So Railway/Nixpacks detects this as a Python service and installs the solver.
-# The real list lives in solver/requirements.txt.
--r solver/requirements.txt

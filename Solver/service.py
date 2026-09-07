@@ -1,8 +1,8 @@
 """
 FastAPI wrapper around engine.solve().
 
-Run (from scheduling-prototype/):
-    .venv/bin/uvicorn solver.service:app --reload --port 8000
+Run (from Solver/):
+    uvicorn service:app --reload --port 8000
 
 The Express backend calls POST /solve with the payload built from the DB.
 """
@@ -10,7 +10,7 @@ The Express backend calls POST /solve with the payload built from the DB.
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from .engine import solve
+from engine import solve
 
 app = FastAPI(title="Scheduler Solver", version="0.1.0")
 
