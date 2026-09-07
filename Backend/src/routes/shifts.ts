@@ -19,7 +19,12 @@ router.get('/mine', requireAuth, async (req, res) => {
     where: { employeeId },
     orderBy: [{ day: 'asc' }, { start: 'asc' }],
   });
-  res.json({ published: true, publishedAt: schedule.publishedAt, shifts });
+  res.json({
+    published: true,
+    publishedAt: schedule.publishedAt,
+    weekStart: schedule.weekStart,
+    shifts,
+  });
 });
 
 // Unassigned shifts the caller could pick up (at a store they work, once posted).

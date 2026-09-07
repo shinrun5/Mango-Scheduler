@@ -44,6 +44,9 @@ export function ManagerLayout() {
             <NavLink to="/stores" className={tab}>
               Stores
             </NavLink>
+            <NavLink to="/history" className={tab}>
+              History
+            </NavLink>
           </div>
         </div>
         <div className="flex items-center gap-3">

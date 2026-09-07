@@ -12,9 +12,11 @@ import type {
   RosterWorker,
   Session,
   Shift,
-  Tier,
   ShiftRequirement,
+  SnapshotDetail,
+  SnapshotMeta,
   Store,
+  Tier,
 } from '../types'
 import { getSession, setSession } from './session'
 
@@ -175,14 +177,27 @@ export const api = {
   saveMyAvailability: (windows: { day: DayOfWeek; start: string; end: string }[]) =>
     sendJSON<RecurringAvailability[]>('/availability/mine', 'PUT', { windows }),
 
-  generateSchedule: (solveSeconds = 5) =>
-    sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { solveSeconds }),
+  generateSchedule: (opts?: { saveFirst?: boolean; saveLabel?: string }) =>
+    sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { solveSeconds: 5, ...opts }),
 
-  // --- publish state ---
-  getScheduleStatus: () => getJSON<{ publishedAt: string | null }>('/schedule/status'),
+  // --- publish state + calendar week ---
+  getScheduleStatus: () =>
+    getJSON<{ publishedAt: string | null; weekStart: string }>('/schedule/status'),
   publishSchedule: () => sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', {}),
   unpublishSchedule: () => sendJSON<{ publishedAt: string | null }>('/schedule/unpublish', 'POST', {}),
+  setScheduleWeek: (weekStart: string) =>
+    sendJSON<{ weekStart: string }>('/schedule/week', 'PUT', { weekStart }),
   getMyShifts: () => getJSON<MyShiftsResponse>('/shifts/mine'),
+
+  // --- schedule history (snapshots) ---
+  saveSnapshot: (label?: string) =>
+    sendJSON<SnapshotMeta & { shiftCount: number }>('/schedule/snapshots', 'POST', { label }),
+  getSnapshots: () => getJSON<SnapshotMeta[]>('/schedule/snapshots'),
+  getSnapshot: (id: number) => getJSON<SnapshotDetail>(`/schedule/snapshots/${id}`),
+  restoreSnapshot: (id: number) =>
+    sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', {}),
+  deleteSnapshot: (id: number) =>
+    request<{ message: string }>(`/schedule/snapshots/${id}`, { method: 'DELETE' }),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
   updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string }) =>

@@ -85,6 +85,27 @@ export function timeRangeCompact(startIso: string, endIso: string): string {
   return `${to12HourCompact(toHHMM24(startIso))}–${to12HourCompact(toHHMM24(endIso))}`
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** The date of day `dayIndex` (0 = Mon) within the week starting at `weekStartIso`, as "Sep 8". */
+export function dayDate(weekStartIso: string, dayIndex: number): string {
+  const d = new Date(weekStartIso)
+  d.setUTCDate(d.getUTCDate() + dayIndex)
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
+}
+
+/** "Sep 8 – Sep 14" for a week starting at `weekStartIso`. */
+export function weekRangeLabel(weekStartIso: string): string {
+  return `${dayDate(weekStartIso, 0)} – ${dayDate(weekStartIso, 6)}`
+}
+
+/** `weekStartIso` shifted by whole weeks, as "YYYY-MM-DD" (for PUT /schedule/week). */
+export function shiftWeekYMD(weekStartIso: string, deltaWeeks: number): string {
+  const d = new Date(weekStartIso)
+  d.setUTCDate(d.getUTCDate() + deltaWeeks * 7)
+  return d.toISOString().slice(0, 10)
+}
+
 /** For real timestamps (not the 1970 wall-clock values): "just now", "5m ago",
  * "3h ago", then a short date. */
 export function relativeTime(iso: string): string {

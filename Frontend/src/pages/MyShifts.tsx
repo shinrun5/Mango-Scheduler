@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { DAY_LABEL, DAYS, relativeTime, timeRange } from '../lib/time'
+import { DAY_LABEL, DAYS, dayDate, relativeTime, timeRange } from '../lib/time'
 import type { ChangeRequest, MyShiftsResponse, Shift, Store } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
@@ -94,7 +94,14 @@ export function MyShifts() {
               key={day}
               className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
             >
-              <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
+              <span className="font-heading text-sm font-bold text-ink">
+                {DAY_LABEL[day]}
+                {data.weekStart && (
+                  <span className="ml-1.5 font-body text-[11px] font-semibold text-muted-ink">
+                    {dayDate(data.weekStart, DAYS.indexOf(day))}
+                  </span>
+                )}
+              </span>
               <div className="mt-1.5 flex flex-col gap-2">
                 {shifts.map((s) => {
                   const pending = pendingFor(s.id)

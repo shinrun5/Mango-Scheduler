@@ -52,14 +52,27 @@ enum DayOfWeek {
   SUNDAY
 }
 
-// Singleton (row id = 1): when the current week's schedule was last posted for
-// employees to see. Null / missing = not posted yet. Manager edits to Shift rows
-// are always live once posted -- this is just the "employees can look now" gate.
+// Singleton (row id = 1): the current working schedule. `publishedAt` gates whether
+// employees can see it; `weekStart` (a Monday, midnight UTC) is the calendar week it
+// covers -- shifts themselves stay day-of-week templated, this is just the dates shown.
 model Schedule {
   id            Int       @id @default(1)
   publishedAt   DateTime?
   publishedById Int?
+  weekStart     DateTime?
   updatedAt     DateTime  @updatedAt
+}
+
+// A frozen copy of the working schedule, kept for history. Self-contained: shift
+// rows carry denormalised employee/store names so old weeks still render after the
+// roster changes.
+model ScheduleSnapshot {
+  id        Int      @id @default(autoincrement())
+  weekStart DateTime
+  label     String?
+  savedAt   DateTime @default(now())
+  savedById Int?
+  shifts    Json     // [{ employeeId, employeeName, storeId, storeName, day, start, end }]
 }
 
 model Shift {

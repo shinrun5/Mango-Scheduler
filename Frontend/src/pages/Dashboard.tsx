@@ -7,7 +7,18 @@ import { api } from '../lib/api'
 import { type Candidate, computeCandidates } from '../lib/candidates'
 import { computeGapCards, type GapCardData } from '../lib/gaps'
 import { effectiveCanOpen } from '../lib/openers'
-import { DAYS, DAY_LABEL, timeRange, to12Hour, toHHMM24, toMinutes, windowsOverlap, withTime } from '../lib/time'
+import {
+  DAYS,
+  DAY_LABEL,
+  dayDate,
+  shiftWeekYMD,
+  timeRange,
+  to12Hour,
+  toHHMM24,
+  toMinutes,
+  windowsOverlap,
+  withTime,
+} from '../lib/time'
 import type {
   DayOfWeek,
   Employee,
@@ -68,10 +79,18 @@ export function Dashboard() {
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
+  const [weekStart, setWeekStart] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
-    api.getScheduleStatus().then((s) => setPublishedAt(s.publishedAt)).catch(() => {})
+    api
+      .getScheduleStatus()
+      .then((s) => {
+        setPublishedAt(s.publishedAt)
+        setWeekStart(s.weekStart)
+      })
+      .catch(() => {})
   }, [])
 
   async function togglePublish(next: boolean) {
@@ -86,13 +105,39 @@ export function Dashboard() {
     }
   }
 
+  async function changeWeek(deltaWeeks: number) {
+    if (!weekStart) return
+    try {
+      const { weekStart: next } = await api.setScheduleWeek(shiftWeekYMD(weekStart, deltaWeeks))
+      setWeekStart(next)
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  async function saveToHistory() {
+    setSaving(true)
+    setError(null)
+    try {
+      const label = window.prompt('Label this saved schedule (optional):') ?? undefined
+      await api.saveSnapshot(label || undefined)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleGenerate() {
     setGenerating(true)
     setError(null)
     try {
-      const result = await api.generateSchedule()
+      // never lose the current schedule to a regenerate — auto-save it first
+      const result = await api.generateSchedule({ saveFirst: (board?.shifts.length ?? 0) > 0 })
       setLastResult(result)
       setBoard(await loadBoard())
+      const s = await api.getScheduleStatus()
+      setPublishedAt(s.publishedAt)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -288,9 +333,13 @@ export function Dashboard() {
   return (
     <>
       <Header
+        weekStart={weekStart ?? undefined}
+        onWeekChange={(d) => void changeWeek(d)}
         gapCount={solved ? view.totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
+        onSave={solved ? () => void saveToHistory() : undefined}
+        saving={saving}
         publishedAt={publishedAt}
         onPublish={() => void togglePublish(true)}
         onUnpublish={() => void togglePublish(false)}
@@ -350,11 +399,16 @@ export function Dashboard() {
                         <button
                           type="button"
                           onClick={(e) => openSlotEditor(e, d.requirements)}
-                          className={`text-center font-heading text-xs font-bold transition-opacity hover:opacity-60 ${
+                          className={`flex flex-col items-center leading-tight transition-opacity hover:opacity-60 ${
                             d.gaps.length ? 'text-coral-dark' : 'text-ink'
                           }`}
                         >
-                          {DAY_LABEL[d.day]}
+                          <span className="font-heading text-xs font-bold">{DAY_LABEL[d.day]}</span>
+                          {weekStart && (
+                            <span className="font-body text-[10px] font-semibold text-muted-ink">
+                              {dayDate(weekStart, DAYS.indexOf(d.day))}
+                            </span>
+                          )}
                         </button>
                         <DayCard
                           people={d.people}

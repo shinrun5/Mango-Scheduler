@@ -148,7 +148,30 @@ export interface ChangeRequest {
 export interface MyShiftsResponse {
   published: boolean
   publishedAt: string | null
+  weekStart: string | null
   shifts: Shift[]
+}
+
+export interface SnapshotMeta {
+  id: number
+  weekStart: string
+  label: string | null
+  savedAt: string
+}
+
+export interface SnapshotShift {
+  employeeId: number | null
+  employeeName: string | null
+  storeId: number
+  storeName: string
+  day: DayOfWeek
+  start: string // "HH:MM"
+  end: string
+}
+
+export interface SnapshotDetail extends SnapshotMeta {
+  savedById: number | null
+  shifts: SnapshotShift[]
 }
 
 export interface GenerateScheduleResult {

@@ -6,6 +6,7 @@ import { homePathForRole, useAuth } from './lib/auth'
 import { Availability } from './pages/Availability'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
+import { History } from './pages/History'
 import { MyShifts } from './pages/MyShifts'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
+            <Route path="/history" element={<History />} />
           </Route>
         </Route>
 
