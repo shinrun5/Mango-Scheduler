@@ -77,26 +77,27 @@ router.post('/', ...manager, async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
-  const availability = await prisma.recurringAvailability.findMany();
+// GET /availability — windows for employees at stores the caller manages (used by
+// the manager board's candidate picker). Managers/owners only.
+router.get('/', ...manager, async (req, res) => {
+  const availability = await prisma.recurringAvailability.findMany({
+    where: { employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } },
+  });
   res.json(availability);
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', ...manager, async (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
 
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: 'A valid numeric id is required' });
+  const row = await prisma.recurringAvailability.findUnique({
+    where: { id },
+    include: { employee: { select: { employeeStores: { select: { storeId: true } } } } },
+  });
+  if (!row || !row.employee.employeeStores.some((es) => req.user!.storeIds.includes(es.storeId))) {
+    return res.status(404).json({ error: 'Not found' });
   }
-
-  try {
-    const availability = await prisma.recurringAvailability.findUnique({
-      where: { id },
-    });
-    res.json(availability);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch availability' });
-  }
+  res.json(row);
 });
 
 router.delete('/:id', ...manager, async (req, res) => {

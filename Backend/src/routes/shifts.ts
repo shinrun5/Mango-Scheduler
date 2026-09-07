@@ -1,8 +1,9 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import prisma from '../lib/prisma.js';
-import { canManageStore, requireAuth, requireManagerFor } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
 
 const router = Router();
+const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 /** guard for PUT/DELETE /:id — the store isn't in the request, so load the shift first */
 async function requireManagerOfShift(req: Request, res: Response, next: NextFunction) {
@@ -82,12 +83,12 @@ router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async
   }
 });
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', ...anyManager, async (req, res) => {
   const shifts = await prisma.shift.findMany({ where: { storeId: { in: req.user!.storeIds } } });
   res.json(shifts);
 });
 
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', ...anyManager, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   const shift = await prisma.shift.findUnique({ where: { id } });

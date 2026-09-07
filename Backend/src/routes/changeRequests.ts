@@ -59,6 +59,10 @@ router.get('/swap-targets', requireAuth, async (req, res) => {
 
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
+  // must be your shift, or at a store you work
+  if (shift.employeeId !== me && !(await linkExists(me, shift.storeId))) {
+    return res.status(403).json({ error: 'Not your shift' });
+  }
 
   const links = await prisma.employeeStore.findMany({
     where: { storeId: shift.storeId, employeeId: { not: me } },
