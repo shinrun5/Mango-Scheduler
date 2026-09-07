@@ -7,6 +7,7 @@ import type {
   EmployeeStore,
   GenerateScheduleResult,
   MyShiftsResponse,
+  Profile,
   RecurringAvailability,
   RosterWorker,
   Session,
@@ -110,6 +111,9 @@ export const api = {
     return data.user
   },
   me: () => getJSON<{ user: AuthUser }>('/auth/me').then((d) => d.user),
+  getProfile: () => getJSON<Profile>('/auth/profile'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
 
   // --- shift-change requests ---
   getOpenShifts: () => getJSON<Shift[]>('/shifts/open'),
@@ -138,6 +142,11 @@ export const api = {
 
   // --- schedule board ---
   getStores: () => getJSON<Store[]>('/stores'),
+  createStore: (input: { name: string; requiresOpenerSkill?: boolean }) =>
+    sendJSON<Store>('/stores', 'POST', input),
+  updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean }) =>
+    sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
+  deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
   getShifts: () => getJSON<Shift[]>('/shifts'),

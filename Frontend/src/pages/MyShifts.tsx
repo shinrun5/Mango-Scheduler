@@ -58,7 +58,7 @@ export function MyShifts() {
 
   if (!data.published) {
     return (
-      <div className="mx-auto w-full max-w-2xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-24 sm:pb-6">
         <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
         <p className="mt-2 font-body text-sm text-muted-ink">
           This week's schedule isn't posted yet — check back soon.
@@ -75,7 +75,7 @@ export function MyShifts() {
   })).filter((d) => d.shifts.length > 0)
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-24 sm:pb-6">
       <div className="flex items-baseline justify-between">
         <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
         {data.publishedAt && (

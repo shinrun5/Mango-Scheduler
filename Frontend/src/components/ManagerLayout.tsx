@@ -41,6 +41,9 @@ export function ManagerLayout() {
             <NavLink to="/requests" className={tab}>
               Requests{pending > 0 ? ` (${pending})` : ''}
             </NavLink>
+            <NavLink to="/stores" className={tab}>
+              Stores
+            </NavLink>
           </div>
         </div>
         <div className="flex items-center gap-3">

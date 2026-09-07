@@ -7,8 +7,10 @@ import { Availability } from './pages/Availability'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
 import { MyShifts } from './pages/MyShifts'
+import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
 import { Requests } from './pages/Requests'
+import { Stores } from './pages/Stores'
 import { Workers } from './pages/Workers'
 
 function RootRedirect() {
@@ -33,6 +35,7 @@ export default function App() {
             <Route path="/schedule" element={<Dashboard />} />
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
+            <Route path="/stores" element={<Stores />} />
           </Route>
         </Route>
 
@@ -40,6 +43,7 @@ export default function App() {
           <Route element={<EmployeeLayout />}>
             <Route path="/my-shifts" element={<MyShifts />} />
             <Route path="/availability" element={<Availability />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
         </Route>
 

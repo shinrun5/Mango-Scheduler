@@ -89,4 +89,55 @@ router.get('/me', requireAuth, async (req, res) => {
   return res.json({ user: req.user });
 });
 
+// GET /auth/profile — richer: name, store links + tier, weekly caps
+router.get('/profile', requireAuth, async (req, res) => {
+  const u = req.user!;
+  let employee = null;
+  if (u.employeeId) {
+    const e = await prisma.employee.findUnique({
+      where: { id: u.employeeId },
+      include: { employeeStores: { include: { store: true } } },
+    });
+    if (e) {
+      employee = {
+        id: e.id,
+        name: e.name,
+        hourLimit: e.hourLimit,
+        maxShifts: e.maxShifts,
+        standby: e.standby,
+        stores: e.employeeStores.map((s) => ({
+          storeId: s.storeId,
+          storeName: s.store.name,
+          proficiency: s.proficiency,
+          canOpen: s.canOpen,
+        })),
+      };
+    }
+  }
+  return res.json({ id: u.id, email: u.email, role: u.role, employee });
+});
+
+// POST /auth/change-password  { currentPassword, newPassword }
+router.post('/change-password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'newPassword must be at least 8 characters' });
+  }
+
+  const check = await supabaseAnon().auth.signInWithPassword({
+    email: req.user!.email,
+    password: currentPassword,
+  });
+  if (check.error) return res.status(403).json({ error: 'Current password is incorrect' });
+
+  const updated = await supabaseAdmin().auth.admin.updateUserById(req.user!.authId, {
+    password: newPassword,
+  });
+  if (updated.error) return res.status(400).json({ error: updated.error.message });
+  return res.json({ ok: true });
+});
+
 export default router;

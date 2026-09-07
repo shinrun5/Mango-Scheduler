@@ -1,83 +1,82 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
+import { requireAuth, requireRole } from '../lib/auth.js';
 
 const router = Router();
+const manager = [requireAuth, requireRole('MANAGER')] as const;
 
-router.post('/', async (req, res) => {
-  const { name } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ error: 'name is required' });
-  }
+// POST /stores  (manager)  { name, requiresOpenerSkill? }
+router.post('/', ...manager, async (req, res) => {
+  const { name, requiresOpenerSkill } = req.body ?? {};
+  if (!name) return res.status(400).json({ error: 'name is required' });
 
   try {
-    const newStore = await prisma.store.create({
-      data: { name },
+    const store = await prisma.store.create({
+      data: { name, ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}) },
     });
-    res.json(newStore);
+    res.json(store);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create store' });
   }
 });
 
-router.get('/', async (req, res) => {
-  const stores = await prisma.store.findMany();
+router.get('/', async (_req, res) => {
+  const stores = await prisma.store.findMany({ orderBy: { name: 'asc' } });
   res.json(stores);
 });
 
 router.get('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-
-  if (isNaN(id)) {
-    return res.status(400).json({ error: 'A valid numeric id is required' });
-  }
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
 
   try {
-    const store = await prisma.store.findUnique({
-      where: { id },
-    });
+    const store = await prisma.store.findUnique({ where: { id } });
     res.json(store);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch store' });
   }
 });
 
-router.delete('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
+// PUT /stores/:id  (manager)  { name, requiresOpenerSkill? }
+router.put('/:id', ...manager, async (req, res) => {
+  const id = Number(req.params.id);
+  const { name, requiresOpenerSkill } = req.body ?? {};
 
-  if (isNaN(id)) {
-    return res.status(400).json({ error: 'A valid numeric id is required' });
-  }
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  if (!name) return res.status(400).json({ error: 'name is required' });
 
   try {
-    const store = await prisma.store.delete({
+    const store = await prisma.store.update({
       where: { id },
+      data: { name, ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}) },
     });
-    res.json({ message: `Store ${store.name} deleted successfully` });
+    res.json(store);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete store' });
+    res.status(500).json({ error: 'Failed to update store' });
   }
 });
 
-router.put('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const { name } = req.body;
+// DELETE /stores/:id  (manager) — refuses while anything still points at it
+router.delete('/:id', ...manager, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
 
-  if (isNaN(id)) {
-    return res.status(400).json({ error: 'A valid numeric id is required' });
-  }
-  if (!name) {
-    return res.status(400).json({ error: 'name is required' });
+  const [links, reqs, shifts] = await Promise.all([
+    prisma.employeeStore.count({ where: { storeId: id } }),
+    prisma.shiftRequirement.count({ where: { storeId: id } }),
+    prisma.shift.count({ where: { storeId: id } }),
+  ]);
+  if (links || reqs || shifts) {
+    return res.status(409).json({
+      error: 'Remove this store’s workers, shift requirements and shifts first',
+    });
   }
 
   try {
-    const updatedStore = await prisma.store.update({
-      where: { id },
-      data: { name },
-    });
-    res.json(updatedStore);
+    const store = await prisma.store.delete({ where: { id } });
+    res.json({ message: `Store ${store.name} deleted` });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update store' });
+    res.status(500).json({ error: 'Failed to delete store' });
   }
 });
 

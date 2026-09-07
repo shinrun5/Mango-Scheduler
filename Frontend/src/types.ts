@@ -109,6 +109,20 @@ export interface RosterWorker {
   stores: RosterStoreLink[]
 }
 
+export interface Profile {
+  id: number
+  email: string
+  role: Role
+  employee: {
+    id: number
+    name: string
+    hourLimit: number
+    maxShifts: number
+    standby: boolean
+    stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean }[]
+  } | null
+}
+
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
 

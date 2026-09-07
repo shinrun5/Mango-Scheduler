@@ -99,7 +99,7 @@ export function Availability() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-2xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-6">
         <h1 className="font-heading text-lg font-bold text-ink">My Availability</h1>
         <p className="mt-1 mb-4 font-body text-sm text-muted-ink">
           The hours you can work each week. Your manager's schedule is built from this.
@@ -137,7 +137,7 @@ export function Availability() {
                       {dayRows.map((r) => {
                         const bad = invalidKeys.has(r.key)
                         return (
-                          <div key={r.key} className="flex items-center gap-2">
+                          <div key={r.key} className="flex flex-wrap items-center gap-2">
                             <input
                               type="time"
                               value={r.start}
@@ -182,7 +182,7 @@ export function Availability() {
       </div>
 
       {linked && !loading && (
-        <div className="sticky bottom-0 flex items-center justify-between border-t-[3px] border-ink bg-paper px-6 py-3">
+        <div className="sticky bottom-14 mb-14 flex items-center justify-between border-t-[3px] border-ink bg-paper px-6 py-3 sm:bottom-0 sm:mb-0">
           <span className="font-body text-xs font-semibold text-muted-ink">
             {error ? (
               <span className="text-coral-dark">{error}</span>
