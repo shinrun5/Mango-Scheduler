@@ -30,8 +30,9 @@ its always-on tier is $7/service ($14 total).
 4. Do the [Supabase step](#supabase-auth-allow-list) below with the API's
    `https://fruitcrew-api.onrender.com` URL.
 
-The build runs, in order: frontend `npm ci` + `vite build` → backend `npm ci`
-(which runs `prisma generate`) → `prisma migrate deploy`.
+Build: frontend `npm ci` + `vite build` → backend `npm ci` (runs `prisma generate`).
+Then a pre-deploy step runs `prisma migrate deploy` with the full runtime env, then
+`npm start`.
 
 **Free tier** works but the service sleeps after 15 min idle (~50 s cold start).
 `plan: starter` ($7/mo/service) keeps both warm.
@@ -56,7 +57,8 @@ One project, two services:
   (replace `solver` with whatever you name the service in step 2)
 - **Settings → Networking → Generate Domain** — this is the URL you hand out
 - Build runs: frontend `npm ci` + `vite build` → backend `npm ci`
-  (`prisma generate` via postinstall) → `prisma migrate deploy`, then `npm start`
+  (`prisma generate` via postinstall); a pre-deploy step then runs
+  `prisma migrate deploy`, then `npm start`
 
 ### 2. Solver service
 - **Add service → GitHub repo → this repo** (same repo again)

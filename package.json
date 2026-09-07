@@ -1,12 +1,13 @@
 {
   "name": "fruitcrew",
   "private": true,
-  "description": "Orchestrator for the Railway API service — builds the frontend, installs the backend, runs migrations, then starts the API (which also serves the built frontend). Frontend/ and Backend/ have their own package.json.",
+  "description": "Orchestrator for the Railway/Render API service — builds the frontend and installs the backend at build time; `predeploy` runs migrations; `start` runs the API (which also serves the built frontend). Frontend/ and Backend/ have their own package.json.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm --prefix Frontend ci && npm --prefix Frontend run build && npm --prefix Backend ci && npm --prefix Backend run migrate:deploy",
+    "build": "npm --prefix Frontend ci && npm --prefix Frontend run build && npm --prefix Backend ci",
+    "predeploy": "npm --prefix Backend run migrate:deploy",
     "start": "npm --prefix Backend start"
   }
 }

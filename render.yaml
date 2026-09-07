@@ -14,12 +14,13 @@ services:
     runtime: node
     plan: starter # free tier works too, but it sleeps after 15 min idle
     rootDir: .
-    # frontend build -> backend install (runs prisma generate via postinstall) -> migrations
+    # frontend build -> backend install (runs prisma generate via postinstall)
     buildCommand: >-
       npm --prefix Frontend ci &&
       npm --prefix Frontend run build &&
-      npm --prefix Backend ci &&
-      npm --prefix Backend run migrate:deploy
+      npm --prefix Backend ci
+    # migrations run after build, before the new version goes live, with the full env
+    preDeployCommand: npm --prefix Backend run migrate:deploy
     startCommand: npm --prefix Backend start
     healthCheckPath: /api/health
     autoDeploy: true
