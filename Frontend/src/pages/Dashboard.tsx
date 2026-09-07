@@ -378,7 +378,7 @@ export function Dashboard() {
       />
 
       {solved && weekLoad.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-8 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
           <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
             Shifts this week
           </span>
@@ -401,7 +401,7 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-8 p-8">
+      <div className="flex flex-1 flex-col gap-8 p-4 sm:p-8">
         {view.stores.length === 0 && <p className="font-body text-muted-ink">No stores set up yet.</p>}
         {view.stores.map((store) => (
           <div key={store.id} className="flex flex-col gap-3">
@@ -412,8 +412,8 @@ export function Dashboard() {
                   <span className="font-heading text-lg font-bold text-ink">{store.name}</span>
                 </div>
                 <div
-                  className="grid gap-3.5"
-                  style={{ gridTemplateColumns: `repeat(${store.days.length}, minmax(0, 1fr))` }}
+                  className="grid gap-3.5 overflow-x-auto pb-1"
+                  style={{ gridTemplateColumns: `repeat(${store.days.length}, minmax(150px, 1fr))` }}
                 >
                   {store.days.map((d) => {
                     const opStart = d.requirements.length

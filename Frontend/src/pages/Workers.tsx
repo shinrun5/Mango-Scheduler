@@ -59,7 +59,7 @@ export function Workers() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="font-heading text-lg font-bold text-ink">Workers</h1>
         <Button onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : '+ Add worker'}</Button>

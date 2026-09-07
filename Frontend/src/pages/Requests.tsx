@@ -63,7 +63,7 @@ export function Requests() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">Requests</h1>
       {unclaimedOffers > 0 && (
         <p className="mt-1 font-body text-xs text-muted-ink">

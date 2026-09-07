@@ -61,7 +61,7 @@ export function History() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">History</h1>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 

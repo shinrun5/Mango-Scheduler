@@ -30,7 +30,7 @@ export function Overview() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl flex-1 p-6">
+    <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">Overview</h1>
       <p className="mt-1 font-body text-sm text-muted-ink">
         {stores.length} store{stores.length === 1 ? '' : 's'}
