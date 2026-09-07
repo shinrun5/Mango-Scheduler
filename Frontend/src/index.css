@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Fruit Crew design tokens — locked direction, see
-   scheduling-prototype/design/StyleGuide.dc.html for the reference sheet. */
+   design/StyleGuide.dc.html for the reference sheet. */
 @theme {
   --color-ink: #3a2b4d;
   --color-cream: #fff8ec;
