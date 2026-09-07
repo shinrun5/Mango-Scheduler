@@ -97,9 +97,13 @@ should return `{"status":"ok"}`.
 
 ## First accounts on a fresh deploy
 
-The owner account is promoted from an existing user (see `Backend/prisma/createOwner.ts`).
-Run it against the deployed database, e.g. from Render's shell or locally with the
-prod `DATABASE_URL`:
+**Web:** visit `/setup` on the deployed site → enter company name, email, password →
+creates the owner account and the org. This page works only until an owner exists,
+then it locks itself (and the API refuses).
+
+**CLI** (if an owner already exists and you need another, or to promote an existing
+account): run against the deployed database, from the host's shell or locally with
+the prod `DATABASE_URL`:
 
 ```bash
 npm --prefix Backend run create-owner -- <email> "Company name"

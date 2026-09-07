@@ -50,6 +50,91 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// GET /auth/setup-status — is there an owner yet? drives the /setup page.
+router.get('/setup-status', async (_req, res) => {
+  const owners = await prisma.user.count({ where: { role: 'OWNER' } });
+  return res.json({ needsSetup: owners === 0 });
+});
+
+// POST /auth/register-owner  { email, password, companyName }
+// First-run only: creates (or promotes) the OWNER account and their Org. If the
+// email already has a login, the password must match and that account is promoted.
+// Refuses once any OWNER exists.
+router.post('/register-owner', async (req, res) => {
+  const { email, password, companyName } = req.body ?? {};
+  const company = typeof companyName === 'string' ? companyName.trim() : '';
+  if (!email || !password || !company) {
+    return res.status(400).json({ error: 'email, password, and companyName are required' });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+  if ((await prisma.user.count({ where: { role: 'OWNER' } })) > 0) {
+    return res.status(403).json({ error: 'Setup is already complete — an owner account exists.' });
+  }
+
+  // reuse an existing Supabase login if the password checks out, else make one
+  let authId: string;
+  let session: unknown = null;
+  let createdAuthUser = false;
+
+  const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
+  if (signIn.data.session && signIn.data.user) {
+    authId = signIn.data.user.id;
+    session = signIn.data.session;
+  } else {
+    const created = await supabaseAdmin().auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (created.error || !created.data.user) {
+      const msg = created.error?.message ?? '';
+      if (/already.*regist/i.test(msg)) {
+        return res.status(401).json({ error: 'That email already has an account — check the password.' });
+      }
+      return res.status(400).json({ error: msg || 'Could not create account' });
+    }
+    authId = created.data.user.id;
+    createdAuthUser = true;
+    const fresh = await supabaseAnon().auth.signInWithPassword({ email, password });
+    session = fresh.data.session ?? null;
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { authId } });
+    const orgId =
+      existing?.orgId ?? (await prisma.org.create({ data: { name: company } })).id;
+    await prisma.org.update({ where: { id: orgId }, data: { name: company } });
+
+    const user = existing
+      ? await prisma.user.update({ where: { id: existing.id }, data: { role: 'OWNER', orgId } })
+      : await prisma.user.create({ data: { authId, email, role: 'OWNER', orgId } });
+
+    await prisma.org.update({ where: { id: orgId }, data: { ownerId: user.id } });
+
+    // stores already in the org (normally none at first run) get this owner + a schedule
+    const stores = await prisma.store.findMany({ where: { orgId } });
+    for (const s of stores) {
+      await prisma.managerStore.upsert({
+        where: { userId_storeId: { userId: user.id, storeId: s.id } },
+        create: { userId: user.id, storeId: s.id },
+        update: {},
+      });
+      await prisma.schedule.upsert({
+        where: { storeId: s.id },
+        create: { storeId: s.id },
+        update: {},
+      });
+    }
+
+    return res.status(201).json({ user: publicUser(user), session });
+  } catch {
+    if (createdAuthUser) await supabaseAdmin().auth.admin.deleteUser(authId).catch(() => {});
+    return res.status(500).json({ error: 'Failed to finish setup' });
+  }
+});
+
 // POST /auth/login  { email, password }
 router.post('/login', async (req, res) => {
   const { email, password } = req.body ?? {};

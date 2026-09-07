@@ -36,12 +36,20 @@ export function Login() {
       title="Fruit Crew"
       subtitle="Sign in to your schedule"
       footer={
-        <>
-          Got an invite code?{' '}
-          <Link to="/register" className="font-bold text-ink underline">
-            Set up your account
-          </Link>
-        </>
+        <div className="flex flex-col gap-1">
+          <span>
+            Got an invite code?{' '}
+            <Link to="/register" className="font-bold text-ink underline">
+              Set up your account
+            </Link>
+          </span>
+          <span>
+            New company?{' '}
+            <Link to="/setup" className="font-bold text-ink underline">
+              Create the owner account
+            </Link>
+          </span>
+        </div>
       }
     >
       <form onSubmit={onSubmit}>

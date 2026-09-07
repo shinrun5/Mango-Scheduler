@@ -115,6 +115,17 @@ export const api = {
     setSession(data.session)
     return data.user
   },
+  getSetupStatus: () => getJSON<{ needsSetup: boolean }>('/auth/setup-status'),
+  registerOwner: async (email: string, password: string, companyName: string): Promise<AuthUser> => {
+    setSession(null)
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-owner', 'POST', {
+      email,
+      password,
+      companyName,
+    })
+    setSession(data.session)
+    return data.user
+  },
   me: () => getJSON<{ user: AuthUser }>('/auth/me').then((d) => d.user),
   getProfile: () => getJSON<Profile>('/auth/profile'),
   changePassword: (currentPassword: string, newPassword: string) =>
