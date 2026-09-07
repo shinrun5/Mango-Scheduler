@@ -5,6 +5,21 @@ export const FRUITS = [
   'grape',
   'strawberry',
   'watermelon',
+  'honeydew',
+  'dragonfruit',
+  'pineapple',
+  'lemon',
+  'lime',
+  'peach',
+  'pear',
+  'cherry',
+  'blueberry',
+  'plum',
+  'starfruit',
+  'coconut',
+  'mango',
+  'pomegranate',
+  'fig',
 ] as const
 
 export type Fruit = (typeof FRUITS)[number]
