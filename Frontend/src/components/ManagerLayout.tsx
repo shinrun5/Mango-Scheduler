@@ -54,6 +54,11 @@ function Chrome() {
             </select>
           )}
           <div className="flex flex-wrap items-center gap-2">
+            {user?.role === 'OWNER' && (
+              <NavLink to="/overview" className={tab}>
+                Overview
+              </NavLink>
+            )}
             <NavLink to="/schedule" className={tab}>
               Schedule
             </NavLink>

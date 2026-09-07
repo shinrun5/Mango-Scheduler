@@ -7,6 +7,7 @@ import type {
   EmployeeStore,
   GenerateScheduleResult,
   MyShiftsResponse,
+  OverviewStore,
   Profile,
   RecurringAvailability,
   RequirementInput,
@@ -153,6 +154,7 @@ export const api = {
 
   // --- schedule board ---
   getStores: () => getJSON<Store[]>('/stores'),
+  getOverview: () => getJSON<{ stores: OverviewStore[] }>('/overview'),
   createStore: (input: { name: string; requiresOpenerSkill?: boolean }) =>
     sendJSON<Store>('/stores', 'POST', input),
   updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean }) =>

@@ -189,6 +189,19 @@ export interface SnapshotDetail extends SnapshotMeta {
   shifts: SnapshotShift[]
 }
 
+export interface OverviewStore {
+  storeId: number
+  name: string
+  publishedAt: string | null
+  weekStart: string | null
+  shiftCount: number
+  openShifts: number
+  staffHours: number
+  requirementCount: number
+  gapCount: number
+  pendingRequests: number
+}
+
 export interface GenerateScheduleResult {
   created: number
   optimal: boolean

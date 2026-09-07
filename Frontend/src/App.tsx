@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard'
 import { History } from './pages/History'
 import { Login } from './pages/Login'
 import { Marketplace } from './pages/Marketplace'
+import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -35,6 +36,7 @@ export default function App() {
 
         <Route element={<ProtectedRoute role={['MANAGER', 'OWNER']} />}>
           <Route element={<ManagerLayout />}>
+            <Route path="/overview" element={<Overview />} />
             <Route path="/schedule" element={<Dashboard />} />
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
