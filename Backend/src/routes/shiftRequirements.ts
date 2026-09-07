@@ -1,10 +1,21 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { requireAuth, requireRole } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireManagerFor } from '../lib/auth.js';
 
 const router = Router();
-const manager = [requireAuth, requireRole('MANAGER')] as const;
+
+/** guard for PUT/DELETE /:id — look up the requirement's store first */
+async function requireManagerOfReq(req: Request, res: Response, next: NextFunction) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const row = await prisma.shiftRequirement.findUnique({ where: { id }, select: { storeId: true } });
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  if (!canManageStore(req.user, row.storeId)) {
+    return res.status(403).json({ error: 'You do not manage that store' });
+  }
+  next();
+}
 
 const DAYS = new Set<string>(Object.values(DayOfWeek));
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -45,10 +56,12 @@ function friendlyData(b: any) {
   };
 }
 
-// GET /shiftrequirements?storeId=
-router.get('/', async (req, res) => {
+// GET /shiftrequirements?storeId=  (scoped to stores the caller can manage)
+router.get('/', requireAuth, async (req, res) => {
   const storeId = Number(req.query.storeId);
-  const where = Number.isInteger(storeId) ? { storeId } : {};
+  const where = Number.isInteger(storeId)
+    ? { storeId: req.user!.storeIds.includes(storeId) ? storeId : -1 }
+    : { storeId: { in: req.user!.storeIds } };
   const rows = await prisma.shiftRequirement.findMany({
     where,
     orderBy: [{ day: 'asc' }, { start: 'asc' }],
@@ -56,20 +69,19 @@ router.get('/', async (req, res) => {
   res.json(rows);
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
-  try {
-    const row = await prisma.shiftRequirement.findUnique({ where: { id } });
-    res.json(row);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch shift requirement' });
+  const row = await prisma.shiftRequirement.findUnique({ where: { id } });
+  if (!row || !req.user!.storeIds.includes(row.storeId)) {
+    return res.status(404).json({ error: 'Not found' });
   }
+  res.json(row);
 });
 
-// POST /shiftrequirements (manager)
+// POST /shiftrequirements (manager of that store)
 // { storeId, day, start:"HH:MM", end:"HH:MM", peopleNeeded, seniorsNeeded?, allowNew?, needOpen?, graceMinutes? }
-router.post('/', ...manager, async (req, res) => {
+router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
   const b = req.body ?? {};
   if (!Number.isInteger(b.storeId)) return res.status(400).json({ error: 'storeId is required' });
   const bad = validateFriendly(b);
@@ -88,7 +100,7 @@ router.post('/', ...manager, async (req, res) => {
 // PUT /shiftrequirements/:id (manager)
 // Friendly shape when `peopleNeeded` is present; otherwise a legacy partial update
 // (managerRequired / seniorRequired / regularRequired / newRequired / needOpen / graceMinutes).
-router.put('/:id', ...manager, async (req, res) => {
+router.put('/:id', requireAuth, requireManagerOfReq, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   const b = req.body ?? {};
@@ -120,7 +132,7 @@ router.put('/:id', ...manager, async (req, res) => {
   }
 });
 
-router.delete('/:id', ...manager, async (req, res) => {
+router.delete('/:id', requireAuth, requireManagerOfReq, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   try {

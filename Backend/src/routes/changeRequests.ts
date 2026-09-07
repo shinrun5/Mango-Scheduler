@@ -1,10 +1,25 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
-import { requireAuth, requireRole } from '../lib/auth.js';
+import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
 
 const router = Router();
-const manager = [requireAuth, requireRole('MANAGER')] as const;
+const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
+
+/** guard for approve/deny — the request's shift must be at a store the caller manages */
+async function requireManagerOfRequest(req: Request, res: Response, next: NextFunction) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const r = await prisma.shiftChangeRequest.findUnique({
+    where: { id },
+    include: { shift: { select: { storeId: true } } },
+  });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (!canManageStore(req.user, r.shift.storeId)) {
+    return res.status(403).json({ error: 'You do not manage that store' });
+  }
+  next();
+}
 
 const INCLUDE = { shift: true, requestedBy: true, targetEmployee: true } as const;
 type FullRequest = Prisma.ShiftChangeRequestGetPayload<{ include: typeof INCLUDE }>;
@@ -221,11 +236,14 @@ router.post('/:id/unclaim', requireAuth, async (req, res) => {
   res.json(shape(updated));
 });
 
-// GET /change-requests?status=PENDING  (manager)
-router.get('/', ...manager, async (req, res) => {
+// GET /change-requests?status=PENDING  (manager/owner — only their stores' requests)
+router.get('/', ...anyManager, async (req, res) => {
   const status = req.query.status;
   const valid = ['PENDING', 'APPROVED', 'DENIED', 'CANCELLED'];
-  const where = typeof status === 'string' && valid.includes(status) ? { status: status as never } : {};
+  const where: Prisma.ShiftChangeRequestWhereInput = {
+    shift: { storeId: { in: req.user!.storeIds } },
+    ...(typeof status === 'string' && valid.includes(status) ? { status: status as never } : {}),
+  };
 
   const rows = await prisma.shiftChangeRequest.findMany({
     where,
@@ -236,7 +254,7 @@ router.get('/', ...manager, async (req, res) => {
 });
 
 // POST /change-requests/:id/approve  (manager) — re-validates, then mutates the Shift
-router.post('/:id/approve', ...manager, async (req, res) => {
+router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
 
@@ -267,7 +285,7 @@ router.post('/:id/approve', ...manager, async (req, res) => {
 });
 
 // POST /change-requests/:id/deny  (manager)
-router.post('/:id/deny', ...manager, async (req, res) => {
+router.post('/:id/deny', requireAuth, requireManagerOfRequest, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
 

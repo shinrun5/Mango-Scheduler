@@ -18,13 +18,20 @@ async function main() {
   await prisma.shift.deleteMany();
   await prisma.recurringAvailability.deleteMany();
   await prisma.shiftRequirement.deleteMany();
+  await prisma.managerStore.deleteMany();
   await prisma.employeeStore.deleteMany();
   await prisma.employee.deleteMany();
   await prisma.store.deleteMany();
+  await prisma.org.deleteMany();
 
-  const mango = await prisma.store.create({ data: { name: 'Mango' } });
+  const org = await prisma.org.create({ data: { name: 'Demo Co' } });
+  const mango = await prisma.store.create({
+    data: { name: 'Mango', orgId: org.id, schedule: { create: {} } },
+  });
   // at Ciao, opening isn't a gated skill -> anyone who works there can open
-  const ciao = await prisma.store.create({ data: { name: 'Ciao', requiresOpenerSkill: false } });
+  const ciao = await prisma.store.create({
+    data: { name: 'Ciao', orgId: org.id, requiresOpenerSkill: false, schedule: { create: {} } },
+  });
 
   // name -> [stores + tier], availability window (weekdays)
   const people: Array<{

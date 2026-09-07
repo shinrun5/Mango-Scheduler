@@ -179,12 +179,19 @@ async function main() {
   await prisma.shift.deleteMany();
   await prisma.recurringAvailability.deleteMany();
   await prisma.shiftRequirement.deleteMany();
+  await prisma.managerStore.deleteMany();
   await prisma.employeeStore.deleteMany();
   await prisma.employee.deleteMany();
   await prisma.store.deleteMany();
+  await prisma.org.deleteMany();
 
-  const mango = await prisma.store.create({ data: { name: 'Mango' } });
-  const ciao = await prisma.store.create({ data: { name: 'Ciao', requiresOpenerSkill: false } });
+  const org = await prisma.org.create({ data: { name: 'My Company' } });
+  const mango = await prisma.store.create({
+    data: { name: 'Mango', orgId: org.id, schedule: { create: {} } },
+  });
+  const ciao = await prisma.store.create({
+    data: { name: 'Ciao', orgId: org.id, requiresOpenerSkill: false, schedule: { create: {} } },
+  });
   const storeId = { Mango: mango.id, Ciao: ciao.id };
 
   let pin = 1000;

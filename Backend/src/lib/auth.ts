@@ -16,6 +16,10 @@ export interface AuthUser {
   email: string;
   role: Role;
   employeeId: number | null;
+  orgId: number | null;
+  /** stores this user may act on: an OWNER's whole org, a MANAGER's assigned
+   * stores, or an EMPLOYEE's linked stores. */
+  storeIds: number[];
 }
 
 declare global {
@@ -56,8 +60,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
-  const user = await prisma.user.findUnique({ where: { authId } });
+  const user = await prisma.user.findUnique({
+    where: { authId },
+    include: {
+      managerStores: { select: { storeId: true } },
+      employee: { select: { employeeStores: { select: { storeId: true } } } },
+    },
+  });
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
+
+  let storeIds: number[];
+  if (user.role === 'OWNER' && user.orgId != null) {
+    storeIds = (await prisma.store.findMany({ where: { orgId: user.orgId }, select: { id: true } })).map(
+      (s) => s.id,
+    );
+  } else if (user.role === 'MANAGER') {
+    storeIds = user.managerStores.map((m) => m.storeId);
+  } else {
+    storeIds = user.employee?.employeeStores.map((e) => e.storeId) ?? [];
+  }
 
   req.user = {
     id: user.id,
@@ -65,6 +86,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     email: user.email,
     role: user.role,
     employeeId: user.employeeId,
+    orgId: user.orgId,
+    storeIds,
   };
   next();
 }
@@ -76,4 +99,28 @@ export function requireRole(...roles: Role[]) {
     if (!roles.includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
     next();
   };
+}
+
+export const requireOwner = [requireAuth, requireRole('OWNER')] as const;
+
+/** True when the user may act on this store (OWNER of its org, or an assigned MANAGER). */
+export function canManageStore(user: AuthUser | undefined, storeId: number): boolean {
+  return !!user && (user.role === 'OWNER' || user.role === 'MANAGER') && user.storeIds.includes(storeId);
+}
+
+/** Middleware: reject unless the user can manage the store named by `pick(req)`. */
+export function requireManagerFor(pick: (req: Request) => number | undefined) {
+  return [
+    requireAuth,
+    (req: Request, res: Response, next: NextFunction) => {
+      const storeId = pick(req);
+      if (storeId === undefined || Number.isNaN(storeId)) {
+        return res.status(400).json({ error: 'storeId is required' });
+      }
+      if (!canManageStore(req.user, storeId)) {
+        return res.status(403).json({ error: 'You do not manage that store' });
+      }
+      next();
+    },
+  ] as const;
 }

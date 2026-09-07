@@ -1,18 +1,38 @@
 import { randomBytes } from "node:crypto";
-import { Router } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import prisma from "../lib/prisma.js";
-import { requireAuth, requireRole } from "../lib/auth.js";
+import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
-const manager = [requireAuth, requireRole("MANAGER")] as const;
+const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
 
-/** A random 4-digit PIN that isn't taken at this store yet. */
+/** Can this user manage this employee? OWNER: any in the org. MANAGER: any employee
+ * linked to a store they run. */
+async function canManageEmployee(req: Request, employeeId: number): Promise<boolean> {
+  if (req.user?.role === "OWNER") return true;
+  const link = await prisma.employeeStore.findFirst({
+    where: { employeeId, storeId: { in: req.user?.storeIds ?? [] } },
+    select: { employeeId: true },
+  });
+  return !!link;
+}
+
+/** Middleware wrapper around canManageEmployee for the /:id routes. */
+async function requireManagerOfEmployee(req: Request, res: Response, next: NextFunction) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "A valid numeric id is required" });
+  const employee = await prisma.employee.findUnique({ where: { id }, select: { id: true } });
+  if (!employee) return res.status(404).json({ error: "Employee not found" });
+  if (!(await canManageEmployee(req, id))) {
+    return res.status(403).json({ error: "That worker isn't at one of your stores" });
+  }
+  next();
+}
+
 async function freePin(storeId: number): Promise<string> {
   for (let i = 0; i < 25; i++) {
     const pin = String(Math.floor(1000 + Math.random() * 9000));
-    const clash = await prisma.employeeStore.findUnique({
-      where: { storeId_pin: { storeId, pin } },
-    });
+    const clash = await prisma.employeeStore.findUnique({ where: { storeId_pin: { storeId, pin } } });
     if (!clash) return pin;
   }
   throw new Error("Could not allocate a free PIN for this store");
@@ -29,8 +49,10 @@ interface RosterRow {
   stores: { storeId: number; proficiency: string; canOpen: boolean; primary: boolean; pin: string }[];
 }
 
-async function roster(): Promise<RosterRow[]> {
+/** The roster, optionally limited to employees linked to `storeIds`. */
+async function roster(storeIds?: number[]): Promise<RosterRow[]> {
   const employees = await prisma.employee.findMany({
+    ...(storeIds ? { where: { employeeStores: { some: { storeId: { in: storeIds } } } } } : {}),
     orderBy: { name: "asc" },
     include: { employeeStores: true, user: { select: { email: true } } },
   });
@@ -52,18 +74,14 @@ async function roster(): Promise<RosterRow[]> {
   }));
 }
 
-// GET /employees/roster  (manager) — the full worker list with store links + account status
-router.get("/roster", ...manager, async (_req, res) => {
-  res.json(await roster());
+// GET /employees/roster — workers at the caller's stores (all, for an OWNER)
+router.get("/roster", ...anyManager, async (req, res) => {
+  res.json(await roster(req.user!.role === "OWNER" ? undefined : req.user!.storeIds));
 });
 
-// POST /employees/:id/invite  (manager) — issue a single-use sign-up code
-router.post("/:id/invite", ...manager, async (req, res) => {
+// POST /employees/:id/invite
+router.post("/:id/invite", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: "A valid numeric id is required" });
-  }
-
   const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
   if (!employee) return res.status(404).json({ error: "Employee not found" });
   if (employee.user) return res.status(409).json({ error: "This employee already has an account" });
@@ -73,74 +91,65 @@ router.post("/:id/invite", ...manager, async (req, res) => {
   res.json({ employeeId: id, inviteCode });
 });
 
-// POST /employees  (manager) — create a worker, optionally with a first store link
-router.post("/", ...manager, async (req, res) => {
+// POST /employees — create a worker, with a first store link (must manage that store)
+router.post("/", ...anyManager, async (req, res) => {
   const { name, hourLimit, maxShifts, standby, store } = req.body ?? {};
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
   }
+  const storeId = store?.storeId;
+  if (storeId !== undefined) {
+    if (!canManageStore(req.user, storeId)) {
+      return res.status(403).json({ error: "You do not manage that store" });
+    }
+  } else if (req.user!.role !== "OWNER") {
+    return res.status(400).json({ error: "Pick a store for this worker" });
+  }
 
   try {
     const employee = await prisma.employee.create({
-      data: {
-        name,
-        hourLimit,
-        maxShifts: maxShifts ?? 6,
-        standby: standby ?? false,
-      },
+      data: { name, hourLimit, maxShifts: maxShifts ?? 6, standby: standby ?? false },
     });
-
-    if (store?.storeId && store?.proficiency) {
+    if (storeId && store?.proficiency) {
       await prisma.employeeStore.create({
         data: {
           employeeId: employee.id,
-          storeId: store.storeId,
-          pin: await freePin(store.storeId),
+          storeId,
+          pin: await freePin(storeId),
           proficiency: store.proficiency,
           canOpen: store.canOpen ?? false,
           primary: store.primary ?? true,
         },
       });
     }
-
     const rows = await roster();
     res.json(rows.find((r) => r.id === employee.id));
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to create employee" });
   }
 });
 
-router.get("/", async (_req, res) => {
-  const employees = await prisma.employee.findMany();
+router.get("/", requireAuth, async (req, res) => {
+  const employees =
+    req.user!.role === "OWNER"
+      ? await prisma.employee.findMany()
+      : await prisma.employee.findMany({
+          where: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
+        });
   res.json(employees);
 });
 
-router.get("/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: "A valid numeric id is required" });
-  }
-
-  try {
-    const employee = await prisma.employee.findUnique({ where: { id } });
-    res.json(employee);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch employee" });
-  }
+router.get("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
+  const employee = await prisma.employee.findUnique({ where: { id: Number(req.params.id) } });
+  res.json(employee);
 });
 
-// PUT /employees/:id  (manager)
-router.put("/:id", ...manager, async (req, res) => {
+router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
   const { name, hourLimit, maxShifts, standby } = req.body ?? {};
-
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: "A valid numeric id is required" });
-  }
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
   }
-
   try {
     await prisma.employee.update({
       where: { id },
@@ -153,20 +162,14 @@ router.put("/:id", ...manager, async (req, res) => {
     });
     const rows = await roster();
     res.json(rows.find((r) => r.id === id));
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to update employee" });
   }
 });
 
-// DELETE /employees/:id  (manager) — drops availability + store links, frees any
-// shifts (employeeId -> null so the slot shows as a gap). An existing account is
-// left in place but unlinked (delete it with `npm run delete-user`).
-router.delete("/:id", ...manager, async (req, res) => {
+// DELETE /employees/:id — drops availability + store links + requests, frees shifts.
+router.delete("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: "A valid numeric id is required" });
-  }
-
   try {
     const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
     if (!employee) return res.status(404).json({ error: "Employee not found" });
@@ -183,7 +186,7 @@ router.delete("/:id", ...manager, async (req, res) => {
       message: `Employee ${employee.name} removed`,
       accountLeftUnlinked: employee.user?.email ?? null,
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to delete employee" });
   }
 });

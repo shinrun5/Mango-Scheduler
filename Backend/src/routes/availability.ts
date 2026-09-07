@@ -4,7 +4,7 @@ import prisma from '../lib/prisma.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 
 const router = Router();
-const manager = [requireAuth, requireRole('MANAGER')] as const;
+const manager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
 
 const DAYS = new Set<string>(Object.values(DayOfWeek));
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;

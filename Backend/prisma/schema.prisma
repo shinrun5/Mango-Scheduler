@@ -10,15 +10,40 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// A company / multi-store owner. Every Store and User belongs to exactly one.
+model Org {
+  id        Int      @id @default(autoincrement())
+  name      String
+  ownerId   Int?     // User id of the OWNER (plain column, no relation — like publishedById)
+  createdAt DateTime @default(now())
+  stores    Store[]
+  users     User[]
+}
+
 model Store {
   id       Int                @id @default(autoincrement())
   name     String
+  org      Org     @relation(fields: [orgId], references: [id])
+  orgId    Int
   // false => opening is not a gated skill here; every employee at this store
   // counts as an opener regardless of their EmployeeStore.canOpen flag
   requiresOpenerSkill Boolean @default(true)
   shiftRequirement ShiftRequirement[]
   shifts    Shift[]
   employeeStores EmployeeStore[]
+  managers  ManagerStore[]
+  schedule  Schedule?
+  snapshots ScheduleSnapshot[]
+}
+
+// Which stores a MANAGER user runs (a manager can cover several).
+model ManagerStore {
+  user    User  @relation(fields: [userId], references: [id])
+  userId  Int
+  store   Store @relation(fields: [storeId], references: [id])
+  storeId Int
+
+  @@id([userId, storeId])
 }
 
 model ShiftRequirement {
@@ -49,22 +74,26 @@ enum DayOfWeek {
   SUNDAY
 }
 
-// Singleton (row id = 1): the current working schedule. `publishedAt` gates whether
-// employees can see it; `weekStart` (a Monday, midnight UTC) is the calendar week it
-// covers -- shifts themselves stay day-of-week templated, this is just the dates shown.
+// One per store: that store's current working schedule. `publishedAt` gates whether
+// its employees can see it; `weekStart` (a Monday, midnight UTC) is the calendar week
+// it covers -- shifts stay day-of-week templated, this is just the dates shown.
 model Schedule {
-  id            Int       @id @default(1)
+  id            Int       @id @default(autoincrement())
+  store         Store     @relation(fields: [storeId], references: [id])
+  storeId       Int       @unique
   publishedAt   DateTime?
   publishedById Int?
   weekStart     DateTime?
   updatedAt     DateTime  @updatedAt
 }
 
-// A frozen copy of the working schedule, kept for history. Self-contained: shift
-// rows carry denormalised employee/store names so old weeks still render after the
-// roster changes.
+// A frozen copy of one store's working schedule, kept for history. Self-contained:
+// shift rows carry denormalised employee names so old weeks still render after the
+// roster changes. `storeId` null = a legacy pre-multi-store snapshot.
 model ScheduleSnapshot {
   id        Int      @id @default(autoincrement())
+  store     Store?   @relation(fields: [storeId], references: [id])
+  storeId   Int?
   weekStart DateTime
   label     String?
   savedAt   DateTime @default(now())
@@ -135,6 +164,7 @@ model Employee {
 }
 
 enum Role {
+  OWNER
   MANAGER
   EMPLOYEE
 }
@@ -147,8 +177,11 @@ model User {
   authId     String   @unique   // Supabase auth.users.id (UUID)
   email      String   @unique
   role       Role     @default(EMPLOYEE)
+  org        Org?     @relation(fields: [orgId], references: [id])
+  orgId      Int?
   employee   Employee? @relation(fields: [employeeId], references: [id])
   employeeId Int?      @unique
+  managerStores ManagerStore[]
   createdAt  DateTime @default(now())
 }
 
