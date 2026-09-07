@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
+import { requireAuth, requireRole } from '../lib/auth.js';
 
 const router = Router();
+const manager = [requireAuth, requireRole('MANAGER')] as const;
 
-router.post('/', async (req, res) => {
+router.post('/', ...manager, async (req, res) => {
   const { employeeId, storeId, pin, proficiency } = req.body;
 
   if (!employeeId || !storeId || !pin || !proficiency) {
@@ -26,8 +28,8 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:employeeId/:storeId', async (req, res) => {
-  const employeeId = parseInt(req.params.employeeId);
-  const storeId = parseInt(req.params.storeId);
+  const employeeId = Number(req.params.employeeId);
+  const storeId = Number(req.params.storeId);
 
   if (isNaN(employeeId) || isNaN(storeId)) {
     return res.status(400).json({ error: 'Valid numeric employeeId and storeId are required' });
@@ -43,9 +45,9 @@ router.get('/:employeeId/:storeId', async (req, res) => {
   }
 });
 
-router.delete('/:employeeId/:storeId', async (req, res) => {
-  const employeeId = parseInt(req.params.employeeId);
-  const storeId = parseInt(req.params.storeId);
+router.delete('/:employeeId/:storeId', ...manager, async (req, res) => {
+  const employeeId = Number(req.params.employeeId);
+  const storeId = Number(req.params.storeId);
 
   if (isNaN(employeeId) || isNaN(storeId)) {
     return res.status(400).json({ error: 'Valid numeric employeeId and storeId are required' });
@@ -61,9 +63,9 @@ router.delete('/:employeeId/:storeId', async (req, res) => {
   }
 });
 
-router.put('/:employeeId/:storeId', async (req, res) => {
-  const employeeId = parseInt(req.params.employeeId);
-  const storeId = parseInt(req.params.storeId);
+router.put('/:employeeId/:storeId', ...manager, async (req, res) => {
+  const employeeId = Number(req.params.employeeId);
+  const storeId = Number(req.params.storeId);
   const { pin, proficiency } = req.body;
 
   if (isNaN(employeeId) || isNaN(storeId)) {

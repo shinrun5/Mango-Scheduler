@@ -192,7 +192,7 @@ router.delete('/snapshots/:id', ...manager, async (req, res) => {
  * replace (default true) clears existing Shift rows first.
  * saveFirst freezes the current schedule to history before replacing it.
  */
-router.post('/generate', async (req, res) => {
+router.post('/generate', ...manager, async (req, res) => {
   const solveSeconds = Number(req.body?.solveSeconds ?? 5);
   const replace = req.body?.replace !== false;
 

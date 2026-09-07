@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { requireAuth } from '../lib/auth.js';
+import { requireAuth, requireRole } from '../lib/auth.js';
 
 const router = Router();
+const manager = [requireAuth, requireRole('MANAGER')] as const;
 
 // The signed-in employee's own shifts -- but only once the schedule is posted.
 // Placed before "/:id" so "mine" isn't parsed as an id.
@@ -43,7 +44,7 @@ router.get('/open', requireAuth, async (req, res) => {
   res.json(shifts);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', ...manager, async (req, res) => {
   const { employeeId, storeId, day, start, end } = req.body;
 
   if (!storeId || !day || !start || !end) {
@@ -66,9 +67,9 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = Number(req.params.id);
 
-  if (isNaN(id)) {
+  if (!Number.isInteger(id)) {
     return res.status(400).json({ error: 'A valid numeric id is required' });
   }
 
@@ -82,10 +83,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
+router.delete('/:id', ...manager, async (req, res) => {
+  const id = Number(req.params.id);
 
-  if (isNaN(id)) {
+  if (!Number.isInteger(id)) {
     return res.status(400).json({ error: 'A valid numeric id is required' });
   }
 
@@ -99,11 +100,11 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
+router.put('/:id', ...manager, async (req, res) => {
+  const id = Number(req.params.id);
   const { employeeId, storeId, day, start, end } = req.body;
 
-  if (isNaN(id)) {
+  if (!Number.isInteger(id)) {
     return res.status(400).json({ error: 'A valid numeric id is required' });
   }
 

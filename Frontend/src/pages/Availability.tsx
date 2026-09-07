@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/Button'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { DAY_LABEL, DAYS, to12Hour, toHHMM24 } from '../lib/time'
+import { DAY_LABEL, DAYS, toHHMM24 } from '../lib/time'
 import type { DayOfWeek } from '../types'
 
 interface Row {

@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { homePathForRole, useAuth } from '../lib/auth'
+import { useAuth } from '../lib/auth'
+import { homePathForRole } from '../lib/roles'
 import type { Role } from '../types'
 
 /** Guards its child routes: bounces to /login when signed out, and to the user's

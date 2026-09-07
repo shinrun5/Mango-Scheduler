@@ -68,8 +68,3 @@ export function useAuth(): AuthState {
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
   return ctx
 }
-
-/** Where a logged-in user of this role belongs by default. */
-export function homePathForRole(role: AuthUser['role']): string {
-  return role === 'MANAGER' ? '/schedule' : '/my-shifts'
-}

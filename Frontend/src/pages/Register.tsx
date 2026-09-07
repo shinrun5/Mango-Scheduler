@@ -2,7 +2,8 @@ import { type FormEvent, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AuthLayout, Field } from '../components/AuthLayout'
 import { Button } from '../components/Button'
-import { homePathForRole, useAuth } from '../lib/auth'
+import { useAuth } from '../lib/auth'
+import { homePathForRole } from '../lib/roles'
 
 export function Register() {
   const { user, loading, register } = useAuth()

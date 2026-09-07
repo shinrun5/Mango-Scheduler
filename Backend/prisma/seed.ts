@@ -161,6 +161,21 @@ const CIAO_CLOSE: Partial<Record<Day, string>> = { FRIDAY: '22:00', SATURDAY: '2
 const ciaoClose = (day: Day) => CIAO_CLOSE[day] ?? '21:30';
 
 async function main() {
+  // Re-seeding wipes every Employee, and User.employeeId is ON DELETE SET NULL, so
+  // it would silently orphan every login. Refuse unless explicitly forced.
+  const userCount = await prisma.user.count();
+  if (userCount > 0 && process.env.SEED_FORCE !== '1') {
+    console.error(
+      `Refusing to seed: ${userCount} User account(s) exist and re-seeding would unlink them ` +
+        `from their employee record. Run with SEED_FORCE=1 to seed anyway.`,
+    );
+    await prisma.$disconnect();
+    process.exit(1);
+  }
+
+  await prisma.shiftChangeRequest.deleteMany();
+  await prisma.scheduleSnapshot.deleteMany();
+  await prisma.schedule.deleteMany();
   await prisma.shift.deleteMany();
   await prisma.recurringAvailability.deleteMany();
   await prisma.shiftRequirement.deleteMany();
@@ -246,4 +261,8 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main();
+main().catch(async (err) => {
+  console.error(err);
+  await prisma.$disconnect();
+  process.exit(1);
+});
