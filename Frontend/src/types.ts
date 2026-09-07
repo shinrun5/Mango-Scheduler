@@ -192,8 +192,10 @@ export interface SnapshotDetail extends SnapshotMeta {
 export interface ManagerRow {
   id: number
   email: string
+  role: Role
   storeIds: number[]
   isEmployee: boolean
+  isSelf: boolean
 }
 
 export interface OverviewStore {

@@ -79,6 +79,51 @@ router.get("/roster", ...anyManager, async (req, res) => {
   res.json(await roster(req.user!.role === "OWNER" ? undefined : req.user!.storeIds));
 });
 
+// POST /employees/me — the calling manager/owner adds themselves as a schedulable
+// worker: an Employee row, a link to every store they run, and user.employeeId.
+// Idempotent — a no-op if they're already linked.
+router.post("/me", ...anyManager, async (req, res) => {
+  const me = req.user!;
+  if (me.employeeId) {
+    const e = await prisma.employee.findUnique({
+      where: { id: me.employeeId },
+      include: { employeeStores: { select: { storeId: true } } },
+    });
+    return res.json({ employeeId: me.employeeId, created: false, stores: e?.employeeStores.length ?? 0 });
+  }
+
+  const { name, hourLimit, maxShifts } = req.body ?? {};
+  const displayName =
+    (typeof name === "string" && name.trim()) || me.email.split("@")[0] || "Me";
+  const storeIds = me.storeIds;
+  if (storeIds.length === 0) {
+    return res.status(400).json({ error: "You're not assigned to any store yet" });
+  }
+
+  const employee = await prisma.employee.create({
+    data: {
+      name: displayName,
+      hourLimit: Number.isFinite(Number(hourLimit)) ? Number(hourLimit) : 40,
+      maxShifts: Number.isFinite(Number(maxShifts)) ? Number(maxShifts) : 5,
+      standby: false,
+    },
+  });
+  for (const [i, storeId] of storeIds.entries()) {
+    await prisma.employeeStore.create({
+      data: {
+        employeeId: employee.id,
+        storeId,
+        pin: await freePin(storeId),
+        proficiency: "MANAGER",
+        canOpen: true,
+        primary: i === 0,
+      },
+    });
+  }
+  await prisma.user.update({ where: { id: me.id }, data: { employeeId: employee.id } });
+  res.status(201).json({ employeeId: employee.id, created: true, stores: storeIds.length });
+});
+
 // POST /employees/:id/invite
 router.post("/:id/invite", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);

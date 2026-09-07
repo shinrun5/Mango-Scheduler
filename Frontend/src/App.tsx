@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard'
 import { History } from './pages/History'
 import { Login } from './pages/Login'
 import { Marketplace } from './pages/Marketplace'
+import { MyAvailability } from './pages/MyAvailability'
 import { Overview } from './pages/Overview'
 import { MyShifts } from './pages/MyShifts'
 import { Profile } from './pages/Profile'
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/workers" element={<Workers />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
+            <Route path="/my-availability" element={<MyAvailability />} />
             <Route path="/history" element={<History />} />
           </Route>
         </Route>

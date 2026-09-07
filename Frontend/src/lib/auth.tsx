@@ -10,6 +10,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<AuthUser>
   register: (email: string, password: string, inviteCode: string) => Promise<AuthUser>
   registerOwner: (email: string, password: string, companyName: string) => Promise<AuthUser>
+  /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
+  refreshUser: () => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -57,6 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u = await api.registerOwner(email, password, companyName)
         setUser(u)
         return u
+      },
+      refreshUser: async () => {
+        try {
+          setUser(await api.me())
+        } catch {
+          /* leave the current user in place if the refresh fails */
+        }
       },
       logout: async () => {
         await api.logout()

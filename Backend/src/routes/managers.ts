@@ -5,24 +5,28 @@ import { supabaseAdmin } from '../lib/supabase.js';
 
 const router = Router();
 
-interface ManagerRow {
+interface PersonRow {
   id: number;
   email: string;
+  role: 'OWNER' | 'MANAGER';
   storeIds: number[];
   isEmployee: boolean;
+  isSelf: boolean;
 }
 
-async function list(orgId: number): Promise<ManagerRow[]> {
+async function people(orgId: number, selfId: number): Promise<PersonRow[]> {
   const users = await prisma.user.findMany({
-    where: { orgId, role: 'MANAGER' },
-    orderBy: { email: 'asc' },
+    where: { orgId, role: { in: ['OWNER', 'MANAGER'] } },
+    orderBy: [{ role: 'asc' }, { email: 'asc' }], // OWNER sorts before MANAGER
     include: { managerStores: { select: { storeId: true } } },
   });
   return users.map((u) => ({
     id: u.id,
     email: u.email,
+    role: u.role as 'OWNER' | 'MANAGER',
     storeIds: u.managerStores.map((m) => m.storeId),
     isEmployee: u.employeeId != null,
+    isSelf: u.id === selfId,
   }));
 }
 
@@ -33,9 +37,77 @@ async function orgStoreIds(orgId: number): Promise<Set<number>> {
   );
 }
 
-// GET /managers  (owner) — every manager in the org + which stores they run
+// GET /managers  (owner) — every owner + manager in the org
 router.get('/', ...requireOwner, async (req, res) => {
-  res.json({ managers: await list(req.user!.orgId!) });
+  res.json({ people: await people(req.user!.orgId!, req.user!.id) });
+});
+
+// POST /managers/owners  { email, password }  (owner) — add a co-owner
+router.post('/owners', ...requireOwner, async (req, res) => {
+  const orgId = req.user!.orgId!;
+  const { email, password } = req.body ?? {};
+  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+  if (await prisma.user.findUnique({ where: { email } })) {
+    return res.status(409).json({ error: 'An account with that email already exists' });
+  }
+
+  const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
+  if (created.error || !created.data.user) {
+    return res.status(400).json({ error: created.error?.message ?? 'Could not create the account' });
+  }
+  try {
+    const user = await prisma.user.create({
+      data: { authId: created.data.user.id, email, role: 'OWNER', orgId },
+    });
+    res.status(201).json({
+      id: user.id,
+      email,
+      role: 'OWNER',
+      storeIds: [],
+      isEmployee: false,
+      isSelf: false,
+    });
+  } catch {
+    await supabaseAdmin().auth.admin.deleteUser(created.data.user.id).catch(() => {});
+    res.status(500).json({ error: 'Failed to create the owner' });
+  }
+});
+
+// POST /managers/:id/role  { role: 'OWNER' | 'MANAGER' }  (owner) — promote / hand over
+router.post('/:id/role', ...requireOwner, async (req, res) => {
+  const orgId = req.user!.orgId!;
+  const id = Number(req.params.id);
+  const role = req.body?.role;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  if (role !== 'OWNER' && role !== 'MANAGER') {
+    return res.status(400).json({ error: "role must be 'OWNER' or 'MANAGER'" });
+  }
+
+  const target = await prisma.user.findFirst({
+    where: { id, orgId, role: { in: ['OWNER', 'MANAGER'] } },
+  });
+  if (!target) return res.status(404).json({ error: 'Not found in your org' });
+  if (target.role === role) return res.json({ id, role });
+
+  if (target.role === 'OWNER' && role === 'MANAGER') {
+    const owners = await prisma.user.count({ where: { orgId, role: 'OWNER' } });
+    if (owners <= 1) return res.status(400).json({ error: 'The company needs at least one owner' });
+  }
+
+  await prisma.user.update({ where: { id }, data: { role } });
+
+  // a freshly demoted owner has no store assignments — give them all org stores to start
+  if (target.role === 'OWNER' && role === 'MANAGER') {
+    const stores = await prisma.store.findMany({ where: { orgId }, select: { id: true } });
+    await prisma.$transaction([
+      prisma.managerStore.deleteMany({ where: { userId: id } }),
+      prisma.managerStore.createMany({ data: stores.map((s) => ({ userId: id, storeId: s.id })) }),
+    ]);
+  }
+  res.json({ id, role });
 });
 
 // POST /managers  { email, password, storeIds: number[] }  (owner)
@@ -103,8 +175,14 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   if (id === req.user!.id) return res.status(400).json({ error: "You can't remove yourself" });
 
-  const target = await prisma.user.findFirst({ where: { id, orgId, role: 'MANAGER' } });
-  if (!target) return res.status(404).json({ error: 'Manager not found' });
+  const target = await prisma.user.findFirst({
+    where: { id, orgId, role: { in: ['OWNER', 'MANAGER'] } },
+  });
+  if (!target) return res.status(404).json({ error: 'Not found in your org' });
+  if (target.role === 'OWNER') {
+    const owners = await prisma.user.count({ where: { orgId, role: 'OWNER' } });
+    if (owners <= 1) return res.status(400).json({ error: 'The company needs at least one owner' });
+  }
 
   await prisma.managerStore.deleteMany({ where: { userId: id } });
   await prisma.user.delete({ where: { id } });

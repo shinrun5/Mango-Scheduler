@@ -88,6 +88,9 @@ function Chrome() {
           <NavLink to="/stores" className={tab}>
             Stores
           </NavLink>
+          <NavLink to="/my-availability" className={tab}>
+            My hours
+          </NavLink>
           <NavLink to="/history" className={tab}>
             History
           </NavLink>

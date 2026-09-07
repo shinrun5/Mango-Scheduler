@@ -168,13 +168,17 @@ export const api = {
   getStores: () => getJSON<Store[]>('/stores'),
   getOverview: () => getJSON<{ stores: OverviewStore[] }>('/overview'),
 
-  // --- owner: managers ---
-  getManagers: () => getJSON<{ managers: ManagerRow[] }>('/managers').then((d) => d.managers),
+  // --- owner: team (owners + managers) ---
+  getTeam: () => getJSON<{ people: ManagerRow[] }>('/managers').then((d) => d.people),
   createManager: (input: { email: string; password: string; storeIds: number[] }) =>
     sendJSON<ManagerRow>('/managers', 'POST', input),
+  createOwner: (input: { email: string; password: string }) =>
+    sendJSON<ManagerRow>('/managers/owners', 'POST', input),
   setManagerStores: (id: number, storeIds: number[]) =>
     sendJSON<{ id: number; storeIds: number[] }>(`/managers/${id}/stores`, 'PUT', { storeIds }),
-  deleteManager: (id: number) => request<{ message: string }>(`/managers/${id}`, { method: 'DELETE' }),
+  setPersonRole: (id: number, role: 'OWNER' | 'MANAGER') =>
+    sendJSON<{ id: number; role: string }>(`/managers/${id}/role`, 'POST', { role }),
+  removePerson: (id: number) => request<{ message: string }>(`/managers/${id}`, { method: 'DELETE' }),
   createStore: (input: { name: string; requiresOpenerSkill?: boolean }) =>
     sendJSON<Store>('/stores', 'POST', input),
   updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean }) =>
@@ -209,6 +213,9 @@ export const api = {
     request<{ message: string; accountLeftUnlinked: string | null }>(`/employees/${id}`, { method: 'DELETE' }),
   inviteWorker: (id: number) =>
     sendJSON<{ employeeId: number; inviteCode: string }>(`/employees/${id}/invite`, 'POST', {}),
+  /** Manager/owner adds themselves as a schedulable worker at every store they run. */
+  becomeWorker: () =>
+    sendJSON<{ employeeId: number; created: boolean; stores: number }>('/employees/me', 'POST', {}),
 
   // --- employee self-service ---
   getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),
