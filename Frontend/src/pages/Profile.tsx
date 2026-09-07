@@ -21,7 +21,7 @@ export function Profile() {
   const e = profile.employee
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-24 sm:pb-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">Profile</h1>
 
       <div className="mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">

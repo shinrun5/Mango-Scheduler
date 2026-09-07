@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { SwapIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { DAY_LABEL, DAYS, dayDate, timeRange } from '../lib/time'
 import type { ChangeRequest, Store } from '../types'
@@ -52,34 +53,49 @@ export function Marketplace() {
   if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!data) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
 
+  const nothing =
+    data.available.length === 0 && data.claimed.length === 0 && data.posted.length === 0
+
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-24 sm:pb-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">Marketplace</h1>
-      <p className="mt-1 font-body text-sm text-muted-ink">
+      <p className="mt-0.5 font-body text-sm text-muted-ink">
         Shifts your coworkers can't work. Claim one and your manager confirms it.
       </p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <Section title="Up for grabs">
-        {data.available.length === 0 ? (
-          <Empty>Nothing on the board right now.</Empty>
-        ) : (
-          data.available.map((r) => (
-            <Card key={r.id}>
-              <Line>{when(r)}</Line>
-              <Sub>offered by {r.requestedBy.name}</Sub>
-              {r.note && <Note>“{r.note}”</Note>}
-              <button
-                disabled={busy === r.id}
-                onClick={() => void act(r.id, () => api.claimOffer(r.id))}
-                className="mt-2 self-start rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
-              >
-                Claim
-              </button>
-            </Card>
-          ))
-        )}
-      </Section>
+      {nothing ? (
+        <div className="mt-8 flex flex-col items-center gap-2 rounded-2xl border-[2.5px] border-dashed border-ink/25 bg-paper/60 px-6 py-10 text-center">
+          <span className="text-muted-ink">
+            <SwapIcon size={30} />
+          </span>
+          <span className="font-heading text-sm font-bold text-ink">Board's clear</span>
+          <span className="max-w-xs font-body text-xs text-muted-ink">
+            No shifts up for grabs right now. Post one from My Shifts if you need cover.
+          </span>
+        </div>
+      ) : (
+        <Section title="Up for grabs">
+          {data.available.length === 0 ? (
+            <Empty>Nothing up for grabs right now.</Empty>
+          ) : (
+            data.available.map((r) => (
+              <Card key={r.id}>
+                <Line>{when(r)}</Line>
+                <Sub>offered by {r.requestedBy.name}</Sub>
+                {r.note && <Note>“{r.note}”</Note>}
+                <button
+                  disabled={busy === r.id}
+                  onClick={() => void act(r.id, () => api.claimOffer(r.id))}
+                  className="mt-2 self-start rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+                >
+                  Claim
+                </button>
+              </Card>
+            ))
+          )}
+        </Section>
+      )}
 
       {data.claimed.length > 0 && (
         <Section title="You claimed — waiting for your manager">

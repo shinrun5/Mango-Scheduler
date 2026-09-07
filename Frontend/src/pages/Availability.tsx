@@ -97,12 +97,24 @@ export function Availability() {
     }
   }
 
+  const status = error
+    ? { text: error, tone: 'text-coral-dark' }
+    : invalidKeys.size > 0
+      ? { text: 'Fix the highlighted times', tone: 'text-coral-dark' }
+      : dirty
+        ? { text: 'Unsaved changes', tone: 'text-ink' }
+        : justSaved
+          ? { text: 'Saved ✓', tone: 'text-green-dark' }
+          : { text: 'All changes saved', tone: 'text-muted-ink' }
+  // hide the button entirely when there's nothing to do — keeps the bar calm
+  const showSave = dirty || saving || invalidKeys.size > 0
+
   return (
     <>
-      <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-6">
+      <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-40 sm:p-6 sm:pb-24">
         <h1 className="font-heading text-lg font-bold text-ink">My Availability</h1>
-        <p className="mt-1 mb-4 font-body text-sm text-muted-ink">
-          The hours you can work each week. Your manager's schedule is built from this.
+        <p className="mt-0.5 mb-4 font-body text-sm text-muted-ink">
+          The hours you can work each week — your schedule is built from this.
         </p>
 
         {!linked ? (
@@ -112,9 +124,23 @@ export function Availability() {
         ) : loading ? (
           <p className="font-body text-sm text-muted-ink">Loading…</p>
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2">
             {DAYS.map((day) => {
               const dayRows = rows.filter((r) => r.day === day)
+
+              if (dayRows.length === 0) {
+                return (
+                  <button
+                    key={day}
+                    onClick={() => addRow(day)}
+                    className="flex items-center justify-between rounded-xl border-2 border-ink/20 bg-paper/70 px-3.5 py-2.5 text-left active:bg-paper"
+                  >
+                    <span className="font-heading text-sm font-bold text-muted-ink">{DAY_LABEL[day]}</span>
+                    <span className="font-body text-xs font-bold text-sky-dark">+ Add hours</span>
+                  </button>
+                )
+              }
+
               return (
                 <div
                   key={day}
@@ -124,56 +150,54 @@ export function Availability() {
                     <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
                     <button
                       onClick={() => addRow(day)}
-                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-1 font-heading text-[11px] font-bold text-ink"
                     >
                       + Add hours
                     </button>
                   </div>
 
-                  {dayRows.length === 0 ? (
-                    <span className="font-body text-xs text-muted-ink">Not available</span>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {dayRows.map((r) => {
-                        const bad = invalidKeys.has(r.key)
-                        return (
-                          <div key={r.key} className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col gap-2">
+                    {dayRows.map((r) => {
+                      const bad = invalidKeys.has(r.key)
+                      return (
+                        <div key={r.key} className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
                             <input
                               type="time"
                               value={r.start}
                               step={1800}
                               onChange={(e) => patchRow(r.key, { start: e.target.value })}
-                              className={`rounded-lg border-2 bg-cream px-2 py-1 font-body text-xs text-ink outline-none ${
+                              className={`min-w-0 flex-1 rounded-lg border-2 bg-cream px-2 py-1.5 font-body text-sm text-ink outline-none ${
                                 bad ? 'border-coral' : 'border-ink'
                               }`}
                             />
-                            <span className="font-body text-xs text-muted-ink">to</span>
+                            <span className="shrink-0 font-body text-xs text-muted-ink">–</span>
                             <input
                               type="time"
                               value={r.end}
                               step={1800}
                               onChange={(e) => patchRow(r.key, { end: e.target.value })}
-                              className={`rounded-lg border-2 bg-cream px-2 py-1 font-body text-xs text-ink outline-none ${
+                              className={`min-w-0 flex-1 rounded-lg border-2 bg-cream px-2 py-1.5 font-body text-sm text-ink outline-none ${
                                 bad ? 'border-coral' : 'border-ink'
                               }`}
                             />
-                            {bad && (
-                              <span className="font-body text-[11px] font-bold text-coral-dark">
-                                end must be after start
-                              </span>
-                            )}
                             <button
                               onClick={() => removeRow(r.key)}
-                              aria-label="Remove"
-                              className="ml-auto rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-heading text-xs font-bold text-ink"
+                              aria-label="Remove these hours"
+                              className="shrink-0 rounded-full border-2 border-ink bg-cream px-2.5 py-1 font-heading text-sm font-bold leading-none text-ink"
                             >
                               ×
                             </button>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                          {bad && (
+                            <span className="font-body text-[11px] font-bold text-coral-dark">
+                              End must be after start
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
@@ -182,23 +206,17 @@ export function Availability() {
       </div>
 
       {linked && !loading && (
-        <div className="sticky bottom-14 mb-14 flex items-center justify-between border-t-[3px] border-ink bg-paper px-6 py-3 sm:bottom-0 sm:mb-0">
-          <span className="font-body text-xs font-semibold text-muted-ink">
-            {error ? (
-              <span className="text-coral-dark">{error}</span>
-            ) : invalidKeys.size > 0 ? (
-              <span className="text-coral-dark">Fix the highlighted times</span>
-            ) : dirty ? (
-              'Unsaved changes'
-            ) : justSaved ? (
-              'Saved ✓'
-            ) : (
-              'All changes saved'
-            )}
-          </span>
-          <Button onClick={() => void save()} disabled={!canSave}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
+        <div
+          className={`fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 flex items-center gap-3 border-t-[3px] border-ink px-4 py-2.5 transition-colors sm:bottom-0 sm:px-6 ${
+            dirty || invalidKeys.size > 0 || error ? 'bg-coral-bg' : 'bg-paper'
+          } ${showSave ? 'justify-between' : 'justify-center'}`}
+        >
+          <span className={`font-body text-xs font-bold ${status.tone}`}>{status.text}</span>
+          {showSave && (
+            <Button onClick={() => void save()} disabled={!canSave} className="shrink-0">
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          )}
         </div>
       )}
     </>

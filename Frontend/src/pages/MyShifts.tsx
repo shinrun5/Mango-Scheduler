@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CalendarIcon } from '../components/icons'
 import { api } from '../lib/api'
-import { DAY_LABEL, DAYS, dayDate, relativeTime, timeRange } from '../lib/time'
+import { DAY_LABEL, DAYS, dayDate, relativeTime, timeRange, weekRangeLabel } from '../lib/time'
 import type { ChangeRequest, MyShiftsResponse, Shift, Store } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
@@ -53,16 +54,17 @@ export function MyShifts() {
     }
   }
 
-  if (error && !data) return <div className="p-8 font-body text-sm text-coral-dark">{error}</div>
-  if (!data) return <div className="p-8 font-body text-sm text-muted-ink">Loading…</div>
+  if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
+  if (!data) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
 
   if (!data.published) {
     return (
-      <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-24 sm:pb-6">
+      <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
         <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
-        <p className="mt-2 font-body text-sm text-muted-ink">
-          This week's schedule isn't posted yet — check back soon.
-        </p>
+        <EmptyState
+          title="Nothing posted yet"
+          body="Your manager hasn't put up this week's schedule. Check back soon."
+        />
       </div>
     )
   }
@@ -74,44 +76,67 @@ export function MyShifts() {
       .sort((a, b) => a.start.localeCompare(b.start)),
   })).filter((d) => d.shifts.length > 0)
 
+  const totalHours = Math.round(
+    data.shifts.reduce(
+      (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 3_600_000,
+      0,
+    ),
+  )
+  const meta = [
+    byDay.length > 0 &&
+      `${data.shifts.length} shift${data.shifts.length === 1 ? '' : 's'} · ~${totalHours}h`,
+    data.publishedAt && `posted ${relativeTime(data.publishedAt)}`,
+  ].filter(Boolean)
+
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6 pb-24 sm:pb-6">
-      <div className="flex items-baseline justify-between">
-        <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
-        {data.publishedAt && (
-          <span className="font-body text-xs text-muted-ink">posted {relativeTime(data.publishedAt)}</span>
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
+      <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
+      <div className="mt-0.5 font-body text-xs text-muted-ink">
+        {data.weekStart && (
+          <span className="font-bold text-ink">Week of {weekRangeLabel(data.weekStart)}</span>
         )}
+        {data.weekStart && meta.length > 0 && ' · '}
+        {meta.join(' · ')}
       </div>
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {byDay.length === 0 ? (
-        <p className="mt-2 font-body text-sm text-muted-ink">You're not on the schedule this week.</p>
+        <EmptyState
+          title="You're off this week"
+          body="No shifts on the posted schedule. Check Market for shifts up for grabs."
+        />
       ) : (
         <div className="mt-4 flex flex-col gap-2.5">
           {byDay.map(({ day, shifts }) => (
             <div
               key={day}
-              className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+              className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]"
             >
-              <span className="font-heading text-sm font-bold text-ink">
-                {DAY_LABEL[day]}
+              <div className="flex items-baseline gap-1.5 border-b-2 border-ink/10 bg-cream px-3 py-1.5">
+                <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
                 {data.weekStart && (
-                  <span className="ml-1.5 font-body text-[11px] font-semibold text-muted-ink">
+                  <span className="font-body text-[11px] font-semibold text-muted-ink">
                     {dayDate(data.weekStart, DAYS.indexOf(day))}
                   </span>
                 )}
-              </span>
-              <div className="mt-1.5 flex flex-col gap-2">
+              </div>
+              <div className="flex flex-col divide-y divide-ink/10">
                 {shifts.map((s) => {
                   const pending = pendingFor(s.id)
                   return (
-                    <div key={s.id} className="flex flex-col gap-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-body text-xs font-bold text-ink">{storeName(s.storeId)}</span>
-                        <span className="font-body text-xs text-muted-ink">{timeRange(s.start, s.end)}</span>
+                    <div key={s.id} className="flex flex-col gap-1.5 px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-heading text-sm font-bold text-ink">
+                            {timeRange(s.start, s.end)}
+                          </div>
+                          <div className="font-body text-[11px] font-semibold text-muted-ink">
+                            {storeName(s.storeId)}
+                          </div>
+                        </div>
                         {pending ? (
-                          <span className="ml-auto flex items-center gap-1.5 font-body text-[11px] font-bold text-orange">
+                          <span className="flex shrink-0 flex-col items-end gap-0.5 text-right font-body text-[11px] font-bold text-orange">
                             {pending.openOffer ? 'on the marketplace' : 'change requested'}
                             <button
                               onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
@@ -123,7 +148,7 @@ export function MyShifts() {
                         ) : (
                           <button
                             onClick={() => setExpanded((e) => (e === s.id ? null : s.id))}
-                            className="ml-auto rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                            className="shrink-0 rounded-full px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark active:bg-sky/10"
                           >
                             {expanded === s.id ? 'Close' : 'Request change'}
                           </button>
@@ -161,14 +186,16 @@ export function MyShifts() {
               return (
                 <div
                   key={s.id}
-                  className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-dashed border-ink/40 bg-paper px-3 py-2"
+                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-ink/40 bg-paper px-3 py-2"
                 >
-                  <span className="font-body text-xs font-bold text-ink">{DAY_LABEL[s.day]}</span>
-                  <span className="font-body text-xs text-muted-ink">
-                    {storeName(s.storeId)} · {timeRange(s.start, s.end)}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-body text-xs font-bold text-ink">
+                      {DAY_LABEL[s.day]} · {timeRange(s.start, s.end)}
+                    </div>
+                    <div className="font-body text-[11px] text-muted-ink">{storeName(s.storeId)}</div>
+                  </div>
                   {pending ? (
-                    <span className="ml-auto flex items-center gap-1.5 font-body text-[11px] font-bold text-orange">
+                    <span className="flex shrink-0 items-center gap-1.5 font-body text-[11px] font-bold text-orange">
                       requested
                       <button
                         onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
@@ -180,7 +207,7 @@ export function MyShifts() {
                   ) : (
                     <button
                       onClick={() => void act(() => api.createChangeRequest({ type: 'PICKUP', shiftId: s.id }))}
-                      className="ml-auto rounded-full border-2 border-ink bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white"
+                      className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white"
                     >
                       Pick up
                     </button>
@@ -230,6 +257,18 @@ export function MyShifts() {
   )
 }
 
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="mt-8 flex flex-col items-center gap-2 rounded-2xl border-[2.5px] border-dashed border-ink/25 bg-paper/60 px-6 py-10 text-center">
+      <span className="text-muted-ink">
+        <CalendarIcon size={30} />
+      </span>
+      <span className="font-heading text-sm font-bold text-ink">{title}</span>
+      <span className="max-w-xs font-body text-xs text-muted-ink">{body}</span>
+    </div>
+  )
+}
+
 function RequestPanel({
   shiftId,
   onDrop,
@@ -249,32 +288,36 @@ function RequestPanel({
     api.getSwapTargets(shiftId).then(setTargets).catch(() => setTargets([]))
   }, [shiftId])
 
+  const pill = 'rounded-full border-2 px-3 py-1.5 font-heading text-[11px] font-bold'
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border-2 border-ink/15 bg-cream p-2.5">
+    <div className="flex flex-col gap-2.5 rounded-xl border-2 border-ink/15 bg-cream p-2.5">
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Optional note for your manager"
-        className="rounded-lg border-2 border-ink/30 bg-paper px-2 py-1 font-body text-xs text-ink outline-none"
+        className="rounded-lg border-2 border-ink/30 bg-paper px-2.5 py-1.5 font-body text-xs text-ink outline-none"
       />
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex gap-2">
         <button
           onClick={() => onOffer(note || undefined)}
-          className="rounded-full border-2 border-ink bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white"
+          className={`${pill} flex-1 border-ink bg-green text-white`}
         >
           Post to the crew
         </button>
         <button
           onClick={() => onDrop(note || undefined)}
-          className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
+          className={`${pill} flex-1 border-coral text-coral-dark`}
         >
-          Drop
+          Drop it
         </button>
-        <span className="font-body text-[11px] text-muted-ink">or give to</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 font-body text-[11px] text-muted-ink">or give to</span>
         <select
           value={target}
           onChange={(e) => setTarget(e.target.value === '' ? '' : Number(e.target.value))}
-          className="rounded-lg border-2 border-ink bg-paper px-2 py-1 font-body text-xs text-ink outline-none"
+          className="min-w-0 flex-1 rounded-lg border-2 border-ink bg-paper px-2 py-1.5 font-body text-xs text-ink outline-none"
         >
           <option value="">choose…</option>
           {targets.map((t) => (
@@ -286,9 +329,9 @@ function RequestPanel({
         <button
           disabled={target === ''}
           onClick={() => target !== '' && onSwap(target, note || undefined)}
-          className="rounded-full border-2 border-ink bg-paper px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-40"
+          className={`${pill} shrink-0 border-ink bg-paper text-ink disabled:opacity-40`}
         >
-          Request
+          Send
         </button>
       </div>
     </div>
