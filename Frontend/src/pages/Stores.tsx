@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
+import { ManagersSection } from '../components/ManagersSection'
 import { RequirementsEditor } from '../components/RequirementsEditor'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -53,7 +54,18 @@ export function Stores() {
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {isOwner && (
-        <AddStore onAdd={(name, requiresOpenerSkill) => act(() => api.createStore({ name, requiresOpenerSkill }))} />
+        <>
+          <AddStore
+            onAdd={(name, requiresOpenerSkill) =>
+              act(() => api.createStore({ name, requiresOpenerSkill }))
+            }
+          />
+          {!loading && stores.length > 0 && (
+            <div className="mt-3">
+              <ManagersSection stores={stores} />
+            </div>
+          )}
+        </>
       )}
 
       {loading ? (

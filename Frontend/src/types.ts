@@ -189,6 +189,13 @@ export interface SnapshotDetail extends SnapshotMeta {
   shifts: SnapshotShift[]
 }
 
+export interface ManagerRow {
+  id: number
+  email: string
+  storeIds: number[]
+  isEmployee: boolean
+}
+
 export interface OverviewStore {
   storeId: number
   name: string

@@ -6,6 +6,7 @@ import type {
   Employee,
   EmployeeStore,
   GenerateScheduleResult,
+  ManagerRow,
   MyShiftsResponse,
   OverviewStore,
   Profile,
@@ -155,6 +156,14 @@ export const api = {
   // --- schedule board ---
   getStores: () => getJSON<Store[]>('/stores'),
   getOverview: () => getJSON<{ stores: OverviewStore[] }>('/overview'),
+
+  // --- owner: managers ---
+  getManagers: () => getJSON<{ managers: ManagerRow[] }>('/managers').then((d) => d.managers),
+  createManager: (input: { email: string; password: string; storeIds: number[] }) =>
+    sendJSON<ManagerRow>('/managers', 'POST', input),
+  setManagerStores: (id: number, storeIds: number[]) =>
+    sendJSON<{ id: number; storeIds: number[] }>(`/managers/${id}/stores`, 'PUT', { storeIds }),
+  deleteManager: (id: number) => request<{ message: string }>(`/managers/${id}`, { method: 'DELETE' }),
   createStore: (input: { name: string; requiresOpenerSkill?: boolean }) =>
     sendJSON<Store>('/stores', 'POST', input),
   updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean }) =>

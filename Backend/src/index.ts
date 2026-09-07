@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response, Router } from 
 import authRoutes from './routes/auth.js';
 import changeRequestRoutes from './routes/changeRequests.js';
 import employeeRoutes from './routes/employees.js';
+import managerRoutes from './routes/managers.js';
 import overviewRoutes from './routes/overview.js';
 import storeRoutes from './routes/stores.js';
 import shiftRoutes from './routes/shifts.js';
@@ -26,6 +27,7 @@ api.use('/employeeStores', employeeStoreRoutes);
 api.use('/availability', availabilityRoutes);
 api.use('/schedule', scheduleRoutes);
 api.use('/change-requests', changeRequestRoutes);
+api.use('/managers', managerRoutes);
 api.use('/overview', overviewRoutes);
 app.use('/api', api);
 
