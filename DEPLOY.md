@@ -12,6 +12,10 @@ The frontend calls the API at `/api` with no host (`Frontend/src/lib/api.ts`), s
 must be served from the same origin as the API. The Node service does that in
 production; `npm run dev` uses the Vite proxy instead.
 
+**Use Option B (Railway).** For a site employees open weekly, cold starts read as
+"it's broken" — Railway keeps the API warm for ~$5/mo. Render's free tier sleeps;
+its always-on tier is $7/service ($14 total).
+
 ---
 
 ## Option A — Render (blueprint, one file)
@@ -34,24 +38,35 @@ The build runs, in order: frontend `npm ci` + `vite build` → backend `npm ci`
 
 ---
 
-## Option B — Railway (no sleep, ~$5/mo)
+## Option B — Railway (recommended: no sleep, ~$5/mo)
 
-No config file needed — two services in one project.
+Both services deploy from this repo and read their `railway.json`, so the
+build/start commands are already set. Hobby plan ($5/mo, usage included) is
+enough for this load.
 
-**API service**
-- **Root directory**: `/` (repo root)
-- **Build**: `npm --prefix Frontend ci && npm --prefix Frontend run build && npm --prefix Backend ci && npm --prefix Backend run migrate:deploy`
-- **Start**: `npm --prefix Backend start`
-- **Variables**: the five secrets above, plus
-  `SOLVER_URL=http://${{fruitcrew-solver.RAILWAY_PRIVATE_DOMAIN}}:8080`
-  (use the solver service's private domain; set its port to 8080 or read `$PORT`)
-- **Health check path**: `/api/health`
+One project, two services:
 
-**Solver service** (same repo, "Add service → GitHub repo" again)
-- **Root directory**: `/scheduling-prototype`
-- **Build**: `pip install -r solver/requirements.txt`
-- **Start**: `uvicorn solver.service:app --host 0.0.0.0 --port $PORT`
-- Leave it on the private network only (don't generate a public domain).
+### 1. API service (also serves the frontend)
+- **Add service → GitHub repo → this repo**
+- **Settings → Root Directory**: `/` (default — picks up `/railway.json`)
+- **Variables**: the five secrets from `Backend/.env`
+  (`DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`), plus
+  `SOLVER_URL=http://${{solver.RAILWAY_PRIVATE_DOMAIN}}:${{solver.PORT}}`
+  (replace `solver` with whatever you name the service in step 2)
+- **Settings → Networking → Generate Domain** — this is the URL you hand out
+- Build runs: frontend `npm ci` + `vite build` → backend `npm ci`
+  (`prisma generate` via postinstall) → `prisma migrate deploy`, then `npm start`
+
+### 2. Solver service
+- **Add service → GitHub repo → this repo** (same repo again)
+- **Settings → Root Directory**: `/scheduling-prototype` (picks up its own `railway.json`)
+- No variables needed
+- **Do not** generate a public domain — the API reaches it on the private network
+- `railway.json` sets `sleepApplication: true`, so it scales to zero and wakes
+  when the owner generates a schedule (~once a week). First request after a
+  sleep takes ~20–40 s while OR-Tools boots; that's fine for a weekly action.
+  Flip it to `false` if you want it always warm.
 
 ---
 
