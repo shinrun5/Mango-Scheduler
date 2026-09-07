@@ -1,20 +1,24 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
+import { RequirementsEditor } from '../components/RequirementsEditor'
 import { api } from '../lib/api'
-import type { EmployeeStore, Store } from '../types'
+import type { EmployeeStore, ShiftRequirement, Store } from '../types'
 
 export function Stores() {
   const [stores, setStores] = useState<Store[]>([])
   const [links, setLinks] = useState<EmployeeStore[]>([])
+  const [reqs, setReqs] = useState<ShiftRequirement[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<number | null>(null)
+  const [showNeeds, setShowNeeds] = useState<number | null>(null)
 
   function refresh() {
-    return Promise.all([api.getStores(), api.getEmployeeStores()])
-      .then(([s, l]) => {
+    return Promise.all([api.getStores(), api.getEmployeeStores(), api.getShiftRequirements()])
+      .then(([s, l, r]) => {
         setStores(s)
         setLinks(l)
+        setReqs(r)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load stores'))
   }
@@ -24,6 +28,7 @@ export function Stores() {
   }, [])
 
   const workerCount = (storeId: number) => links.filter((l) => l.storeId === storeId).length
+  const reqCount = (storeId: number) => reqs.filter((r) => r.storeId === storeId).length
 
   async function act(fn: () => Promise<unknown>) {
     setError(null)
@@ -63,29 +68,42 @@ export function Stores() {
             ) : (
               <div
                 key={s.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
               >
-                <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
-                <span className="font-body text-[11px] text-muted-ink">
-                  {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
-                  {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
-                </span>
-                <div className="ml-auto flex gap-2">
-                  <button
-                    onClick={() => setEditing(s.id)}
-                    className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (window.confirm(`Delete ${s.name}?`)) void act(() => api.deleteStore(s.id))
-                    }}
-                    className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
-                  >
-                    Delete
-                  </button>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
+                  <span className="font-body text-[11px] text-muted-ink">
+                    {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
+                    {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
+                  </span>
+                  <div className="ml-auto flex gap-2">
+                    <button
+                      onClick={() => setShowNeeds((v) => (v === s.id ? null : s.id))}
+                      className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
+                        reqCount(s.id) === 0 ? 'bg-coral-bg text-coral-dark' : 'bg-cream text-ink'
+                      }`}
+                    >
+                      Shift needs ({reqCount(s.id)})
+                    </button>
+                    <button
+                      onClick={() => setEditing(s.id)}
+                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Delete ${s.name}?`)) void act(() => api.deleteStore(s.id))
+                      }}
+                      className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
+                {showNeeds === s.id && (
+                  <RequirementsEditor storeId={s.id} onChange={() => void refresh()} />
+                )}
               </div>
             ),
           )}

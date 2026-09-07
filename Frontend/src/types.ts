@@ -83,6 +83,19 @@ export interface ShiftRequirement {
   graceMinutes: number
 }
 
+/** Friendly shape used by the requirements editor (POST/PUT /shiftrequirements). */
+export interface RequirementInput {
+  storeId?: number
+  day: DayOfWeek
+  start: string // "HH:MM"
+  end: string
+  peopleNeeded: number
+  seniorsNeeded: number
+  allowNew: boolean
+  needOpen: boolean
+  graceMinutes: number
+}
+
 export interface ScheduleGap {
   requirementId: number
   kind: 'head' | 'senior' | 'open'

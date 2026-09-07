@@ -9,6 +9,7 @@ import type {
   MyShiftsResponse,
   Profile,
   RecurringAvailability,
+  RequirementInput,
   RosterWorker,
   Session,
   Shift,
@@ -153,6 +154,14 @@ export const api = {
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
   getShifts: () => getJSON<Shift[]>('/shifts'),
   getShiftRequirements: () => getJSON<ShiftRequirement[]>('/shiftrequirements'),
+  getStoreRequirements: (storeId: number) =>
+    getJSON<ShiftRequirement[]>(`/shiftrequirements?storeId=${storeId}`),
+  createRequirement: (input: RequirementInput) =>
+    sendJSON<ShiftRequirement>('/shiftrequirements', 'POST', input),
+  updateRequirementFull: (id: number, input: Omit<RequirementInput, 'storeId'>) =>
+    sendJSON<ShiftRequirement>(`/shiftrequirements/${id}`, 'PUT', input),
+  deleteRequirement: (id: number) =>
+    request<{ message: string }>(`/shiftrequirements/${id}`, { method: 'DELETE' }),
   getAvailability: () => getJSON<RecurringAvailability[]>('/availability'),
 
   // --- manager: workers ---
