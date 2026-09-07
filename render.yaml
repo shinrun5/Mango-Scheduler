@@ -1,0 +1,57 @@
+# Render blueprint — deploys the whole app from this repo.
+#   API  : Express + Prisma, also serves the built React frontend (same origin)
+#   Solver: FastAPI + OR-Tools, called only by the API
+# Supabase (Postgres + Auth) stays as-is; wire its values into the API env vars.
+#
+# First deploy:
+#   1. Push this branch, then in Render: New > Blueprint, pick this repo.
+#   2. Fill the `sync: false` vars (from Backend/.env) when prompted.
+#   3. In Supabase > Authentication > URL Configuration add the API's
+#      onrender.com URL (and later your custom domain).
+services:
+  - type: web
+    name: fruitcrew-api
+    runtime: node
+    plan: starter # free tier works too, but it sleeps after 15 min idle
+    rootDir: .
+    # frontend build -> backend install (runs prisma generate via postinstall) -> migrations
+    buildCommand: >-
+      npm --prefix Frontend ci &&
+      npm --prefix Frontend run build &&
+      npm --prefix Backend ci &&
+      npm --prefix Backend run migrate:deploy
+    startCommand: npm --prefix Backend start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SOLVER_URL
+        fromService:
+          type: web
+          name: fruitcrew-solver
+          property: hostport # internal host:port, not exposed publicly
+      # --- secrets: paste from Backend/.env when Render prompts (never commit) ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+  - type: web
+    name: fruitcrew-solver
+    runtime: python
+    plan: starter
+    rootDir: scheduling-prototype
+    buildCommand: pip install -r solver/requirements.txt
+    startCommand: uvicorn solver.service:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    # The solver has no auth. It's only meant for API -> solver calls. To keep it
+    # off the public internet, change `type: web` to `type: pserv` (private
+    # service, paid) — the SOLVER_URL reference above keeps working.
