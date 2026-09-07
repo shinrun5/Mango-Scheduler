@@ -45,21 +45,31 @@ export function Requests() {
     }
   }
 
-  const sorted = [...requests].sort(
-    (a, b) =>
-      (a.status === 'PENDING' ? 0 : 1) - (b.status === 'PENDING' ? 0 : 1) || b.id - a.id,
-  )
+  // an unclaimed marketplace post has nothing for the manager to act on yet
+  const unclaimedOffers = requests.filter(
+    (r) => r.openOffer && r.status === 'PENDING' && !r.targetEmployee,
+  ).length
+
+  const sorted = [...requests]
+    .filter((r) => !(r.openOffer && r.status === 'PENDING' && !r.targetEmployee))
+    .sort((a, b) => (a.status === 'PENDING' ? 0 : 1) - (b.status === 'PENDING' ? 0 : 1) || b.id - a.id)
 
   function sentence(r: ChangeRequest) {
     const who = r.requestedBy.name
     if (r.type === 'DROP') return `${who} wants to drop`
     if (r.type === 'PICKUP') return `${who} wants to pick up`
+    if (r.openOffer) return `${r.targetEmployee?.name ?? '—'} claimed ${who}'s shift`
     return `${who} wants to give this to ${r.targetEmployee?.name ?? '—'}`
   }
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-6">
       <h1 className="font-heading text-lg font-bold text-ink">Requests</h1>
+      {unclaimedOffers > 0 && (
+        <p className="mt-1 font-body text-xs text-muted-ink">
+          {unclaimedOffers} shift{unclaimedOffers === 1 ? '' : 's'} on the marketplace, unclaimed
+        </p>
+      )}
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {loading ? (

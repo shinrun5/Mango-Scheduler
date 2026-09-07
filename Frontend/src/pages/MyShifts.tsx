@@ -112,12 +112,12 @@ export function MyShifts() {
                         <span className="font-body text-xs text-muted-ink">{timeRange(s.start, s.end)}</span>
                         {pending ? (
                           <span className="ml-auto flex items-center gap-1.5 font-body text-[11px] font-bold text-orange">
-                            change requested
+                            {pending.openOffer ? 'on the marketplace' : 'change requested'}
                             <button
                               onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
                               className="font-bold text-muted-ink underline"
                             >
-                              cancel
+                              {pending.openOffer ? 'withdraw' : 'cancel'}
                             </button>
                           </span>
                         ) : (
@@ -133,6 +133,9 @@ export function MyShifts() {
                         <RequestPanel
                           shiftId={s.id}
                           onDrop={(note) => act(() => api.createChangeRequest({ type: 'DROP', shiftId: s.id, note }))}
+                          onOffer={(note) =>
+                            act(() => api.createChangeRequest({ type: 'SWAP', shiftId: s.id, note }))
+                          }
                           onSwap={(targetEmployeeId, note) =>
                             act(() =>
                               api.createChangeRequest({ type: 'SWAP', shiftId: s.id, targetEmployeeId, note }),
@@ -230,10 +233,12 @@ export function MyShifts() {
 function RequestPanel({
   shiftId,
   onDrop,
+  onOffer,
   onSwap,
 }: {
   shiftId: number
   onDrop: (note?: string) => void
+  onOffer: (note?: string) => void
   onSwap: (targetEmployeeId: number, note?: string) => void
 }) {
   const [targets, setTargets] = useState<{ id: number; name: string }[]>([])
@@ -254,10 +259,16 @@ function RequestPanel({
       />
       <div className="flex flex-wrap items-center gap-2">
         <button
+          onClick={() => onOffer(note || undefined)}
+          className="rounded-full border-2 border-ink bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white"
+        >
+          Post to the crew
+        </button>
+        <button
           onClick={() => onDrop(note || undefined)}
           className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
         >
-          Drop this shift
+          Drop
         </button>
         <span className="font-body text-[11px] text-muted-ink">or give to</span>
         <select

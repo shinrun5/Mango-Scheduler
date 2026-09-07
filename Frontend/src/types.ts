@@ -143,6 +143,8 @@ export interface ChangeRequest {
   id: number
   type: ChangeType
   status: RequestStatus
+  /** true = a SWAP posted to the marketplace (no target until someone claims it) */
+  openOffer: boolean
   note: string | null
   createdAt: string
   resolvedAt: string | null

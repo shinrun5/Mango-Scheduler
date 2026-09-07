@@ -130,6 +130,14 @@ export const api = {
     note?: string
   }) => sendJSON<ChangeRequest>('/change-requests', 'POST', input),
   cancelChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/cancel`, 'POST', {}),
+
+  // --- marketplace ---
+  getMarketplace: () =>
+    getJSON<{ available: ChangeRequest[]; claimed: ChangeRequest[]; posted: ChangeRequest[] }>(
+      '/change-requests/marketplace',
+    ),
+  claimOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/claim`, 'POST', {}),
+  unclaimOffer: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/unclaim`, 'POST', {}),
   getChangeRequests: (status?: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED') =>
     getJSON<ChangeRequest[]>(`/change-requests${status ? `?status=${status}` : ''}`),
   approveChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/approve`, 'POST', {}),

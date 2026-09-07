@@ -19,7 +19,8 @@ export function ManagerLayout() {
   useEffect(() => {
     api
       .getChangeRequests('PENDING')
-      .then((r) => setPending(r.length))
+      // unclaimed marketplace posts aren't actionable yet — don't count them
+      .then((r) => setPending(r.filter((x) => !(x.openOffer && !x.targetEmployee)).length))
       .catch(() => {})
   }, [location.pathname])
 

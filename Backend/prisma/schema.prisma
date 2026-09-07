@@ -98,10 +98,13 @@ enum RequestStatus {
 }
 
 // An employee-initiated change to a posted shift, awaiting manager approval.
+// A SWAP with openOffer = true is a marketplace post: no target until a coworker
+// claims it (which sets targetEmployeeId); still PENDING until the manager approves.
 model ShiftChangeRequest {
   id               Int           @id @default(autoincrement())
   type             ChangeType
   status           RequestStatus @default(PENDING)
+  openOffer        Boolean       @default(false)
   shift            Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   shiftId          Int
   requestedBy      Employee      @relation("RequestsMade", fields: [requestedById], references: [id])

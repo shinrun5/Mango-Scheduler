@@ -64,6 +64,14 @@ export function UserIcon({ size = 22 }: { size?: number }) {
   )
 }
 
+export function SwapIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" />
+    </svg>
+  )
+}
+
 export function WarningIcon({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

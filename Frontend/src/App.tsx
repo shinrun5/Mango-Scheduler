@@ -8,6 +8,7 @@ import { Availability } from './pages/Availability'
 import { Dashboard } from './pages/Dashboard'
 import { History } from './pages/History'
 import { Login } from './pages/Login'
+import { Marketplace } from './pages/Marketplace'
 import { MyShifts } from './pages/MyShifts'
 import { Profile } from './pages/Profile'
 import { Register } from './pages/Register'
@@ -45,6 +46,7 @@ export default function App() {
         <Route element={<ProtectedRoute role="EMPLOYEE" />}>
           <Route element={<EmployeeLayout />}>
             <Route path="/my-shifts" element={<MyShifts />} />
+            <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/availability" element={<Availability />} />
             <Route path="/profile" element={<Profile />} />
           </Route>

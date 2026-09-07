@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarIcon, ClockIcon, UserIcon } from './icons'
+import { CalendarIcon, ClockIcon, SwapIcon, UserIcon } from './icons'
 import { FruitAvatar } from './FruitAvatar'
 import { useAuth } from '../lib/auth'
 
 const NAV = [
   { to: '/my-shifts', label: 'Shifts', Icon: CalendarIcon },
+  { to: '/marketplace', label: 'Market', Icon: SwapIcon },
   { to: '/availability', label: 'Availability', Icon: ClockIcon },
   { to: '/profile', label: 'Profile', Icon: UserIcon },
 ]
