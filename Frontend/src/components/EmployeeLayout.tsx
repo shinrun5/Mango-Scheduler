@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { CalendarIcon, ClockIcon, SwapIcon, UserIcon } from './icons'
 import { FruitAvatar } from './FruitAvatar'
+import { NotificationBell } from './NotificationBell'
 import { useAuth } from '../lib/auth'
 
 const NAV = [
@@ -39,13 +40,14 @@ export function EmployeeLayout(): ReactNode {
             </NavLink>
           ))}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <NavLink
             to="/profile"
             className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
           >
             {user?.name ?? user?.email}
           </NavLink>
+          <NotificationBell />
           <button
             onClick={() => void logout()}
             className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"

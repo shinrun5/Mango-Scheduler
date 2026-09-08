@@ -210,6 +210,16 @@ export interface SnapshotDetail extends SnapshotMeta {
   shifts: SnapshotShift[]
 }
 
+export interface NotificationItem {
+  id: number
+  kind: 'AVAILABILITY_REMINDER' | 'SCHEDULE_DRAFTED' | 'GENERIC'
+  title: string
+  body: string | null
+  link: string | null
+  createdAt: string
+  readAt: string | null
+}
+
 export interface ManagerRow {
   id: number
   email: string

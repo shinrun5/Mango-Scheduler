@@ -7,6 +7,7 @@ import type {
   EmployeeStore,
   GenerateScheduleResult,
   ManagerRow,
+  NotificationItem,
   MyShiftsResponse,
   OverviewStore,
   Profile,
@@ -129,6 +130,13 @@ export const api = {
     sendJSON<{ ok: true }>('/auth/profile', 'PUT', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
+
+  // --- notifications ---
+  getNotifications: () =>
+    getJSON<{ unread: number; items: NotificationItem[] }>('/notifications'),
+  markNotificationRead: (id: number) =>
+    sendJSON<{ ok: true }>(`/notifications/${id}/read`, 'POST', {}),
+  markAllNotificationsRead: () => sendJSON<{ ok: true }>('/notifications/read-all', 'POST', {}),
 
   // --- shift-change requests ---
   getOpenShifts: () => getJSON<Shift[]>('/shifts/open'),

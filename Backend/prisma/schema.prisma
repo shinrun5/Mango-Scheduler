@@ -187,7 +187,39 @@ model User {
   employee   Employee? @relation(fields: [employeeId], references: [id])
   employeeId Int?      @unique
   managerStores ManagerStore[]
+  notifications Notification[]
   createdAt  DateTime @default(now())
+}
+
+enum NotificationKind {
+  AVAILABILITY_REMINDER
+  SCHEDULE_DRAFTED
+  GENERIC
+}
+
+// In-app notification. Some also go out by email (see lib/notify.ts).
+model Notification {
+  id        Int              @id @default(autoincrement())
+  user      User             @relation(fields: [userId], references: [id])
+  userId    Int
+  kind      NotificationKind @default(GENERIC)
+  title     String
+  body      String?
+  link      String? // a client-side path, e.g. "/availability"
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  @@index([userId, readAt])
+}
+
+// De-dupes scheduled jobs so a Fri run is a no-op if Thu already ran (and Sun
+// after Sat). `key` is usually the target week (+ storeId for per-store jobs).
+model JobRun {
+  job   String
+  key   String
+  ranAt DateTime @default(now())
+
+  @@id([job, key])
 }
 
 model RecurringAvailability {

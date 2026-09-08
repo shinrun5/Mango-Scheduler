@@ -14,6 +14,8 @@ import shiftRequirementRoutes from './routes/shiftRequirements.js';
 import employeeStoreRoutes from './routes/employeeStores.js';
 import availabilityRoutes from './routes/availability.js';
 import scheduleRoutes from './routes/schedule.js';
+import notificationRoutes from './routes/notifications.js';
+import { startCron } from './cron.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -35,6 +37,7 @@ api.use('/change-requests', changeRequestRoutes);
 api.use('/time-off', timeOffRoutes);
 api.use('/managers', managerRoutes);
 api.use('/overview', overviewRoutes);
+api.use('/notifications', notificationRoutes);
 app.use('/api', api);
 
 // In production the built frontend is served from this same origin (the app
@@ -67,4 +70,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log('Server listening on port', PORT);
+  startCron();
 });

@@ -55,6 +55,12 @@ One project, two services:
   `SUPABASE_SERVICE_ROLE_KEY`), plus
   `SOLVER_URL=http://${{solver.RAILWAY_PRIVATE_DOMAIN}}:${{solver.PORT}}`
   (replace `solver` with whatever you name the service in step 2)
+- **For scheduled jobs + email** (Thu/Fri availability reminder, Sat/Sun
+  auto-generate): `CRON_ENABLED=1`, `APP_URL=https://<your-domain>`,
+  `RESEND_API_KEY=<key>`, optionally `CRON_TZ` (default `America/Toronto`)
+  and `EMAIL_FROM` (needs a verified domain in Resend before it can email
+  anyone other than the Resend account owner; in-app notifications work
+  regardless)
 - **Settings → Networking → Generate Domain** — this is the URL you hand out
 - Build runs: frontend `npm ci` + `vite build` → backend `npm ci`
   (`prisma generate` via postinstall); a pre-deploy step then runs

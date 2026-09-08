@@ -1,0 +1,209 @@
+import { DayOfWeek } from '@prisma/client';
+import prisma from './prisma.js';
+import { callSolver } from './solverClient.js';
+
+/** The DateTime columns hold a wall-clock time (e.g. 11:30); read the clock face in UTC. */
+export function toHHMM(d: Date): string {
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+/** Midnight UTC of the Monday on or before `d`. */
+export function mondayUTC(d = new Date()): Date {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dow = x.getUTCDay();
+  x.setUTCDate(x.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+  return x;
+}
+
+/** One store's shift rows with denormalised names — the frozen form for a snapshot. */
+export async function freezeShifts(storeId: number) {
+  const shifts = await prisma.shift.findMany({
+    where: { storeId },
+    include: { employee: true, store: true },
+  });
+  return shifts.map((s) => ({
+    employeeId: s.employeeId,
+    employeeName: s.employee?.name ?? null,
+    storeId: s.storeId,
+    storeName: s.store.name,
+    day: s.day,
+    start: toHHMM(s.start),
+    end: toHHMM(s.end),
+  }));
+}
+
+const WEEK_DAYS: DayOfWeek[] = [
+  DayOfWeek.MONDAY,
+  DayOfWeek.TUESDAY,
+  DayOfWeek.WEDNESDAY,
+  DayOfWeek.THURSDAY,
+  DayOfWeek.FRIDAY,
+  DayOfWeek.SATURDAY,
+  DayOfWeek.SUNDAY,
+];
+
+export interface GenResult {
+  feasible: boolean;
+  created: number;
+  optimal: boolean;
+  objective: number | null;
+  unfilled: number;
+  spread: number | null;
+  shiftsPerEmployee: Record<string, number>;
+  gaps: unknown[];
+}
+
+/**
+ * Solve and write one store's schedule for whatever week its Schedule.weekStart
+ * points at. Always a draft — never publishes. Honours one-week availability
+ * overrides and time-off notices for that week.
+ *
+ * Throws for setup problems (no store / no requirements / solver unreachable);
+ * returns `feasible: false` when the solver simply can't fill the week.
+ */
+export async function generateScheduleForStore(
+  storeId: number,
+  opts: { solveSeconds?: number; replace?: boolean; snapshotLabel?: string } = {},
+): Promise<GenResult> {
+  const solveSeconds = opts.solveSeconds ?? 5;
+  const replace = opts.replace !== false;
+
+  if (opts.snapshotLabel) {
+    const existing = await freezeShifts(storeId);
+    if (existing.length > 0) {
+      const schedule = await prisma.schedule.findUnique({ where: { storeId } });
+      await prisma.scheduleSnapshot.create({
+        data: {
+          storeId,
+          weekStart: schedule?.weekStart ?? mondayUTC(),
+          label: opts.snapshotLabel,
+          shifts: existing,
+        },
+      });
+    }
+  }
+
+  const scheduleRow = await prisma.schedule.findUnique({ where: { storeId } });
+  const weekStart = scheduleRow?.weekStart ?? null;
+
+  const [store, employees, availability, requirements] = await Promise.all([
+    prisma.store.findUnique({ where: { id: storeId } }),
+    prisma.employee.findMany({
+      where: { standby: false, employeeStores: { some: { storeId } } },
+      include: { employeeStores: { where: { storeId } } },
+    }),
+    prisma.recurringAvailability.findMany(),
+    prisma.shiftRequirement.findMany({ where: { storeId } }),
+  ]);
+
+  if (!store) throw new Error('Store not found');
+  if (requirements.length === 0) throw new Error('This store has no shift requirements yet');
+
+  // A one-week override, if present, fully replaces an employee's standing availability.
+  const empIdsInPlay = new Set(employees.map((e) => e.id));
+  const overrides = weekStart
+    ? await prisma.weekAvailability.findMany({
+        where: { weekStart, employeeId: { in: [...empIdsInPlay] } },
+      })
+    : [];
+  const overrideByEmp = new Map(
+    overrides.map((o) => [
+      o.employeeId,
+      o.windows as unknown as { day: DayOfWeek; start: string; end: string }[],
+    ]),
+  );
+  let effectiveAvailability: { employeeId: number; day: DayOfWeek; start: string; end: string }[] = [];
+  for (const e of employees) {
+    const ov = overrideByEmp.get(e.id);
+    if (ov) {
+      for (const w of ov) effectiveAvailability.push({ employeeId: e.id, day: w.day, start: w.start, end: w.end });
+    } else {
+      for (const a of availability) {
+        if (a.employeeId === e.id) {
+          effectiveAvailability.push({ employeeId: e.id, day: a.day, start: toHHMM(a.start), end: toHHMM(a.end) });
+        }
+      }
+    }
+  }
+
+  // Time-off notices covering any day of this week -> drop that day for that employee.
+  if (weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+    const vacations = await prisma.timeOffRequest.findMany({
+      where: {
+        cancelledAt: null,
+        employeeId: { in: [...empIdsInPlay] },
+        startDate: { lte: weekEnd },
+        endDate: { gte: weekStart },
+      },
+    });
+    const offDays = new Map<number, Set<DayOfWeek>>();
+    for (const v of vacations) {
+      const set = offDays.get(v.employeeId) ?? new Set<DayOfWeek>();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setUTCDate(d.getUTCDate() + i);
+        if (d >= v.startDate && d <= v.endDate) set.add(WEEK_DAYS[i]!);
+      }
+      offDays.set(v.employeeId, set);
+    }
+    effectiveAvailability = effectiveAvailability.filter((a) => !offDays.get(a.employeeId)?.has(a.day));
+  }
+
+  const anyoneOpens = !store.requiresOpenerSkill;
+
+  const payload = {
+    solveSeconds,
+    employees: employees.map((e) => ({
+      id: e.id,
+      name: e.name,
+      hourLimit: e.hourLimit,
+      maxShifts: e.maxShifts,
+      stores: e.employeeStores.map((es) => ({
+        storeId: es.storeId,
+        tier: es.proficiency,
+        canOpen: es.canOpen || anyoneOpens,
+        primary: es.primary,
+      })),
+    })),
+    availability: effectiveAvailability,
+    requirements: requirements.map((r) => ({
+      id: r.id,
+      storeId: r.storeId,
+      day: r.day,
+      start: toHHMM(r.start),
+      end: toHHMM(r.end),
+      head: r.managerRequired + r.seniorRequired + r.regularRequired + r.newRequired,
+      seniorMin: r.managerRequired + r.seniorRequired,
+      needOpen: r.needOpen,
+      graceMinutes: r.graceMinutes,
+      allowNew: r.newRequired > 0,
+    })),
+  };
+
+  const result = await callSolver(payload);
+  const base: GenResult = {
+    feasible: result.feasible,
+    created: 0,
+    optimal: result.optimal,
+    objective: result.objective,
+    unfilled: result.stats.unfilled ?? 0,
+    spread: result.stats.spread ?? null,
+    shiftsPerEmployee: result.stats.shiftsPerEmployee ?? {},
+    gaps: result.gaps,
+  };
+  if (!result.feasible) return base;
+
+  const reqById = new Map(requirements.map((r) => [r.id, r]));
+  const rows = result.assignments.map((a) => {
+    const r = reqById.get(a.requirementId)!;
+    return { employeeId: a.employeeId, storeId: r.storeId, day: r.day, start: r.start, end: r.end };
+  });
+  const createOp = prisma.shift.createMany({ data: rows });
+  await (replace
+    ? prisma.$transaction([prisma.shift.deleteMany({ where: { storeId } }), createOp])
+    : prisma.$transaction([createOp]));
+
+  return { ...base, created: rows.length };
+}

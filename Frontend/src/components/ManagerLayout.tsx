@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+import { NotificationBell } from './NotificationBell'
 import { UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -58,6 +59,7 @@ function Chrome() {
                 ))}
               </select>
             )}
+            <NotificationBell />
             <NavLink
               to="/account"
               className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-paper px-2.5 py-1 font-body text-xs font-semibold text-ink"
