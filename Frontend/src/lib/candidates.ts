@@ -8,6 +8,7 @@ const TIER_RANK: Record<Tier, number> = { NEW: 0, REGULAR: 1, SENIOR: 2, MANAGER
 export interface Candidate {
   employeeId: number
   name: string
+  avatarFruit: string | null
   tier: Tier
   canOpen: boolean
   coversFull: boolean
@@ -79,6 +80,7 @@ export function computeCandidates(args: {
     out.push({
       employeeId: emp.id,
       name: emp.name,
+      avatarFruit: emp.avatarFruit,
       tier: link.proficiency,
       canOpen: link.canOpen,
       coversFull,

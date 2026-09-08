@@ -41,6 +41,7 @@ export interface Employee {
   hourLimit: number
   maxShifts: number
   standby: boolean
+  avatarFruit: string | null
 }
 
 export interface EmployeeStore {
@@ -117,6 +118,7 @@ export interface RosterWorker {
   hourLimit: number
   maxShifts: number
   standby: boolean
+  avatarFruit: string | null
   inviteCode: string | null
   account: { email: string } | null
   stores: RosterStoreLink[]

@@ -153,6 +153,7 @@ model Employee {
   hourLimit Int
   maxShifts Int @default(6)   // max distinct days worked per week
   standby Boolean @default(false)   // on-call: never auto-scheduled, only manually assignable
+  avatarFruit String?   // chosen fruit avatar; null -> a deterministic default by id. Unique per store (see routes/employees.ts).
   employeeStores EmployeeStore[]
   recurringAvailability RecurringAvailability[]
   changeRequestsMade     ShiftChangeRequest[] @relation("RequestsMade")

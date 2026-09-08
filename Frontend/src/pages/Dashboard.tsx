@@ -601,6 +601,7 @@ function buildView({
   requirements,
 }: BoardData): { stores: ViewStore[]; totalShort: number } {
   const employeeName = new Map(employees.map((e) => [e.id, e.name]))
+  const employeeFruit = new Map(employees.map((e) => [e.id, e.avatarFruit]))
 
   // gaps reflect ACTUAL current coverage, not the solver's original report
   const gapsByStoreDay =
@@ -654,6 +655,7 @@ function buildView({
           people.push({
             employeeId,
             name: employeeName.get(employeeId) ?? `#${employeeId}`,
+            avatarFruit: employeeFruit.get(employeeId) ?? null,
             shiftIds: span.shiftIds,
             start: span.start,
             end: span.end,

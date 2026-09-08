@@ -216,6 +216,10 @@ export const api = {
   /** Manager/owner adds themselves as a schedulable worker at every store they run. */
   becomeWorker: () =>
     sendJSON<{ employeeId: number; created: boolean; stores: number }>('/employees/me', 'POST', {}),
+  /** The caller's chosen fruit avatar + the fruits already taken at their store(s). */
+  getMyFruit: () => getJSON<{ mine: string | null; taken: string[] }>('/employees/mine/fruit'),
+  setMyFruit: (fruit: string | null) =>
+    sendJSON<{ fruit: string | null }>('/employees/mine/fruit', 'PUT', { fruit }),
 
   // --- employee self-service ---
   getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),

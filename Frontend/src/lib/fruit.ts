@@ -33,3 +33,10 @@ export type Fruit = (typeof FRUITS)[number]
 export function fruitFor(employeeId: number): Fruit {
   return FRUITS[employeeId % FRUITS.length]
 }
+
+/** The person's chosen fruit if they have a valid one, else the deterministic default. */
+export function fruitForPerson(p: { employeeId: number; avatarFruit?: string | null }): Fruit {
+  return p.avatarFruit && (FRUITS as readonly string[]).includes(p.avatarFruit)
+    ? (p.avatarFruit as Fruit)
+    : fruitFor(p.employeeId)
+}

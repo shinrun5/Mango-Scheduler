@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AvailabilityEditor } from '../components/AvailabilityEditor'
 import { Button } from '../components/Button'
+import { FruitPicker } from '../components/FruitPicker'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -33,7 +34,12 @@ export function MyAvailability() {
       </p>
 
       {linked ? (
-        <AvailabilityEditor barClass="bottom-0" />
+        <>
+          <div className="mb-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
+            <FruitPicker />
+          </div>
+          <AvailabilityEditor barClass="bottom-0" />
+        </>
       ) : (
         <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
           <p className="font-body text-sm text-ink">

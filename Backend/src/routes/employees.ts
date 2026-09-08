@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import prisma from "../lib/prisma.js";
 import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
+import { isFruit } from "../lib/fruits.js";
 
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
@@ -29,6 +30,26 @@ async function requireManagerOfEmployee(req: Request, res: Response, next: NextF
   next();
 }
 
+/** Fruits already claimed by OTHER people who share a store with `employeeId`
+ * (a fruit is unique per store; a multi-store person must be free at all of theirs). */
+async function takenFruits(employeeId: number): Promise<string[]> {
+  const links = await prisma.employeeStore.findMany({
+    where: { employeeId },
+    select: { storeId: true },
+  });
+  const storeIds = links.map((l) => l.storeId);
+  if (storeIds.length === 0) return [];
+  const others = await prisma.employee.findMany({
+    where: {
+      id: { not: employeeId },
+      avatarFruit: { not: null },
+      employeeStores: { some: { storeId: { in: storeIds } } },
+    },
+    select: { avatarFruit: true },
+  });
+  return [...new Set(others.map((o) => o.avatarFruit as string))];
+}
+
 async function freePin(storeId: number): Promise<string> {
   for (let i = 0; i < 25; i++) {
     const pin = String(Math.floor(1000 + Math.random() * 9000));
@@ -44,6 +65,7 @@ interface RosterRow {
   hourLimit: number;
   maxShifts: number;
   standby: boolean;
+  avatarFruit: string | null;
   inviteCode: string | null;
   account: { email: string } | null;
   stores: { storeId: number; proficiency: string; canOpen: boolean; primary: boolean; pin: string }[];
@@ -62,6 +84,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
     hourLimit: e.hourLimit,
     maxShifts: e.maxShifts,
     standby: e.standby,
+    avatarFruit: e.avatarFruit,
     inviteCode: e.inviteCode,
     account: e.user ? { email: e.user.email } : null,
     stores: e.employeeStores.map((s) => ({
@@ -122,6 +145,34 @@ router.post("/me", ...anyManager, async (req, res) => {
   }
   await prisma.user.update({ where: { id: me.id }, data: { employeeId: employee.id } });
   res.status(201).json({ employeeId: employee.id, created: true, stores: storeIds.length });
+});
+
+// GET /employees/mine/fruit — the caller's chosen fruit + which are taken at their store(s)
+router.get("/mine/fruit", requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+  const me = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { avatarFruit: true },
+  });
+  res.json({ mine: me?.avatarFruit ?? null, taken: await takenFruits(employeeId) });
+});
+
+// PUT /employees/mine/fruit  { fruit: string | null } — pick a fruit (or null to reset)
+router.put("/mine/fruit", requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const fruit = req.body?.fruit ?? null;
+  if (fruit !== null && !isFruit(fruit)) {
+    return res.status(400).json({ error: "Not a known fruit" });
+  }
+  if (fruit !== null && (await takenFruits(employeeId)).includes(fruit)) {
+    return res.status(409).json({ error: "Someone at your store already has that one" });
+  }
+
+  await prisma.employee.update({ where: { id: employeeId }, data: { avatarFruit: fruit } });
+  res.json({ fruit });
 });
 
 // POST /employees/:id/invite

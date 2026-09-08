@@ -1,13 +1,14 @@
 import type { MouseEvent } from 'react'
 import { FruitAvatar } from './FruitAvatar'
 import { StarBadgeIcon, WarningIcon } from './icons'
-import { fruitFor } from '../lib/fruit'
+import { fruitForPerson } from '../lib/fruit'
 import type { GapCardData } from '../lib/gaps'
 import { timeRangeCompact } from '../lib/time'
 
 export interface DayPerson {
   employeeId: number
   name: string
+  avatarFruit: string | null
   /** one or more DB shift rows, merged into a single contiguous span */
   shiftIds: number[]
   start: string
@@ -54,7 +55,7 @@ export function DayCard({
             className={`${ROW} transition-colors hover:bg-cream`}
           >
             <div className="relative h-[22px] w-[22px]">
-              <FruitAvatar kind={fruitFor(row.p.employeeId)} size={22} />
+              <FruitAvatar kind={fruitForPerson(row.p)} size={22} />
               {row.p.isOpener && (
                 <div className="absolute -bottom-1 -right-1">
                   <StarBadgeIcon size={11} />

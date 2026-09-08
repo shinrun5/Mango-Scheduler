@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Candidate } from '../lib/candidates'
-import { fruitFor } from '../lib/fruit'
+import { fruitForPerson } from '../lib/fruit'
 import { clockToMin, minToClock, to12Hour } from '../lib/time'
 import { FruitAvatar } from './FruitAvatar'
 
@@ -43,7 +43,7 @@ function CandidateList({
           onClick={() => onPick(c.employeeId)}
           className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
         >
-          <FruitAvatar kind={fruitFor(c.employeeId)} size={22} />
+          <FruitAvatar kind={fruitForPerson(c)} size={22} />
           <span className="font-body text-xs font-bold text-ink">{c.name}</span>
           {c.standby && (
             <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">

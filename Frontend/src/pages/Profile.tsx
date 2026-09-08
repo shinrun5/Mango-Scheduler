@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
+import { FruitPicker } from '../components/FruitPicker'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import type { Profile as ProfileData } from '../types'
@@ -68,6 +69,12 @@ export function Profile() {
           </p>
         )}
       </div>
+
+      {e && (
+        <div className="mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
+          <FruitPicker />
+        </div>
+      )}
 
       <ChangePassword onError={setError} />
     </div>
