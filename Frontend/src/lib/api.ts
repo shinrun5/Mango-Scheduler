@@ -249,6 +249,12 @@ export const api = {
   getMyFruit: () => getJSON<{ mine: string | null; taken: string[] }>('/employees/mine/fruit'),
   setMyFruit: (fruit: string | null) =>
     sendJSON<{ fruit: string | null }>('/employees/mine/fruit', 'PUT', { fruit }),
+  /** The signed-in employee sets their own weekly caps. */
+  updateMyLimits: (patch: { hourLimit?: number; maxShifts?: number }) =>
+    sendJSON<{ hourLimit: number; maxShifts: number }>('/employees/mine/limits', 'PUT', patch),
+  /** Replace the caller's "one of these days only" groups (e.g. [["SATURDAY","SUNDAY"]]). */
+  setMyEitherOr: (groups: DayOfWeek[][]) =>
+    sendJSON<{ groups: DayOfWeek[][] }>('/employees/mine/either-or', 'PUT', { groups }),
 
   // --- employee self-service ---
   getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),

@@ -28,6 +28,8 @@ class Employee(BaseModel):
     hourLimit: int | None = None
     maxShifts: int | None = None
     stores: list[EmployeeStore] = []
+    # "schedule me at most one of these days" groups, e.g. [["SATURDAY","SUNDAY"]]
+    eitherOr: list[list[str]] = []
 
 
 class Availability(BaseModel):

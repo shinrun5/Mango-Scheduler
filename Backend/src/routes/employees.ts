@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import prisma from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
 import { isFruit } from "../lib/fruits.js";
 
@@ -173,6 +174,69 @@ router.put("/mine/fruit", requireAuth, async (req, res) => {
 
   await prisma.employee.update({ where: { id: employeeId }, data: { avatarFruit: fruit } });
   res.json({ fruit });
+});
+
+// PUT /employees/mine/limits  { hourLimit?, maxShifts? } — the caller sets their own caps
+router.put("/mine/limits", requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const data: { hourLimit?: number; maxShifts?: number } = {};
+  if (req.body?.hourLimit !== undefined) {
+    const h = Math.round(Number(req.body.hourLimit));
+    if (!Number.isFinite(h) || h < 1 || h > 80) {
+      return res.status(400).json({ error: "Max hours must be between 1 and 80" });
+    }
+    data.hourLimit = h;
+  }
+  if (req.body?.maxShifts !== undefined) {
+    const d = Math.round(Number(req.body.maxShifts));
+    if (!Number.isFinite(d) || d < 1 || d > 7) {
+      return res.status(400).json({ error: "Max days must be between 1 and 7" });
+    }
+    data.maxShifts = d;
+  }
+  if (Object.keys(data).length === 0) return res.status(400).json({ error: "Nothing to update" });
+
+  const e = await prisma.employee.update({ where: { id: employeeId }, data });
+  res.json({ hourLimit: e.hourLimit, maxShifts: e.maxShifts });
+});
+
+const DAY_SET = new Set([
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+  "SUNDAY",
+]);
+
+// PUT /employees/mine/either-or  { groups: DayOfWeek[][] }
+// Each group = "schedule me at most one of these days". Replaces the whole set.
+router.put("/mine/either-or", requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const raw = req.body?.groups;
+  if (!Array.isArray(raw) || raw.length > 5) {
+    return res.status(400).json({ error: "groups must be an array (max 5)" });
+  }
+  const groups: string[][] = [];
+  for (const g of raw) {
+    if (!Array.isArray(g)) return res.status(400).json({ error: "each group must be an array of days" });
+    const days = [...new Set(g)];
+    if (days.length < 2 || days.length > 7 || days.some((d) => !DAY_SET.has(d))) {
+      return res.status(400).json({ error: "each group needs 2–7 valid days" });
+    }
+    groups.push(days as string[]);
+  }
+
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: { eitherOrDays: groups.length ? (groups as unknown as object) : Prisma.JsonNull },
+  });
+  res.json({ groups });
 });
 
 // POST /employees/:id/invite

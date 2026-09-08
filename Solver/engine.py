@@ -227,6 +227,12 @@ def solve(payload: dict) -> dict:
                 model.Add(w == 0)
             worked[d] = w
 
+        # "one of these days only": at most one day per either/or group
+        for group in e.get("eitherOr", []) or []:
+            in_group = [worked[d] for d in group if d in worked]
+            if len(in_group) > 1:
+                model.Add(sum(in_group) <= 1)
+
         sc = model.NewIntVar(0, len(DAYS), f"count_{e['id']}")
         model.Add(sc == sum(worked.values()))
         max_shifts = e.get("maxShifts")

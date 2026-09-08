@@ -237,6 +237,7 @@ router.get('/profile', requireAuth, async (req, res) => {
         name: e.name,
         hourLimit: e.hourLimit,
         maxShifts: e.maxShifts,
+        eitherOrDays: (e.eitherOrDays as string[][] | null) ?? [],
         standby: e.standby,
         stores: e.employeeStores.map((s) => ({
           storeId: s.storeId,

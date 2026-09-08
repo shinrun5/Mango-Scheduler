@@ -176,6 +176,9 @@ model Employee {
   maxShifts Int @default(6)   // max distinct days worked per week
   standby Boolean @default(false)   // on-call: never auto-scheduled, only manually assignable
   avatarFruit String?   // chosen fruit avatar; null -> a deterministic default by id. Unique per store (see routes/employees.ts).
+  // "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] = schedule at most
+  // one of Sat/Sun. DayOfWeek[][]; the solver adds sum(worked[d] in group) <= 1.
+  eitherOrDays Json?
   employeeStores EmployeeStore[]
   recurringAvailability RecurringAvailability[]
   weekAvailability     WeekAvailability[]

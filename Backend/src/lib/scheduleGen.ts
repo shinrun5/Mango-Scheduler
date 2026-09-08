@@ -225,6 +225,8 @@ export async function generateScheduleForStore(
       name: e.name,
       hourLimit: e.hourLimit,
       maxShifts: e.maxShifts,
+      // "schedule me at most one of these days" groups (e.g. Sat OR Sun)
+      eitherOr: (e.eitherOrDays as DayOfWeek[][] | null) ?? [],
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,
@@ -283,7 +285,12 @@ export async function generateScheduleForStore(
   const allRows = replace ? [...fixedRows, ...solvedRows] : solvedRows;
   const createOp = prisma.shift.createMany({ data: allRows });
   await (replace
-    ? prisma.$transaction([prisma.shift.deleteMany({ where: { storeId } }), createOp])
+    ? prisma.$transaction([
+        prisma.shift.deleteMany({ where: { storeId } }),
+        createOp,
+        // a fresh draft is never live — employees only see it once a manager posts it
+        prisma.schedule.updateMany({ where: { storeId }, data: { publishedAt: null } }),
+      ])
     : prisma.$transaction([createOp]));
 
   return { ...base, created: allRows.length };

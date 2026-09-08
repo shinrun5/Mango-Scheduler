@@ -137,6 +137,8 @@ export interface Profile {
     name: string
     hourLimit: number
     maxShifts: number
+    /** "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] */
+    eitherOrDays: DayOfWeek[][]
     standby: boolean
     stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean; pin: string }[]
   } | null
