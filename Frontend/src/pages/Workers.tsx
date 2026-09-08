@@ -405,6 +405,13 @@ function FixedShiftRow({
           </button>
         </span>
       ))}
+      {fixed.length > 0 && (
+        <span className="basis-full font-body text-[10px] italic text-muted-ink">
+          At{' '}
+          {[...new Set(fixed.map((f) => storeName(f.storeId)))].join(', ')} they work only these
+          days — the scheduler won't add others there.
+        </span>
+      )}
       {open ? (
         <span className="flex flex-wrap items-center gap-1">
           <select value={storeId} onChange={(e) => setStoreId(Number(e.target.value))} className={sel}>

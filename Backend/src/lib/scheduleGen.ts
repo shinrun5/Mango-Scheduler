@@ -166,31 +166,19 @@ export async function generateScheduleForStore(
     end: f.end,
   }));
   const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
-  const fixedHours = new Map<number, number>();
-  const fixedDayCount = new Map<number, Set<DayOfWeek>>();
-  for (const f of fixedShifts) {
-    fixedHours.set(
-      f.employeeId,
-      (fixedHours.get(f.employeeId) ?? 0) + (f.end.getTime() - f.start.getTime()) / 3_600_000,
-    );
-    let days = fixedDayCount.get(f.employeeId);
-    if (!days) fixedDayCount.set(f.employeeId, (days = new Set<DayOfWeek>()));
-    days.add(f.day);
-  }
-  // the solver must not schedule a fixed person again on a day they're already committed
-  for (const [empId, days] of fixedDayCount) {
-    effectiveAvailability = effectiveAvailability.filter(
-      (a) => !(a.employeeId === empId && days.has(a.day)),
-    );
-  }
+  // A fixed schedule IS the schedule at this store: someone with any fixed shift
+  // here works exactly those days, nothing more — even if they're available all
+  // week. Drop them from the solver's pool entirely; only their fixed rows land.
+  const fixedEmpIds = new Set(fixedShifts.map((f) => f.employeeId));
+  effectiveAvailability = effectiveAvailability.filter((a) => !fixedEmpIds.has(a.employeeId));
 
   const payload = {
     solveSeconds,
     employees: employees.map((e) => ({
       id: e.id,
       name: e.name,
-      hourLimit: Math.max(0, Math.round(e.hourLimit - (fixedHours.get(e.id) ?? 0))),
-      maxShifts: Math.max(0, e.maxShifts - (fixedDayCount.get(e.id)?.size ?? 0)),
+      hourLimit: e.hourLimit,
+      maxShifts: e.maxShifts,
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,
