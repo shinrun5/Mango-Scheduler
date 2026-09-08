@@ -58,7 +58,7 @@ export function FruitPicker({ onChange }: { onChange?: (fruit: string | null) =>
       </p>
       {error && <p className="mt-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
-      <div className="mt-2 grid grid-cols-6 gap-2 sm:grid-cols-8">
+      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
         {FRUITS.map((f) => {
           const isMine = f === mine
           const locked = !isMine && taken.has(f)
@@ -69,7 +69,7 @@ export function FruitPicker({ onChange }: { onChange?: (fruit: string | null) =>
               disabled={locked || saving !== null}
               title={locked ? `${f} — taken` : f}
               onClick={() => void pick(f)}
-              className={`flex aspect-square items-center justify-center rounded-xl border-2 transition-colors ${
+              className={`flex flex-col items-center gap-1 rounded-xl border-2 px-1 py-2 transition-colors ${
                 isMine
                   ? 'border-ink bg-cream shadow-[2px_2px_0_var(--color-ink)]'
                   : locked
@@ -78,6 +78,9 @@ export function FruitPicker({ onChange }: { onChange?: (fruit: string | null) =>
               }`}
             >
               <FruitAvatar kind={f} size={30} />
+              <span className="font-body text-[10px] font-bold capitalize leading-none text-ink">
+                {f}
+              </span>
             </button>
           )
         })}

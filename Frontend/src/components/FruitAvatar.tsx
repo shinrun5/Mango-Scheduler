@@ -37,16 +37,32 @@ function Orange() {
 }
 
 function Banana() {
+  // a chunky smiling crescent: tip top-left, tip bottom-right, fat belly in the middle
   return (
-    <g transform="rotate(-18 32 32)">
-      <rect x={10} y={24} width={44} height={20} rx={10} fill="#FFC94D" stroke={INK} strokeWidth={2.6} />
-      <ellipse cx={12} cy={34} rx={3.2} ry={4.2} fill="#8B5E3C" stroke={INK} strokeWidth={1.6} />
-      <circle cx={26} cy={32} r={2.4} fill={INK} />
-      <circle cx={38} cy={32} r={2.4} fill={INK} />
-      <ellipse cx={23} cy={38} rx={3.6} ry={2.2} fill="#FFE1A3" opacity={0.8} />
-      <ellipse cx={41} cy={38} rx={3.6} ry={2.2} fill="#FFE1A3" opacity={0.8} />
-      <path d="M27 40 Q32 44 37 40" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
-    </g>
+    <>
+      <path
+        d="M15 14 C13 13 10 15 11 19 C15 39 27 52 47 53 C52 53.4 55 49 52 46 C51 45 49 45 47 45 C33 44 24 34 21 20 C20 15.5 18 14 15 14 Z"
+        fill="#FFCF4D"
+        stroke={INK}
+        strokeWidth={2.6}
+        strokeLinejoin="round"
+      />
+      <ellipse cx={14} cy={15} rx={3} ry={3.6} fill="#7A4A2C" stroke={INK} strokeWidth={1.8} transform="rotate(-30 14 15)" />
+      <ellipse cx={49} cy={50} rx={3.4} ry={3} fill="#7A4A2C" stroke={INK} strokeWidth={1.8} />
+      <path
+        d="M20 21 C23 33 31 42 43 44"
+        fill="none"
+        stroke="#EDB42E"
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        opacity={0.75}
+      />
+      <circle cx={26} cy={31} r={2.4} fill={INK} />
+      <circle cx={35} cy={35} r={2.4} fill={INK} />
+      <ellipse cx={22} cy={35} rx={3.4} ry={2} fill="#FFE7A8" opacity={0.85} transform="rotate(35 22 35)" />
+      <ellipse cx={38} cy={40} rx={3.4} ry={2} fill="#FFE7A8" opacity={0.85} transform="rotate(35 38 40)" />
+      <path d="M27 38 Q31 43 36 41" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+    </>
   )
 }
 
@@ -89,18 +105,36 @@ function Strawberry() {
 }
 
 function Watermelon() {
+  // an upright triangular slice: green rind arc at the bottom, white pith, pink flesh
   return (
     <>
-      <path d="M8 46 A24 24 0 0 1 56 46 Z" fill="#5FBE6B" stroke={INK} strokeWidth={2.6} />
-      <path d="M14 46 A18 18 0 0 1 50 46 Z" fill="#FFF8EC" stroke={INK} strokeWidth={1.6} />
-      <path d="M19 46 A13 13 0 0 1 45 46 Z" fill="#FF6F61" stroke={INK} strokeWidth={2.2} />
-      <circle cx={27} cy={40} r={1.6} fill={INK} />
-      <circle cx={37} cy={40} r={1.6} fill={INK} />
-      <circle cx={24} cy={34} r={2.3} fill={INK} />
-      <circle cx={40} cy={34} r={2.3} fill={INK} />
-      <ellipse cx={21} cy={39} rx={3.4} ry={2} fill="#FF9E90" opacity={0.6} />
-      <ellipse cx={43} cy={39} rx={3.4} ry={2} fill="#FF9E90" opacity={0.6} />
-      <path d="M25 40 Q32 44 39 40" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      <path
+        d="M32 7 C20 27 14 41 14 47 A20 13 0 0 0 50 47 C50 41 44 27 32 7 Z"
+        fill="#54B65F"
+        stroke={INK}
+        strokeWidth={2.6}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M32 15 C23 32 18 43 18 47 A14.5 9 0 0 0 46 47 C46 43 41 32 32 15 Z"
+        fill="#FBF3E4"
+        stroke={INK}
+        strokeWidth={1.4}
+      />
+      <path
+        d="M32 21 C25 35 21 44 21 47 A11.5 7 0 0 0 43 47 C43 44 39 35 32 21 Z"
+        fill="#FF6F61"
+        stroke={INK}
+        strokeWidth={1.6}
+      />
+      <ellipse cx={26} cy={45} rx={1.5} ry={2.3} fill={INK} transform="rotate(-14 26 45)" />
+      <ellipse cx={38} cy={46} rx={1.5} ry={2.3} fill={INK} transform="rotate(14 38 46)" />
+      <ellipse cx={32} cy={49} rx={1.5} ry={2.3} fill={INK} />
+      <circle cx={28} cy={38} r={2.2} fill={INK} />
+      <circle cx={36} cy={38} r={2.2} fill={INK} />
+      <ellipse cx={24} cy={42} rx={3} ry={1.9} fill="#FF9E90" opacity={0.6} />
+      <ellipse cx={40} cy={42} rx={3} ry={1.9} fill="#FF9E90" opacity={0.6} />
+      <path d="M28 43 Q32 47 36 43" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
     </>
   )
 }
@@ -353,6 +387,189 @@ function Fig() {
   )
 }
 
+function Kiwi() {
+  // a cross-cut slice: fuzzy brown skin, pale green flesh, cream core, seed ring
+  const seeds = Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2
+    return <circle key={i} cx={32 + Math.cos(a) * 12} cy={36 + Math.sin(a) * 12} r={1.3} fill={INK} />
+  })
+  return (
+    <>
+      <circle cx={32} cy={36} r={22} fill="#A97C4F" stroke={INK} strokeWidth={2.6} />
+      <circle cx={32} cy={36} r={18} fill="#93C24E" stroke={INK} strokeWidth={1.4} />
+      <circle cx={32} cy={36} r={5} fill="#F2F5DC" />
+      {seeds}
+      <circle cx={25} cy={31} r={2.3} fill={INK} />
+      <circle cx={39} cy={31} r={2.3} fill={INK} />
+      <path d="M26 41 Q32 46 38 41" fill="none" stroke={INK} strokeWidth={2.2} strokeLinecap="round" />
+    </>
+  )
+}
+
+/** A dome of little drupelets — the shape both berries share. */
+function Berrylet({ fill, blush }: { fill: string; blush: string }) {
+  const pts: [number, number][] = [
+    [24, 40], [32, 42], [40, 40],
+    [21, 32], [28, 33], [36, 33], [43, 32],
+    [25, 25], [32, 25], [39, 25],
+    [29, 19], [35, 19],
+  ]
+  return (
+    <>
+      <path d="M32 16 Q37 9 44 11 Q40 18 33 18 Z" fill="#5FBE6B" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
+      {pts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={5} fill={fill} stroke={INK} strokeWidth={1.8} />
+      ))}
+      <circle cx={28} cy={33} r={2.1} fill={INK} />
+      <circle cx={36} cy={33} r={2.1} fill={INK} />
+      <ellipse cx={24} cy={38} rx={3} ry={1.8} fill={blush} opacity={0.7} />
+      <ellipse cx={40} cy={38} rx={3} ry={1.8} fill={blush} opacity={0.7} />
+      <path d="M28 39 Q32 43 36 39" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+    </>
+  )
+}
+
+function Raspberry() {
+  return <Berrylet fill="#D6416B" blush="#EE9DB6" />
+}
+
+function Blackberry() {
+  return <Berrylet fill="#463157" blush="#8E76A6" />
+}
+
+function Cantaloupe() {
+  return (
+    <>
+      <circle cx={32} cy={36} r={22} fill="#E9C892" stroke={INK} strokeWidth={2.6} />
+      <path
+        d="M12 30 Q32 24 52 30 M12 40 Q32 34 52 40 M20 16 Q26 36 22 55 M44 16 Q38 36 42 55"
+        fill="none"
+        stroke="#C9A566"
+        strokeWidth={1.6}
+        opacity={0.8}
+      />
+      <Face cy={37} blush="#DBBE8C" />
+    </>
+  )
+}
+
+function Papaya() {
+  return (
+    <>
+      <rect x={30.5} y={9} width={3} height={7} rx={1.5} fill="#8B5E3C" stroke={INK} strokeWidth={1.8} />
+      <ellipse cx={32} cy={37} rx={16} ry={22} fill="#F4A24C" stroke={INK} strokeWidth={2.6} />
+      <ellipse cx={32} cy={44} rx={5.5} ry={9} fill="#E4743E" opacity={0.5} />
+      <Face cy={33} blush="#FFCB9A" />
+    </>
+  )
+}
+
+function Apricot() {
+  return (
+    <>
+      <path d="M32 12 Q37 7 43 10" fill="none" stroke="#5FBE6B" strokeWidth={2.2} strokeLinecap="round" />
+      <path d="M40 9 Q47 8 47 15 Q40 15 40 9 Z" fill="#5FBE6B" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
+      <circle cx={32} cy={38} r={19} fill="#F6AC55" stroke={INK} strokeWidth={2.6} />
+      <path d="M32 20 Q28 38 32 56" fill="none" stroke={INK} strokeWidth={1.6} opacity={0.4} />
+      <Face cy={38} blush="#FFC98F" />
+    </>
+  )
+}
+
+function Passionfruit() {
+  return (
+    <>
+      <rect x={30.5} y={9} width={3} height={6} rx={1.5} fill="#8B5E3C" stroke={INK} strokeWidth={1.8} />
+      <circle cx={32} cy={39} r={20} fill="#5C2A4E" stroke={INK} strokeWidth={2.6} />
+      <ellipse cx={32} cy={25} rx={13} ry={5} fill="#E7C766" stroke={INK} strokeWidth={1.6} />
+      <circle cx={26} cy={24} r={1.4} fill="#7A4A2C" />
+      <circle cx={34} cy={26} r={1.4} fill="#7A4A2C" />
+      <Face cy={42} blush="#9A6B8C" />
+    </>
+  )
+}
+
+function Guava() {
+  return (
+    <>
+      <path d="M32 11 Q36 6 42 8" fill="none" stroke="#5FBE6B" strokeWidth={2.2} strokeLinecap="round" />
+      <circle cx={32} cy={38} r={20} fill="#BBD06B" stroke={INK} strokeWidth={2.6} />
+      <circle cx={32} cy={41} r={8} fill="#F19FB0" opacity={0.55} />
+      <path d="M32 22 L33 15 L34 22 Z" fill="#5FBE6B" stroke={INK} strokeWidth={1.4} />
+      <Face cy={36} blush="#D8E4A2" />
+    </>
+  )
+}
+
+function Tangerine() {
+  return (
+    <>
+      <path d="M33 18 Q43 10 50 16 Q42 23 33 19 Z" fill="#5FBE6B" stroke={INK} strokeWidth={2} strokeLinejoin="round" />
+      <path d="M30 16 L28 9" stroke="#8B5E3C" strokeWidth={2.2} strokeLinecap="round" />
+      <ellipse cx={32} cy={38} rx={21} ry={18} fill="#FF922E" stroke={INK} strokeWidth={2.6} />
+      <path d="M13 34 Q32 26 51 34" fill="none" stroke="#FFB265" strokeWidth={2.4} strokeLinecap="round" opacity={0.7} />
+      <Face cy={39} blush="#FFD199" />
+    </>
+  )
+}
+
+function Avocado() {
+  return (
+    <>
+      <path d="M30 10 Q34 6 39 9" fill="none" stroke="#5FBE6B" strokeWidth={2.2} strokeLinecap="round" />
+      <path
+        d="M32 11 C24 11 20 23 20 33 C20 47 25 58 32 58 C39 58 44 47 44 33 C44 23 40 11 32 11 Z"
+        fill="#88AC53"
+        stroke={INK}
+        strokeWidth={2.6}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M32 15 C26 15 23 25 23 34 C23 46 27 55 32 55 C37 55 41 46 41 34 C41 25 38 15 32 15 Z"
+        fill="#CFE0A0"
+      />
+      <circle cx={32} cy={41} r={9} fill="#9A6B3E" stroke={INK} strokeWidth={2} />
+      <circle cx={29} cy={27} r={2.1} fill={INK} />
+      <circle cx={35} cy={27} r={2.1} fill={INK} />
+      <path d="M29 31 Q32 34 35 31" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+    </>
+  )
+}
+
+function Lychee() {
+  return (
+    <>
+      <rect x={30.5} y={9} width={3} height={6} rx={1.5} fill="#5FBE6B" stroke={INK} strokeWidth={1.8} />
+      <circle cx={32} cy={38} r={19} fill="#E06A5A" stroke={INK} strokeWidth={2.6} />
+      <path
+        d="M20 34 L24 38 M28 22 L32 26 M40 24 L44 28 M22 46 L26 50 M40 44 L44 48 M32 48 L36 52"
+        stroke="#B24A3E"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        opacity={0.6}
+      />
+      <Face cy={38} blush="#F2A99B" />
+    </>
+  )
+}
+
+function Persimmon() {
+  return (
+    <>
+      <path
+        d="M21 19 L32 11 L43 19 L38 25 L32 21 L26 25 Z"
+        fill="#6BAE4F"
+        stroke={INK}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <rect x={30.5} y={8} width={3} height={6} rx={1.5} fill="#8B5E3C" stroke={INK} strokeWidth={1.8} />
+      <ellipse cx={32} cy={41} rx={21} ry={17} fill="#F2812F" stroke={INK} strokeWidth={2.6} />
+      <Face cy={42} blush="#FBB582" />
+    </>
+  )
+}
+
 const BODIES: Record<Fruit, () => ReactElement> = {
   apple: Apple,
   orange: Orange,
@@ -375,6 +592,18 @@ const BODIES: Record<Fruit, () => ReactElement> = {
   mango: Mango,
   pomegranate: Pomegranate,
   fig: Fig,
+  kiwi: Kiwi,
+  raspberry: Raspberry,
+  blackberry: Blackberry,
+  cantaloupe: Cantaloupe,
+  papaya: Papaya,
+  apricot: Apricot,
+  passionfruit: Passionfruit,
+  guava: Guava,
+  tangerine: Tangerine,
+  avocado: Avocado,
+  lychee: Lychee,
+  persimmon: Persimmon,
 }
 
 export function FruitAvatar({ kind, size = 28 }: { kind: Fruit; size?: number }) {

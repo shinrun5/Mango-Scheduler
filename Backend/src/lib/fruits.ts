@@ -22,6 +22,18 @@ export const FRUITS = [
   'mango',
   'pomegranate',
   'fig',
+  'kiwi',
+  'raspberry',
+  'blackberry',
+  'cantaloupe',
+  'papaya',
+  'apricot',
+  'passionfruit',
+  'guava',
+  'tangerine',
+  'avocado',
+  'lychee',
+  'persimmon',
 ] as const;
 
 export type Fruit = (typeof FRUITS)[number];
