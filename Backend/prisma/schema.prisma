@@ -28,6 +28,9 @@ model Store {
   // false => opening is not a gated skill here; every employee at this store
   // counts as an opener regardless of their EmployeeStore.canOpen flag
   requiresOpenerSkill Boolean @default(true)
+  // true => a NEW-tier worker is never scheduled solo on a window; the solver
+  // keeps at least one REGULAR-or-above coworker on the same window with them
+  pairNewWorkers      Boolean @default(false)
   shiftRequirement ShiftRequirement[]
   shifts    Shift[]
   employeeStores EmployeeStore[]

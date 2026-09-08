@@ -179,6 +179,7 @@ export async function generateScheduleForStore(
       needOpen: r.needOpen,
       graceMinutes: r.graceMinutes,
       allowNew: r.newRequired > 0,
+      pairNew: store.pairNewWorkers,
     })),
   };
 

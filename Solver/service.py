@@ -47,6 +47,7 @@ class Requirement(BaseModel):
     seniorMin: int = 0
     needOpen: bool = False
     allowNew: bool = True
+    pairNew: bool = False  # a NEW worker on this window needs a REGULAR+ coworker on it too
     graceMinutes: int = 0  # availability may begin this many min after `start` and still count
 
 

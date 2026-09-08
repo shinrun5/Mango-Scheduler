@@ -6,6 +6,8 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { EmployeeStore, ShiftRequirement, Store } from '../types'
 
+type StorePatch = { name: string; requiresOpenerSkill: boolean; pairNewWorkers: boolean }
+
 export function Stores() {
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
@@ -55,11 +57,7 @@ export function Stores() {
 
       {isOwner && (
         <>
-          <AddStore
-            onAdd={(name, requiresOpenerSkill) =>
-              act(() => api.createStore({ name, requiresOpenerSkill }))
-            }
-          />
+          <AddStore onAdd={(patch) => act(() => api.createStore(patch))} />
           {!loading && stores.length > 0 && (
             <div className="mt-3">
               <ManagersSection stores={stores} />
@@ -77,9 +75,7 @@ export function Stores() {
               <EditStore
                 key={s.id}
                 store={s}
-                onSave={(name, requiresOpenerSkill) =>
-                  act(() => api.updateStore(s.id, { name, requiresOpenerSkill }))
-                }
+                onSave={(patch) => act(() => api.updateStore(s.id, patch))}
                 onCancel={() => setEditing(null)}
               />
             ) : (
@@ -92,6 +88,7 @@ export function Stores() {
                   <span className="font-body text-[11px] text-muted-ink">
                     {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
                     {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
+                    {s.pairNewWorkers && ' · new workers paired'}
                   </span>
                   <div className="ml-auto flex gap-2">
                     <button
@@ -132,22 +129,27 @@ export function Stores() {
   )
 }
 
-function AddStore({ onAdd }: { onAdd: (name: string, requiresOpenerSkill: boolean) => void }) {
+const checkboxRow =
+  'flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink'
+
+function AddStore({ onAdd }: { onAdd: (patch: StorePatch) => void }) {
   const [name, setName] = useState('')
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(true)
+  const [pairNewWorkers, setPairNewWorkers] = useState(false)
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onAdd(name.trim(), requiresOpenerSkill)
+    onAdd({ name: name.trim(), requiresOpenerSkill, pairNewWorkers })
     setName('')
     setRequiresOpenerSkill(true)
+    setPairNewWorkers(false)
   }
 
   return (
     <form
       onSubmit={submit}
-      className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+      className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
     >
       <input
         value={name}
@@ -155,13 +157,21 @@ function AddStore({ onAdd }: { onAdd: (name: string, requiresOpenerSkill: boolea
         placeholder="New store name"
         className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
       />
-      <label className="flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink">
+      <label className={checkboxRow}>
         <input
           type="checkbox"
           checked={requiresOpenerSkill}
           onChange={(e) => setRequiresOpenerSkill(e.target.checked)}
         />
         Opening needs a trained opener
+      </label>
+      <label className={checkboxRow}>
+        <input
+          type="checkbox"
+          checked={pairNewWorkers}
+          onChange={(e) => setPairNewWorkers(e.target.checked)}
+        />
+        New workers can't work solo
       </label>
       <Button type="submit" disabled={!name.trim()}>
         Add store
@@ -176,20 +186,21 @@ function EditStore({
   onCancel,
 }: {
   store: Store
-  onSave: (name: string, requiresOpenerSkill: boolean) => void
+  onSave: (patch: StorePatch) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(store.name)
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(store.requiresOpenerSkill)
+  const [pairNewWorkers, setPairNewWorkers] = useState(store.pairNewWorkers)
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         className="rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none"
       />
-      <label className="flex items-center gap-1.5 font-body text-[11px] font-bold text-muted-ink">
+      <label className={checkboxRow}>
         <input
           type="checkbox"
           checked={requiresOpenerSkill}
@@ -197,9 +208,19 @@ function EditStore({
         />
         Opener skill required
       </label>
+      <label className={checkboxRow}>
+        <input
+          type="checkbox"
+          checked={pairNewWorkers}
+          onChange={(e) => setPairNewWorkers(e.target.checked)}
+        />
+        New workers can't work solo
+      </label>
       <div className="ml-auto flex gap-2">
         <button
-          onClick={() => name.trim() && onSave(name.trim(), requiresOpenerSkill)}
+          onClick={() =>
+            name.trim() && onSave({ name: name.trim(), requiresOpenerSkill, pairNewWorkers })
+          }
           className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white"
         >
           Save

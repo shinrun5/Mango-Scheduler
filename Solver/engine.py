@@ -90,6 +90,7 @@ def solve(payload: dict) -> dict:
             "seniorMin": int(r.get("seniorMin", 0)),
             "needOpen": bool(r.get("needOpen", False)),
             "allowNew": bool(r.get("allowNew", True)),
+            "pairNew": bool(r.get("pairNew", False)),
             "grace": int(r.get("graceMinutes", GRACE_MIN)),
         })
 
@@ -172,6 +173,20 @@ def solve(payload: dict) -> dict:
             model.Add(sum(opp) + oo >= 1)
             shortages.append(oo)
             gaps_meta.append((rid, "open", oo))
+
+        # a NEW worker is never solo on this window: if any NEW is assigned,
+        # at least one REGULAR-or-above must be on the same window. Hard, but
+        # never makes the solve infeasible -- the solver can just not assign
+        # the NEW person (NEW fills are optional, gated by allowNew).
+        if r["pairNew"]:
+            new_p = [x[(eid, rid)] for eid in elig_by_req[rid]
+                     if emp_store[(eid, r["storeId"])]["tier"] == "NEW"]
+            exp_p = [x[(eid, rid)] for eid in elig_by_req[rid]
+                     if TIER[emp_store[(eid, r["storeId"])]["tier"]] >= TIER["REGULAR"]]
+            if new_p:
+                any_new = model.NewBoolVar(f"anynew_{rid}")
+                model.AddMaxEquality(any_new, new_p)
+                model.Add(sum(exp_p) >= any_new)
 
     # one place at a time: an employee can't hold two requirements whose windows
     # overlap on the same day (covers cross-store double-booking too).

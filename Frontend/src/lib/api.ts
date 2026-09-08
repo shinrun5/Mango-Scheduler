@@ -196,9 +196,9 @@ export const api = {
   setPersonRole: (id: number, role: 'OWNER' | 'MANAGER') =>
     sendJSON<{ id: number; role: string }>(`/managers/${id}/role`, 'POST', { role }),
   removePerson: (id: number) => request<{ message: string }>(`/managers/${id}`, { method: 'DELETE' }),
-  createStore: (input: { name: string; requiresOpenerSkill?: boolean }) =>
+  createStore: (input: { name: string; requiresOpenerSkill?: boolean; pairNewWorkers?: boolean }) =>
     sendJSON<Store>('/stores', 'POST', input),
-  updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean }) =>
+  updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean; pairNewWorkers?: boolean }) =>
     sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
   deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
