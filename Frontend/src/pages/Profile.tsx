@@ -1,33 +1,45 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { FruitPicker } from '../components/FruitPicker'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { Profile as ProfileData } from '../types'
 
+const card = 'mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]'
+const field =
+  'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper'
+
 export function Profile() {
+  const { refreshUser } = useAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const load = useCallback(
+    () =>
+      api
+        .getProfile()
+        .then(setProfile)
+        .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your profile')),
+    [],
+  )
   useEffect(() => {
-    api
-      .getProfile()
-      .then(setProfile)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your profile'))
-  }, [])
+    void load()
+  }, [load])
 
-  if (error) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
+  if (error && !profile) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
   if (!profile) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
 
   const e = profile.employee
+  const displayName = profile.name ?? e?.name ?? profile.email
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
       <h1 className="font-heading text-lg font-bold text-ink">Profile</h1>
 
-      <div className="mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
-        <div className="flex items-center gap-2">
-          <span className="font-heading text-base font-extrabold text-ink">{e?.name ?? profile.email}</span>
+      <div className={card}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-heading text-base font-extrabold text-ink">{displayName}</span>
           <span className="rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-body text-[10px] font-bold text-ink">
             {profile.role.toLowerCase()}
           </span>
@@ -38,6 +50,7 @@ export function Profile() {
           )}
         </div>
         <p className="mt-0.5 font-body text-xs text-muted-ink">{profile.email}</p>
+        {profile.phone && <p className="font-body text-xs text-muted-ink">{profile.phone}</p>}
 
         {e ? (
           <>
@@ -55,6 +68,7 @@ export function Profile() {
                 >
                   {s.storeName} · {s.proficiency}
                   {s.canOpen && <StarBadgeIcon size={11} />}
+                  <span className="font-body font-semibold text-muted-ink">· PIN {s.pin}</span>
                 </span>
               ))}
             </div>
@@ -64,20 +78,95 @@ export function Profile() {
             </p>
           </>
         ) : (
-          <p className="mt-3 font-body text-xs text-coral-dark">
-            Your account isn't linked to an employee record yet — ask your manager.
+          <p className="mt-3 font-body text-xs text-muted-ink">
+            {profile.role === 'EMPLOYEE'
+              ? "Your account isn't linked to an employee record yet — ask your manager."
+              : 'Add yourself to the schedule from "My hours" to pick up shifts.'}
           </p>
         )}
       </div>
 
+      <EditDetails
+        name={profile.name ?? e?.name ?? ''}
+        phone={profile.phone ?? ''}
+        onSaved={async () => {
+          await load()
+          await refreshUser()
+        }}
+        onError={setError}
+      />
+
       {e && (
-        <div className="mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
+        <div className={card}>
           <FruitPicker />
         </div>
       )}
 
       <ChangePassword onError={setError} />
     </div>
+  )
+}
+
+function EditDetails({
+  name,
+  phone,
+  onSaved,
+  onError,
+}: {
+  name: string
+  phone: string
+  onSaved: () => void | Promise<void>
+  onError: (m: string | null) => void
+}) {
+  const [n, setN] = useState(name)
+  const [p, setP] = useState(phone)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const dirty = n.trim() !== name || p.trim() !== phone
+
+  async function submit(ev: FormEvent) {
+    ev.preventDefault()
+    onError(null)
+    setDone(false)
+    if (!n.trim()) return onError('Name cannot be empty')
+    setBusy(true)
+    try {
+      await api.updateProfile({ name: n.trim(), phone: p.trim() })
+      setDone(true)
+      await onSaved()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not save your details')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className={card}>
+      <h2 className="font-heading text-sm font-bold text-ink">Your details</h2>
+      <div className="mt-2 flex flex-col gap-2">
+        <label className="block">
+          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">Name</span>
+          <input value={n} onChange={(ev) => setN(ev.target.value)} className={field} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">Phone number</span>
+          <input
+            type="tel"
+            autoComplete="tel"
+            value={p}
+            onChange={(ev) => setP(ev.target.value)}
+            className={field}
+          />
+        </label>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Button type="submit" disabled={busy || !dirty}>
+          {busy ? 'Saving…' : 'Save'}
+        </Button>
+        {done && !dirty && <span className="font-body text-xs font-bold text-green">Saved ✓</span>}
+      </div>
+    </form>
   )
 }
 
@@ -108,14 +197,8 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
     }
   }
 
-  const field =
-    'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper'
-
   return (
-    <form
-      onSubmit={submit}
-      className="mt-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]"
-    >
+    <form onSubmit={submit} className={card}>
       <h2 className="font-heading text-sm font-bold text-ink">Change password</h2>
       <div className="mt-2 flex flex-col gap-2">
         <input

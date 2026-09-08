@@ -18,6 +18,7 @@ export type Role = 'OWNER' | 'MANAGER' | 'EMPLOYEE'
 export interface AuthUser {
   id: number
   email: string
+  name: string | null
   role: Role
   employeeId: number | null
 }
@@ -127,6 +128,8 @@ export interface RosterWorker {
 export interface Profile {
   id: number
   email: string
+  name: string | null
+  phone: string | null
   role: Role
   employee: {
     id: number
@@ -134,7 +137,7 @@ export interface Profile {
     hourLimit: number
     maxShifts: number
     standby: boolean
-    stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean }[]
+    stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean; pin: string }[]
   } | null
 }
 

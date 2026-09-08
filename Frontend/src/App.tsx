@@ -46,6 +46,7 @@ export default function App() {
             <Route path="/stores" element={<Stores />} />
             <Route path="/my-availability" element={<MyAvailability />} />
             <Route path="/history" element={<History />} />
+            <Route path="/account" element={<Profile />} />
           </Route>
         </Route>
 

@@ -8,8 +8,21 @@ interface AuthState {
   /** true until the initial /auth/me hydration settles */
   loading: boolean
   login: (email: string, password: string) => Promise<AuthUser>
-  register: (email: string, password: string, inviteCode: string) => Promise<AuthUser>
-  registerOwner: (email: string, password: string, companyName: string) => Promise<AuthUser>
+  register: (input: {
+    email: string
+    password: string
+    inviteCode: string
+    name: string
+    phone: string
+    pin: string
+  }) => Promise<AuthUser>
+  registerOwner: (input: {
+    email: string
+    password: string
+    companyName: string
+    name: string
+    phone: string
+  }) => Promise<AuthUser>
   /** Re-fetch /auth/me — use after something changes the account (e.g. becoming a worker). */
   refreshUser: () => Promise<void>
   logout: () => Promise<void>
@@ -50,13 +63,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(u)
         return u
       },
-      register: async (email, password, inviteCode) => {
-        const u = await api.register(email, password, inviteCode)
+      register: async (input) => {
+        const u = await api.register(input)
         setUser(u)
         return u
       },
-      registerOwner: async (email, password, companyName) => {
-        const u = await api.registerOwner(email, password, companyName)
+      registerOwner: async (input) => {
+        const u = await api.registerOwner(input)
         setUser(u)
         return u
       },

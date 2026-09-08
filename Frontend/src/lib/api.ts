@@ -105,29 +105,27 @@ export const api = {
     setSession(data.session)
     return data.user
   },
-  register: async (email: string, password: string, inviteCode: string): Promise<AuthUser> => {
+  register: async (
+    input: { email: string; password: string; inviteCode: string; name: string; phone: string; pin: string },
+  ): Promise<AuthUser> => {
     setSession(null)
-    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register', 'POST', {
-      email,
-      password,
-      inviteCode,
-    })
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register', 'POST', input)
     setSession(data.session)
     return data.user
   },
   getSetupStatus: () => getJSON<{ needsSetup: boolean }>('/auth/setup-status'),
-  registerOwner: async (email: string, password: string, companyName: string): Promise<AuthUser> => {
+  registerOwner: async (
+    input: { email: string; password: string; companyName: string; name: string; phone: string },
+  ): Promise<AuthUser> => {
     setSession(null)
-    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-owner', 'POST', {
-      email,
-      password,
-      companyName,
-    })
+    const data = await sendJSON<{ user: AuthUser; session: Session }>('/auth/register-owner', 'POST', input)
     setSession(data.session)
     return data.user
   },
   me: () => getJSON<{ user: AuthUser }>('/auth/me').then((d) => d.user),
   getProfile: () => getJSON<Profile>('/auth/profile'),
+  updateProfile: (patch: { name?: string; phone?: string }) =>
+    sendJSON<{ ok: true }>('/auth/profile', 'PUT', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
 

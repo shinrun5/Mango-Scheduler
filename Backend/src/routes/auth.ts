@@ -5,9 +5,17 @@ import { requireAuth } from '../lib/auth.js';
 
 const router = Router();
 
-function publicUser(u: { id: number; email: string; role: string; employeeId: number | null }) {
-  return { id: u.id, email: u.email, role: u.role, employeeId: u.employeeId };
+function publicUser(u: {
+  id: number;
+  email: string;
+  name: string | null;
+  role: string;
+  employeeId: number | null;
+}) {
+  return { id: u.id, email: u.email, name: u.name, role: u.role, employeeId: u.employeeId };
 }
+
+const PIN_RE = /^\d{4}$/;
 
 // POST /auth/register  { email, password, inviteCode }
 // An Employee row must already exist with a matching, unclaimed inviteCode
@@ -15,19 +23,37 @@ function publicUser(u: { id: number; email: string; role: string; employeeId: nu
 // User row to that Employee, and consumes the code.
 router.post('/register', async (req, res) => {
   const { email, password, inviteCode } = req.body ?? {};
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const pin = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
   if (!email || !password || !inviteCode) {
     return res.status(400).json({ error: 'email, password, and inviteCode are required' });
   }
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
+  if (pin && !PIN_RE.test(pin)) {
+    return res.status(400).json({ error: 'PIN must be 4 digits' });
+  }
 
   const employee = await prisma.employee.findUnique({
     where: { inviteCode },
-    include: { user: true },
+    include: { user: true, employeeStores: { select: { storeId: true } } },
   });
   if (!employee) return res.status(400).json({ error: 'Invalid invite code' });
   if (employee.user) return res.status(409).json({ error: 'This invite has already been claimed' });
+
+  // check the chosen PIN is free at every store this employee is at, before creating anything
+  if (pin) {
+    for (const { storeId } of employee.employeeStores) {
+      const clash = await prisma.employeeStore.findUnique({
+        where: { storeId_pin: { storeId, pin } },
+      });
+      if (clash && clash.employeeId !== employee.id) {
+        return res.status(409).json({ error: 'That PIN is already taken at one of your stores' });
+      }
+    }
+  }
 
   // email_confirm: true — we deliberately skip email verification for now
   const created = await supabaseAdmin().auth.admin.createUser({ email, password, email_confirm: true });
@@ -37,9 +63,22 @@ router.post('/register', async (req, res) => {
 
   try {
     const user = await prisma.user.create({
-      data: { authId: created.data.user.id, email, role: 'EMPLOYEE', employeeId: employee.id },
+      data: {
+        authId: created.data.user.id,
+        email,
+        name: name || null,
+        phone: phone || null,
+        role: 'EMPLOYEE',
+        employeeId: employee.id,
+      },
     });
-    await prisma.employee.update({ where: { id: employee.id }, data: { inviteCode: null } });
+    await prisma.employee.update({
+      where: { id: employee.id },
+      data: { inviteCode: null, ...(name ? { name } : {}) },
+    });
+    if (pin) {
+      await prisma.employeeStore.updateMany({ where: { employeeId: employee.id }, data: { pin } });
+    }
 
     const signIn = await supabaseAnon().auth.signInWithPassword({ email, password });
     return res.status(201).json({ user: publicUser(user), session: signIn.data.session });
@@ -63,6 +102,8 @@ router.get('/setup-status', async (_req, res) => {
 router.post('/register-owner', async (req, res) => {
   const { email, password, companyName } = req.body ?? {};
   const company = typeof companyName === 'string' ? companyName.trim() : '';
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
   if (!email || !password || !company) {
     return res.status(400).json({ error: 'email, password, and companyName are required' });
   }
@@ -107,9 +148,10 @@ router.post('/register-owner', async (req, res) => {
       existing?.orgId ?? (await prisma.org.create({ data: { name: company } })).id;
     await prisma.org.update({ where: { id: orgId }, data: { name: company } });
 
+    const nameData = { ...(name ? { name } : {}), ...(phone ? { phone } : {}) };
     const user = existing
-      ? await prisma.user.update({ where: { id: existing.id }, data: { role: 'OWNER', orgId } })
-      : await prisma.user.create({ data: { authId, email, role: 'OWNER', orgId } });
+      ? await prisma.user.update({ where: { id: existing.id }, data: { role: 'OWNER', orgId, ...nameData } })
+      : await prisma.user.create({ data: { authId, email, role: 'OWNER', orgId, ...nameData } });
 
     await prisma.org.update({ where: { id: orgId }, data: { ownerId: user.id } });
 
@@ -174,9 +216,13 @@ router.get('/me', requireAuth, async (req, res) => {
   return res.json({ user: req.user });
 });
 
-// GET /auth/profile — richer: name, store links + tier, weekly caps
+// GET /auth/profile — account (name, phone) + employee details (stores, tier, PIN, caps)
 router.get('/profile', requireAuth, async (req, res) => {
   const u = req.user!;
+  const account = await prisma.user.findUnique({
+    where: { id: u.id },
+    select: { name: true, phone: true },
+  });
   let employee = null;
   if (u.employeeId) {
     const e = await prisma.employee.findUnique({
@@ -195,11 +241,40 @@ router.get('/profile', requireAuth, async (req, res) => {
           storeName: s.store.name,
           proficiency: s.proficiency,
           canOpen: s.canOpen,
+          pin: s.pin,
         })),
       };
     }
   }
-  return res.json({ id: u.id, email: u.email, role: u.role, employee });
+  return res.json({
+    id: u.id,
+    email: u.email,
+    name: account?.name ?? null,
+    phone: account?.phone ?? null,
+    role: u.role,
+    employee,
+  });
+});
+
+// PUT /auth/profile  { name?, phone? } — edit your own name / contact number
+router.put('/profile', requireAuth, async (req, res) => {
+  const u = req.user!;
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+  if (name !== undefined && !name) return res.status(400).json({ error: 'Name cannot be empty' });
+
+  await prisma.user.update({
+    where: { id: u.id },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      ...(phone !== undefined ? { phone: phone || null } : {}),
+    },
+  });
+  // keep the roster name in sync when this account is also a worker
+  if (name && u.employeeId) {
+    await prisma.employee.update({ where: { id: u.employeeId }, data: { name } });
+  }
+  res.json({ ok: true });
 });
 
 // POST /auth/change-password  { currentPassword, newPassword }

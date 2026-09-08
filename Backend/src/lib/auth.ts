@@ -14,6 +14,7 @@ export interface AuthUser {
   id: number;
   authId: string;
   email: string;
+  name: string | null;
   role: Role;
   employeeId: number | null;
   orgId: number | null;
@@ -64,7 +65,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     where: { authId },
     include: {
       managerStores: { select: { storeId: true } },
-      employee: { select: { employeeStores: { select: { storeId: true } } } },
+      employee: { select: { name: true, employeeStores: { select: { storeId: true } } } },
     },
   });
   if (!user) return res.status(401).json({ error: 'No account is linked to this token' });
@@ -84,6 +85,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     id: user.id,
     authId: user.authId,
     email: user.email,
+    name: user.name ?? user.employee?.name ?? null,
     role: user.role,
     employeeId: user.employeeId,
     orgId: user.orgId,

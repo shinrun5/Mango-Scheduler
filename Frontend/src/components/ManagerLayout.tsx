@@ -56,10 +56,13 @@ function Chrome() {
                 ))}
               </select>
             )}
-            <span className="hidden font-body text-xs font-semibold text-muted-ink md:inline">
-              {user?.email}
+            <NavLink
+              to="/account"
+              className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
+            >
+              {user?.name ?? user?.email}
               {user?.role === 'OWNER' && ' · owner'}
-            </span>
+            </NavLink>
             <button
               onClick={() => void logout()}
               className="shrink-0 rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
@@ -93,6 +96,9 @@ function Chrome() {
           </NavLink>
           <NavLink to="/history" className={tab}>
             History
+          </NavLink>
+          <NavLink to="/account" className={tab}>
+            Account
           </NavLink>
         </div>
       </div>

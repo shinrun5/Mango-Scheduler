@@ -10,6 +10,9 @@ export function Register() {
   const navigate = useNavigate()
 
   const [inviteCode, setInviteCode] = useState('')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [pin, setPin] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -23,10 +26,21 @@ export function Register() {
       setError('Password must be at least 8 characters')
       return
     }
+    if (pin && !/^\d{4}$/.test(pin)) {
+      setError('PIN must be 4 digits')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      const u = await register(email.trim(), password, inviteCode.trim())
+      const u = await register({
+        email: email.trim(),
+        password,
+        inviteCode: inviteCode.trim(),
+        name: name.trim(),
+        phone: phone.trim(),
+        pin: pin.trim(),
+      })
       navigate(homePathForRole(u.role), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account')
@@ -54,6 +68,22 @@ export function Register() {
           required
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value)}
+        />
+        <Field label="Full name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <Field
+          label="Phone number"
+          type="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+        <Field
+          label="Clock-in PIN (4 digits)"
+          inputMode="numeric"
+          maxLength={4}
+          placeholder="optional — your manager set one already"
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
         />
         <Field
           label="Email"

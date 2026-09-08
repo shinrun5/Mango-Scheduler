@@ -177,6 +177,8 @@ model User {
   id         Int      @id @default(autoincrement())
   authId     String   @unique   // Supabase auth.users.id (UUID)
   email      String   @unique
+  name       String?  // display name; mirrored to Employee.name when linked
+  phone      String?  // contact number, free-form
   role       Role     @default(EMPLOYEE)
   org        Org?     @relation(fields: [orgId], references: [id])
   orgId      Int?

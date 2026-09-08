@@ -14,6 +14,8 @@ export function Setup() {
 
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
   const [company, setCompany] = useState('')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +39,13 @@ export function Setup() {
     setBusy(true)
     setError(null)
     try {
-      const u = await registerOwner(email.trim(), password, company.trim())
+      const u = await registerOwner({
+        email: email.trim(),
+        password,
+        companyName: company.trim(),
+        name: name.trim(),
+        phone: phone.trim(),
+      })
       navigate(homePathForRole(u.role), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not finish setup')
@@ -83,6 +91,14 @@ export function Setup() {
           required
           value={company}
           onChange={(e) => setCompany(e.target.value)}
+        />
+        <Field label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <Field
+          label="Phone number"
+          type="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
         />
         <Field
           label="Your email"

@@ -40,9 +40,12 @@ export function EmployeeLayout(): ReactNode {
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden font-body text-xs font-semibold text-muted-ink md:inline">
-            {user?.email}
-          </span>
+          <NavLink
+            to="/profile"
+            className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
+          >
+            {user?.name ?? user?.email}
+          </NavLink>
           <button
             onClick={() => void logout()}
             className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
