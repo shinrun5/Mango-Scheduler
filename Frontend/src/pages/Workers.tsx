@@ -2,11 +2,13 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { useStore } from '../lib/store-context'
 import type { RosterWorker, Store, Tier } from '../types'
 
 const TIERS: Tier[] = ['NEW', 'REGULAR', 'SENIOR', 'MANAGER']
 
 export function Workers() {
+  const { storeId } = useStore()
   const [workers, setWorkers] = useState<RosterWorker[]>([])
   const [stores, setStores] = useState<Store[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -28,6 +30,9 @@ export function Workers() {
   }, [])
 
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
+  // the top-bar store switcher scopes this page
+  const shown =
+    storeId == null ? workers : workers.filter((w) => w.stores.some((s) => s.storeId === storeId))
 
   async function invite(id: number) {
     try {
@@ -79,16 +84,23 @@ export function Workers() {
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-1 flex items-center justify-between">
         <h1 className="font-heading text-lg font-bold text-ink">Workers</h1>
         <Button onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : '+ Add worker'}</Button>
       </div>
+      {storeId != null && (
+        <p className="mb-3 font-body text-xs text-muted-ink">
+          At <b className="text-ink">{storeName(storeId)}</b> · {shown.length} worker
+          {shown.length === 1 ? '' : 's'} — switch stores in the top bar
+        </p>
+      )}
 
       {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {adding && (
         <AddWorkerForm
           stores={stores}
+          defaultStoreId={storeId ?? undefined}
           onDone={async () => {
             setAdding(false)
             await refresh()
@@ -99,11 +111,15 @@ export function Workers() {
 
       {loading ? (
         <p className="font-body text-sm text-muted-ink">Loading…</p>
-      ) : workers.length === 0 ? (
-        <p className="font-body text-sm text-muted-ink">No workers yet — add one above.</p>
+      ) : shown.length === 0 ? (
+        <p className="font-body text-sm text-muted-ink">
+          {workers.length === 0
+            ? 'No workers yet — add one above.'
+            : `No workers at ${storeId != null ? storeName(storeId) : 'this store'} yet.`}
+        </p>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {workers.map((w) => (
+          {shown.map((w) => (
             <div
               key={w.id}
               className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
@@ -196,17 +212,19 @@ export function Workers() {
 
 function AddWorkerForm({
   stores,
+  defaultStoreId,
   onDone,
   onError,
 }: {
   stores: Store[]
+  defaultStoreId?: number
   onDone: () => void
   onError: (msg: string) => void
 }) {
   const [name, setName] = useState('')
   const [hourLimit, setHourLimit] = useState(30)
   const [maxShifts, setMaxShifts] = useState(5)
-  const [storeId, setStoreId] = useState<number | ''>(stores[0]?.id ?? '')
+  const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
   const [proficiency, setProficiency] = useState<Tier>('REGULAR')
   const [canOpen, setCanOpen] = useState(false)
   const [busy, setBusy] = useState(false)
