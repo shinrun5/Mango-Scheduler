@@ -269,7 +269,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
       weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
       const vacations = await prisma.timeOffRequest.findMany({
         where: {
-          status: 'APPROVED',
+          cancelledAt: null,
           employeeId: { in: [...empIdsInPlay] },
           startDate: { lte: weekEnd },
           endDate: { gte: weekStart },

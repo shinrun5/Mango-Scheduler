@@ -28,7 +28,7 @@ function Chrome() {
   const [pending, setPending] = useState(0)
 
   useEffect(() => {
-    Promise.all([api.getChangeRequests('PENDING'), api.getTimeOff('PENDING')])
+    Promise.all([api.getChangeRequests('PENDING'), api.getTimeOff(true)])
       .then(([r, t]) =>
         setPending(r.filter((x) => !(x.openOffer && !x.targetEmployee)).length + t.length),
       )

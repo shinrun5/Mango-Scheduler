@@ -199,29 +199,23 @@ model RecurringAvailability {
   end        DateTime
 }
 
-enum TimeOffStatus {
-  PENDING
-  APPROVED
-  DENIED
-  CANCELLED
-}
-
-// An employee's vacation / leave request. Must be >= 1 week long and filed >= 1
-// week ahead (enforced in routes/timeOff.ts). While APPROVED, the solver skips
-// the employee on any day the request covers.
+// An employee's vacation / leave NOTICE — not an approval workflow. Filing it
+// (>= 1 week long, >= 1 week ahead; enforced in routes/timeOff.ts) immediately
+// takes the employee off the schedule for those days; the manager just gets a
+// heads-up and can mark it seen. `cancelledAt` set = withdrawn.
 model TimeOffRequest {
-  id           Int           @id @default(autoincrement())
-  employee     Employee      @relation(fields: [employeeId], references: [id])
-  employeeId   Int
-  startDate    DateTime // UTC midnight, inclusive
-  endDate      DateTime // UTC midnight, inclusive
-  note         String?
-  status       TimeOffStatus @default(PENDING)
-  createdAt    DateTime      @default(now())
-  resolvedAt   DateTime?
-  resolvedById Int? // User id of the manager who approved/denied
+  id               Int       @id @default(autoincrement())
+  employee         Employee  @relation(fields: [employeeId], references: [id])
+  employeeId       Int
+  startDate        DateTime // UTC midnight, inclusive
+  endDate          DateTime // UTC midnight, inclusive
+  note             String?
+  createdAt        DateTime  @default(now())
+  cancelledAt      DateTime?
+  acknowledgedAt   DateTime? // a manager marked it "seen"
+  acknowledgedById Int?
 
-  @@index([employeeId, status])
+  @@index([employeeId])
 }
 
 // A one-week override of an employee's standing availability. If a row exists for

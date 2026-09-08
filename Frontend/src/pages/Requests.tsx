@@ -36,14 +36,14 @@ export function Requests() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load requests'))
   }
 
-  async function resolveTimeOff(id: number, approve: boolean) {
+  async function ackTimeOff(id: number) {
     setToBusy(id)
     setError(null)
     try {
-      await (approve ? api.approveTimeOff(id) : api.denyTimeOff(id))
+      await api.ackTimeOff(id)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not resolve the request')
+      setError(e instanceof Error ? e.message : 'Could not update')
     } finally {
       setToBusy(null)
     }
@@ -79,8 +79,7 @@ export function Requests() {
 
   const timeOffSorted = [...timeOff].sort(
     (a, b) =>
-      (a.status === 'PENDING' ? 0 : 1) - (b.status === 'PENDING' ? 0 : 1) ||
-      a.startDate.localeCompare(b.startDate),
+      Number(a.acknowledged) - Number(b.acknowledged) || a.startDate.localeCompare(b.startDate),
   )
 
   function sentence(r: ChangeRequest) {
@@ -103,45 +102,48 @@ export function Requests() {
 
       {!loading && timeOffSorted.length > 0 && (
         <>
-          <h2 className="mt-4 font-heading text-sm font-bold text-ink">Time off</h2>
+          <h2 className="mt-4 font-heading text-sm font-bold text-ink">
+            Time off <span className="font-body text-xs font-semibold text-muted-ink">— heads-up only</span>
+          </h2>
           <div className="mt-2 flex flex-col gap-2.5">
             {timeOffSorted.map((t) => (
               <div
                 key={t.id}
-                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+                className={`rounded-2xl border-[2.5px] bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)] ${
+                  t.acknowledged ? 'border-ink/30' : 'border-ink'
+                }`}
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-body text-sm font-bold text-ink">
                     {t.employeeName ?? `#${t.employeeId}`} — {prettyDate(t.startDate)} to {prettyDate(t.endDate)}
                   </span>
                   <span
-                    className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${STATUS_STYLE[t.status]}`}
+                    className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${
+                      t.state === 'active'
+                        ? 'border-green bg-green/10 text-green-dark'
+                        : 'border-sky bg-sky/10 text-sky-dark'
+                    }`}
                   >
-                    {t.status.toLowerCase()}
+                    {t.state === 'active' ? 'away now' : 'upcoming'}
                   </span>
                   <span className="ml-auto font-body text-[10px] text-muted-ink">
                     {relativeTime(t.createdAt)}
                   </span>
                 </div>
                 {t.note && <p className="mt-1 font-body text-xs italic text-ink">“{t.note}”</p>}
-                {t.status === 'PENDING' && (
-                  <div className="mt-2 flex gap-2">
+                <div className="mt-2">
+                  {t.acknowledged ? (
+                    <span className="font-body text-[11px] font-bold text-muted-ink">seen ✓</span>
+                  ) : (
                     <button
                       disabled={toBusy === t.id}
-                      onClick={() => void resolveTimeOff(t.id, true)}
-                      className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+                      onClick={() => void ackTimeOff(t.id)}
+                      className="rounded-full border-2 border-ink bg-cream px-3 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
                     >
-                      Approve
+                      Got it
                     </button>
-                    <button
-                      disabled={toBusy === t.id}
-                      onClick={() => void resolveTimeOff(t.id, false)}
-                      className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark disabled:opacity-50"
-                    >
-                      Deny
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>

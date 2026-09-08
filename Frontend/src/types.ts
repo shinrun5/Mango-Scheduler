@@ -144,7 +144,7 @@ export interface Profile {
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
 
-export type TimeOffStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
+export type TimeOffState = 'upcoming' | 'active' | 'past' | 'cancelled'
 
 export interface TimeOffRequest {
   id: number
@@ -153,8 +153,11 @@ export interface TimeOffRequest {
   startDate: string // "YYYY-MM-DD"
   endDate: string
   note: string | null
-  status: TimeOffStatus
   createdAt: string
+  /** derived: cancelled, or where it sits relative to today */
+  state: TimeOffState
+  /** a manager marked this notice seen */
+  acknowledged: boolean
 }
 
 export interface ChangeRequest {

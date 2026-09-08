@@ -1,13 +1,13 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from './Button'
 import { api } from '../lib/api'
-import type { TimeOffRequest, TimeOffStatus } from '../types'
+import type { TimeOffRequest, TimeOffState } from '../types'
 
-const BADGE: Record<TimeOffStatus, string> = {
-  PENDING: 'border-orange bg-orange/10 text-ink',
-  APPROVED: 'border-green bg-green/10 text-green-dark',
-  DENIED: 'border-coral bg-coral-bg text-coral-dark',
-  CANCELLED: 'border-ink/25 text-muted-ink',
+const BADGE: Record<TimeOffState, { label: string; cls: string }> = {
+  upcoming: { label: 'upcoming', cls: 'border-sky bg-sky/10 text-sky-dark' },
+  active: { label: 'away now', cls: 'border-green bg-green/10 text-green-dark' },
+  past: { label: 'past', cls: 'border-ink/25 text-muted-ink' },
+  cancelled: { label: 'withdrawn', cls: 'border-ink/25 text-muted-ink' },
 }
 
 const DAY_MS = 86_400_000
@@ -28,7 +28,6 @@ export function TimeOffPanel() {
   const [busy, setBusy] = useState<number | 'new' | null>(null)
 
   const [minStart] = useState(() => ymd(new Date(Date.now() + 7 * DAY_MS)))
-  const [todayStr] = useState(() => ymd(new Date()))
 
   function refresh() {
     return api
@@ -40,14 +39,14 @@ export function TimeOffPanel() {
     void refresh()
   }, [])
 
-  async function cancel(id: number) {
+  async function withdraw(id: number) {
     setBusy(id)
     setError(null)
     try {
       await api.cancelTimeOff(id)
       await refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not cancel')
+      setError(e instanceof Error ? e.message : 'Could not withdraw')
     } finally {
       setBusy(null)
     }
@@ -58,8 +57,8 @@ export function TimeOffPanel() {
   return (
     <div className="flex flex-col gap-3">
       <p className="font-body text-xs text-muted-ink">
-        Vacation or a long break — a week or more, filed at least a week ahead. Your manager
-        approves it, then the scheduler leaves you off those days.
+        Heads-up for a vacation or long break — a week or more, at least a week's notice. This
+        takes you off the schedule for those days automatically and lets your manager know.
       </p>
       {error && <p className="font-body text-xs font-bold text-coral-dark">{error}</p>}
 
@@ -74,7 +73,7 @@ export function TimeOffPanel() {
             await refresh()
             return true
           } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not send the request')
+            setError(e instanceof Error ? e.message : 'Could not save')
             return false
           } finally {
             setBusy(null)
@@ -83,12 +82,11 @@ export function TimeOffPanel() {
       />
 
       {rows.length === 0 ? (
-        <p className="font-body text-sm text-muted-ink">No time-off requests.</p>
+        <p className="font-body text-sm text-muted-ink">Nothing booked.</p>
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((r) => {
-            const canCancel =
-              r.status === 'PENDING' || (r.status === 'APPROVED' && r.startDate > todayStr)
+            const canCancel = r.state === 'upcoming'
             return (
               <div
                 key={r.id}
@@ -102,17 +100,17 @@ export function TimeOffPanel() {
                     {spanDays(r.startDate, r.endDate)} days
                   </span>
                   <span
-                    className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${BADGE[r.status]}`}
+                    className={`rounded-full border px-1.5 py-px font-body text-[10px] font-bold ${BADGE[r.state].cls}`}
                   >
-                    {r.status.toLowerCase()}
+                    {BADGE[r.state].label}
                   </span>
                   {canCancel && (
                     <button
                       disabled={busy === r.id}
-                      onClick={() => void cancel(r.id)}
+                      onClick={() => void withdraw(r.id)}
                       className="ml-auto font-body text-[11px] font-bold text-muted-ink underline"
                     >
-                      cancel
+                      withdraw
                     </button>
                   )}
                 </div>
@@ -166,7 +164,7 @@ function NewRequest({
         onClick={() => setOpen(true)}
         className="self-start rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-xs font-bold text-ink"
       >
-        + Request time off
+        + Add time off
       </button>
     )
   }
@@ -193,7 +191,7 @@ function NewRequest({
       {localErr && <p className="font-body text-xs font-bold text-coral-dark">{localErr}</p>}
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Send request'}
+          {busy ? 'Saving…' : 'Post it'}
         </Button>
         <button
           type="button"

@@ -18,7 +18,6 @@ import type {
   ShiftRequirement,
   SnapshotDetail,
   TimeOffRequest,
-  TimeOffStatus,
   SnapshotMeta,
   Store,
   Tier,
@@ -156,15 +155,15 @@ export const api = {
   approveChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/approve`, 'POST', {}),
   denyChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/deny`, 'POST', {}),
 
-  // --- time off / vacation ---
+  // --- time off / vacation (a notice, not an approval) ---
   getMyTimeOff: () => getJSON<TimeOffRequest[]>('/time-off/mine'),
   requestTimeOff: (input: { startDate: string; endDate: string; note?: string }) =>
     sendJSON<TimeOffRequest>('/time-off', 'POST', input),
   cancelTimeOff: (id: number) => request<{ ok: true }>(`/time-off/${id}`, { method: 'DELETE' }),
-  getTimeOff: (status?: TimeOffStatus) =>
-    getJSON<TimeOffRequest[]>(`/time-off${status ? `?status=${status}` : ''}`),
-  approveTimeOff: (id: number) => sendJSON<TimeOffRequest>(`/time-off/${id}/approve`, 'POST', {}),
-  denyTimeOff: (id: number) => sendJSON<TimeOffRequest>(`/time-off/${id}/deny`, 'POST', {}),
+  /** Manager: current + upcoming notices. `unacked` limits to ones not yet marked seen. */
+  getTimeOff: (unacked?: boolean) =>
+    getJSON<TimeOffRequest[]>(`/time-off${unacked ? '?unacked=1' : ''}`),
+  ackTimeOff: (id: number) => sendJSON<TimeOffRequest>(`/time-off/${id}/ack`, 'POST', {}),
   logout: async () => {
     try {
       await sendJSON('/auth/logout', 'POST', {})
