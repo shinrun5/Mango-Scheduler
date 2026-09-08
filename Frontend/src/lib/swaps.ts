@@ -58,21 +58,15 @@ export function computeSwapOptions(args: {
         windowsOverlap(toMinutes(s.start), toMinutes(s.end), lo, hi),
     )
 
-  // already on A's shift (a coworker on the same/overlapping window) -> nothing to trade
-  const coAssigned = (empId: number) =>
-    spans.some(
-      (s) =>
-        s.employeeId === empId &&
-        s.storeId === a.storeId &&
-        s.day === a.day &&
-        windowsOverlap(toMinutes(s.start), toMinutes(s.end), aLo, aHi),
-    )
+  // already working A's store that day -> it's not a "swap for the day off", skip them
+  const worksSameDayHere = (empId: number) =>
+    spans.some((s) => s.employeeId === empId && s.storeId === a.storeId && s.day === a.day)
 
   const out: SwapOption[] = []
   for (const b of spans) {
     if (b.employeeId === a.employeeId) continue
     if (b.shiftIds.length === a.shiftIds.length && b.shiftIds.every((id) => a.shiftIds.includes(id))) continue
-    if (coAssigned(b.employeeId)) continue
+    if (worksSameDayHere(b.employeeId)) continue
     const bLo = toMinutes(b.start)
     const bHi = toMinutes(b.end)
 
