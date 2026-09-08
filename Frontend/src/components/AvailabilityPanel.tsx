@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { AvailabilityEditor, type AvailWindow } from './AvailabilityEditor'
+import { TimeOffPanel } from './TimeOffPanel'
 import { api } from '../lib/api'
 import { shiftWeekYMD, thisMondayYMD, toHHMM24, weekRangeLabel } from '../lib/time'
 
@@ -15,7 +16,7 @@ const WEEKS = [0, 1, 2, 3, 4].map((n) => {
 /** The availability screen: your standing weekly hours, or a one-week override.
  * `barClass` is passed straight through to the editor's sticky save bar. */
 export function AvailabilityPanel({ barClass }: { barClass: string }) {
-  const [mode, setMode] = useState<'standing' | 'week'>('standing')
+  const [mode, setMode] = useState<'standing' | 'week' | 'timeoff'>('standing')
   const [week, setWeek] = useState(WEEKS[0].ymd)
   const [hasOverride, setHasOverride] = useState(false)
   const [reload, setReload] = useState(0)
@@ -59,12 +60,15 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2">
-        <button className={tab(mode === 'standing')} onClick={() => setMode('standing')}>
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
+        <button className={`shrink-0 ${tab(mode === 'standing')}`} onClick={() => setMode('standing')}>
           Every week
         </button>
-        <button className={tab(mode === 'week')} onClick={() => setMode('week')}>
+        <button className={`shrink-0 ${tab(mode === 'week')}`} onClick={() => setMode('week')}>
           Just one week
+        </button>
+        <button className={`shrink-0 ${tab(mode === 'timeoff')}`} onClick={() => setMode('timeoff')}>
+          Time off
         </button>
       </div>
 
@@ -98,7 +102,9 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
         </div>
       )}
 
-      {mode === 'standing' ? (
+      {mode === 'timeoff' ? (
+        <TimeOffPanel />
+      ) : mode === 'standing' ? (
         <AvailabilityEditor
           key="standing"
           barClass={barClass}

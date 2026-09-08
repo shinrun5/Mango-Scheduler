@@ -17,6 +17,8 @@ import type {
   Shift,
   ShiftRequirement,
   SnapshotDetail,
+  TimeOffRequest,
+  TimeOffStatus,
   SnapshotMeta,
   Store,
   Tier,
@@ -153,6 +155,16 @@ export const api = {
     getJSON<ChangeRequest[]>(`/change-requests${status ? `?status=${status}` : ''}`),
   approveChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/approve`, 'POST', {}),
   denyChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/deny`, 'POST', {}),
+
+  // --- time off / vacation ---
+  getMyTimeOff: () => getJSON<TimeOffRequest[]>('/time-off/mine'),
+  requestTimeOff: (input: { startDate: string; endDate: string; note?: string }) =>
+    sendJSON<TimeOffRequest>('/time-off', 'POST', input),
+  cancelTimeOff: (id: number) => request<{ ok: true }>(`/time-off/${id}`, { method: 'DELETE' }),
+  getTimeOff: (status?: TimeOffStatus) =>
+    getJSON<TimeOffRequest[]>(`/time-off${status ? `?status=${status}` : ''}`),
+  approveTimeOff: (id: number) => sendJSON<TimeOffRequest>(`/time-off/${id}/approve`, 'POST', {}),
+  denyTimeOff: (id: number) => sendJSON<TimeOffRequest>(`/time-off/${id}/deny`, 'POST', {}),
   logout: async () => {
     try {
       await sendJSON('/auth/logout', 'POST', {})

@@ -249,7 +249,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
     const overrideByEmp = new Map(
       overrides.map((o) => [o.employeeId, o.windows as unknown as { day: DayOfWeek; start: string; end: string }[]]),
     );
-    const effectiveAvailability: { employeeId: number; day: DayOfWeek; start: string; end: string }[] = [];
+    let effectiveAvailability: { employeeId: number; day: DayOfWeek; start: string; end: string }[] = [];
     for (const e of employees) {
       const ov = overrideByEmp.get(e.id);
       if (ov) {
@@ -261,6 +261,37 @@ router.post('/generate', ...manageStore, async (req, res) => {
           }
         }
       }
+    }
+
+    // Approved vacations covering any day of this week -> drop that day for that employee.
+    if (weekStart) {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+      const vacations = await prisma.timeOffRequest.findMany({
+        where: {
+          status: 'APPROVED',
+          employeeId: { in: [...empIdsInPlay] },
+          startDate: { lte: weekEnd },
+          endDate: { gte: weekStart },
+        },
+      });
+      const WEEK_DAYS: DayOfWeek[] = [
+        DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+        DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
+      ];
+      const offDays = new Map<number, Set<DayOfWeek>>();
+      for (const v of vacations) {
+        const set = offDays.get(v.employeeId) ?? new Set<DayOfWeek>();
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(weekStart);
+          d.setUTCDate(d.getUTCDate() + i);
+          if (d >= v.startDate && d <= v.endDate) set.add(WEEK_DAYS[i]!);
+        }
+        offDays.set(v.employeeId, set);
+      }
+      effectiveAvailability = effectiveAvailability.filter(
+        (a) => !offDays.get(a.employeeId)?.has(a.day),
+      );
     }
 
     const anyoneOpens = !store.requiresOpenerSkill;

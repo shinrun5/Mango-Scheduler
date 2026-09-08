@@ -144,6 +144,19 @@ export interface Profile {
 export type ChangeType = 'DROP' | 'SWAP' | 'PICKUP'
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
 
+export type TimeOffStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'
+
+export interface TimeOffRequest {
+  id: number
+  employeeId: number
+  employeeName: string | null
+  startDate: string // "YYYY-MM-DD"
+  endDate: string
+  note: string | null
+  status: TimeOffStatus
+  createdAt: string
+}
+
 export interface ChangeRequest {
   id: number
   type: ChangeType
