@@ -30,7 +30,8 @@ export function MyAvailability() {
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">My Availability</h1>
       <p className="mt-0.5 mb-4 font-body text-sm text-muted-ink">
-        Set the hours you can work — the scheduler uses these when it builds a week.
+        Your standing weekly hours — set once, repeats every week. The scheduler only puts you
+        on shifts inside these.
       </p>
 
       {linked ? (

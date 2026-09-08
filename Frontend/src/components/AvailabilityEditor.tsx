@@ -18,9 +18,10 @@ function signature(rows: Row[]): string {
   return JSON.stringify(rows.map((r) => `${r.day} ${r.start} ${r.end}`).sort())
 }
 
-/** The weekly-availability editor for whoever is signed in (uses /availability/mine).
- * The caller must already be linked to an employee record. `barClass` positions the
- * sticky save bar — employees sit above the bottom tab bar, managers at the edge. */
+/** The standing weekly-availability editor for whoever is signed in
+ * (uses /availability/mine). Set once — it repeats every week. The caller must
+ * already be linked to an employee record. `barClass` positions the sticky save
+ * bar: employees sit above the bottom tab bar, managers at the edge. */
 export function AvailabilityEditor({ barClass }: { barClass: string }) {
   const [rows, setRows] = useState<Row[]>([])
   const [savedSig, setSavedSig] = useState('[]')
@@ -54,7 +55,11 @@ export function AvailabilityEditor({ barClass }: { barClass: string }) {
   const canSave = dirty && invalidKeys.size === 0 && !saving
 
   function addRow(day: DayOfWeek) {
-    setRows((rs) => [...rs, { key: newKey(), day, start: '17:00', end: '22:00' }])
+    const prev = rows.filter((r) => r.day === day).at(-1)
+    const start = prev ? prev.end : '17:00'
+    const [h] = start.split(':').map(Number)
+    const end = `${String(Math.min((h ?? 17) + 4, 23)).padStart(2, '0')}:00`
+    setRows((rs) => [...rs, { key: newKey(), day, start, end: end > start ? end : '23:00' }])
     setJustSaved(false)
   }
   function patchRow(key: string, patch: Partial<Pick<Row, 'start' | 'end'>>) {
@@ -96,86 +101,66 @@ export function AvailabilityEditor({ barClass }: { barClass: string }) {
         ? { text: 'Unsaved changes', tone: 'text-ink' }
         : justSaved
           ? { text: 'Saved ✓', tone: 'text-green-dark' }
-          : { text: 'All changes saved', tone: 'text-muted-ink' }
+          : { text: 'Saved — repeats every week', tone: 'text-muted-ink' }
   const showSave = dirty || saving || invalidKeys.size > 0
+
+  const timeInput =
+    'w-[7.5rem] shrink-0 rounded-lg border-2 bg-cream px-2 py-1 font-body text-sm text-ink outline-none'
 
   if (loading) return <p className="font-body text-sm text-muted-ink">Loading…</p>
 
   return (
     <>
-      <div className="flex flex-col gap-2">
+      <div className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
         {DAYS.map((day) => {
           const dayRows = rows.filter((r) => r.day === day)
-
-          if (dayRows.length === 0) {
-            return (
-              <button
-                key={day}
-                onClick={() => addRow(day)}
-                className="flex items-center justify-between rounded-xl border-2 border-ink/20 bg-paper/70 px-3.5 py-2.5 text-left active:bg-paper"
-              >
-                <span className="font-heading text-sm font-bold text-muted-ink">{DAY_LABEL[day]}</span>
-                <span className="font-body text-xs font-bold text-sky-dark">+ Add hours</span>
-              </button>
-            )
-          }
-
           return (
             <div
               key={day}
-              className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+              className="flex gap-3 border-b-2 border-ink/10 px-3 py-2.5 last:border-b-0"
             >
-              <div className="mb-2 flex items-center justify-between">
-                <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
-                <button
-                  onClick={() => addRow(day)}
-                  className="rounded-full border-2 border-ink bg-cream px-2.5 py-1 font-heading text-[11px] font-bold text-ink"
-                >
-                  + Add hours
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-2">
+              <span className="w-9 shrink-0 pt-1.5 font-heading text-sm font-bold text-ink">
+                {DAY_LABEL[day]}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-2 gap-y-1.5">
+                {dayRows.length === 0 && (
+                  <span className="pt-1.5 font-body text-xs text-muted-ink">Not available</span>
+                )}
                 {dayRows.map((r) => {
                   const bad = invalidKeys.has(r.key)
                   return (
-                    <div key={r.key} className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          value={r.start}
-                          step={1800}
-                          onChange={(e) => patchRow(r.key, { start: e.target.value })}
-                          className={`min-w-0 flex-1 rounded-lg border-2 bg-cream px-2 py-1.5 font-body text-sm text-ink outline-none ${
-                            bad ? 'border-coral' : 'border-ink'
-                          }`}
-                        />
-                        <span className="shrink-0 font-body text-xs text-muted-ink">–</span>
-                        <input
-                          type="time"
-                          value={r.end}
-                          step={1800}
-                          onChange={(e) => patchRow(r.key, { end: e.target.value })}
-                          className={`min-w-0 flex-1 rounded-lg border-2 bg-cream px-2 py-1.5 font-body text-sm text-ink outline-none ${
-                            bad ? 'border-coral' : 'border-ink'
-                          }`}
-                        />
-                        <button
-                          onClick={() => removeRow(r.key)}
-                          aria-label="Remove these hours"
-                          className="shrink-0 rounded-full border-2 border-ink bg-cream px-2.5 py-1 font-heading text-sm font-bold leading-none text-ink"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      {bad && (
-                        <span className="font-body text-[11px] font-bold text-coral-dark">
-                          End must be after start
-                        </span>
-                      )}
-                    </div>
+                    <span key={r.key} className="flex items-center gap-1">
+                      <input
+                        type="time"
+                        value={r.start}
+                        step={1800}
+                        onChange={(e) => patchRow(r.key, { start: e.target.value })}
+                        className={`${timeInput} ${bad ? 'border-coral' : 'border-ink'}`}
+                      />
+                      <span className="font-body text-xs text-muted-ink">–</span>
+                      <input
+                        type="time"
+                        value={r.end}
+                        step={1800}
+                        onChange={(e) => patchRow(r.key, { end: e.target.value })}
+                        className={`${timeInput} ${bad ? 'border-coral' : 'border-ink'}`}
+                      />
+                      <button
+                        onClick={() => removeRow(r.key)}
+                        aria-label="Remove"
+                        className="ml-0.5 rounded-full px-1.5 font-heading text-base font-bold leading-none text-muted-ink hover:text-coral-dark"
+                      >
+                        ×
+                      </button>
+                    </span>
                   )
                 })}
+                <button
+                  onClick={() => addRow(day)}
+                  className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
+                >
+                  + hours
+                </button>
               </div>
             </div>
           )

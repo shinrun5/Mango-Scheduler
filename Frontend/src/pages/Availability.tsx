@@ -9,7 +9,8 @@ export function Availability() {
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-40 sm:p-6 sm:pb-24">
       <h1 className="font-heading text-lg font-bold text-ink">My Availability</h1>
       <p className="mt-0.5 mb-4 font-body text-sm text-muted-ink">
-        The hours you can work each week — your schedule is built from this.
+        Your standing weekly hours — set once, repeats every week. Leave out class times, a
+        second job, anything fixed.
       </p>
 
       {linked ? (

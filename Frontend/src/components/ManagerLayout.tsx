@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+import { UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { StoreProvider, useStore } from '../lib/store-context'
@@ -58,10 +59,12 @@ function Chrome() {
             )}
             <NavLink
               to="/account"
-              className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-paper px-2.5 py-1 font-body text-xs font-semibold text-ink"
             >
-              {user?.name ?? user?.email}
-              {user?.role === 'OWNER' && ' · owner'}
+              <UserIcon size={14} />
+              <span className="hidden max-w-[9rem] truncate sm:inline">
+                {user?.name ?? user?.email}
+              </span>
             </NavLink>
             <button
               onClick={() => void logout()}
@@ -96,9 +99,6 @@ function Chrome() {
           </NavLink>
           <NavLink to="/history" className={tab}>
             History
-          </NavLink>
-          <NavLink to="/account" className={tab}>
-            Account
           </NavLink>
         </div>
       </div>
