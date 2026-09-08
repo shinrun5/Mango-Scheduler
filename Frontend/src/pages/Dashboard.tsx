@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useState } from 'react'
+import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import { AssignPopover } from '../components/AssignPopover'
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
@@ -99,6 +99,41 @@ export function Dashboard() {
       .catch(() => {})
   }, [storeId])
 
+  // one-week availability overrides for the week on the board (candidate picker
+  // should honour "just this week I can only work Monday", same as the solver)
+  const [weekOverrides, setWeekOverrides] = useState<{
+    overriddenEmployeeIds: number[]
+    windows: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
+  } | null>(null)
+  useEffect(() => {
+    if (!weekStart) {
+      setWeekOverrides(null)
+      return
+    }
+    let live = true
+    api
+      .getWeekAvailability(weekStart.slice(0, 10))
+      .then((r) => live && setWeekOverrides(r))
+      .catch(() => live && setWeekOverrides(null))
+    return () => {
+      live = false
+    }
+  }, [weekStart])
+
+  const effectiveAvailability = useMemo<RecurringAvailability[]>(() => {
+    if (!board) return []
+    if (!weekOverrides || weekOverrides.overriddenEmployeeIds.length === 0) return board.availability
+    const overridden = new Set(weekOverrides.overriddenEmployeeIds)
+    const asRows: RecurringAvailability[] = weekOverrides.windows.map((w, i) => ({
+      id: -1 - i,
+      employeeId: w.employeeId,
+      day: w.day,
+      start: `1970-01-01T${w.start}:00.000Z`,
+      end: `1970-01-01T${w.end}:00.000Z`,
+    }))
+    return [...board.availability.filter((a) => !overridden.has(a.employeeId)), ...asRows]
+  }, [board, weekOverrides])
+
   async function togglePublish(next: boolean) {
     if (storeId == null) return
     setPublishBusy(true)
@@ -175,7 +210,7 @@ export function Dashboard() {
       excludeEmployeeIds: excludeIds,
       employees: board.employees,
       employeeStores: board.employeeStores,
-      availability: board.availability,
+      availability: effectiveAvailability,
       shifts: board.shifts,
       requireOpener,
       storeRequiresOpenerSkill: store?.requiresOpenerSkill ?? true,

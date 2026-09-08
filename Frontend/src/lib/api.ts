@@ -224,6 +224,26 @@ export const api = {
   /** Replace the signed-in employee's whole week. start/end are "HH:MM". */
   saveMyAvailability: (windows: { day: DayOfWeek; start: string; end: string }[]) =>
     sendJSON<RecurringAvailability[]>('/availability/mine', 'PUT', { windows }),
+  /** One-week override of the caller's standing availability. `weekStart` is "YYYY-MM-DD".
+   * When no override exists yet, `windows` echoes the standing set (hasOverride:false). */
+  getMyWeekAvailability: (weekStart: string) =>
+    getJSON<{ weekStart: string; hasOverride: boolean; windows: { day: DayOfWeek; start: string; end: string }[] }>(
+      `/availability/mine/week?weekStart=${weekStart}`,
+    ),
+  saveMyWeekAvailability: (weekStart: string, windows: { day: DayOfWeek; start: string; end: string }[]) =>
+    sendJSON<{ weekStart: string; hasOverride: boolean; windows: { day: DayOfWeek; start: string; end: string }[] }>(
+      '/availability/mine/week',
+      'PUT',
+      { weekStart, windows },
+    ),
+  clearMyWeekAvailability: (weekStart: string) =>
+    request<{ ok: true }>(`/availability/mine/week?weekStart=${weekStart}`, { method: 'DELETE' }),
+  /** Manager: every one-week override for `weekStart`, for employees at their stores. */
+  getWeekAvailability: (weekStart: string) =>
+    getJSON<{
+      overriddenEmployeeIds: number[]
+      windows: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
+    }>(`/availability/week?weekStart=${weekStart}`),
 
   generateSchedule: (storeId: number, opts?: { saveFirst?: boolean; saveLabel?: string }) =>
     sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { storeId, solveSeconds: 5, ...opts }),

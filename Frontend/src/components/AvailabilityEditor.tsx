@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from './Button'
-import { api } from '../lib/api'
-import { DAY_LABEL, DAYS, toHHMM24 } from '../lib/time'
+import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayOfWeek } from '../types'
 
-interface Row {
-  key: string
+export interface AvailWindow {
   day: DayOfWeek
-  start: string // "HH:MM"
+  start: string // "HH:MM" 24h
   end: string
+}
+
+interface Row extends AvailWindow {
+  key: string
 }
 
 const newKey = () => Math.random().toString(36).slice(2)
@@ -18,11 +20,20 @@ function signature(rows: Row[]): string {
   return JSON.stringify(rows.map((r) => `${r.day} ${r.start} ${r.end}`).sort())
 }
 
-/** The standing weekly-availability editor for whoever is signed in
- * (uses /availability/mine). Set once — it repeats every week. The caller must
- * already be linked to an employee record. `barClass` positions the sticky save
- * bar: employees sit above the bottom tab bar, managers at the edge. */
-export function AvailabilityEditor({ barClass }: { barClass: string }) {
+/** Weekly-availability editor. `load`/`save` decide whether it edits the standing
+ * set (/availability/mine) or a one-week override. `barClass` positions the sticky
+ * save bar: employees sit above the bottom tab bar, managers at the edge. */
+export function AvailabilityEditor({
+  barClass,
+  load,
+  save,
+  idleText,
+}: {
+  barClass: string
+  load: () => Promise<AvailWindow[]>
+  save: (windows: AvailWindow[]) => Promise<AvailWindow[]>
+  idleText: string
+}) {
   const [rows, setRows] = useState<Row[]>([])
   const [savedSig, setSavedSig] = useState('[]')
   const [loading, setLoading] = useState(true)
@@ -31,21 +42,20 @@ export function AvailabilityEditor({ barClass }: { barClass: string }) {
   const [justSaved, setJustSaved] = useState(false)
 
   useEffect(() => {
-    api
-      .getMyAvailability()
+    let live = true
+    load()
       .then((windows) => {
-        const loaded = windows.map<Row>((w) => ({
-          key: newKey(),
-          day: w.day,
-          start: toHHMM24(w.start),
-          end: toHHMM24(w.end),
-        }))
+        if (!live) return
+        const loaded = windows.map<Row>((w) => ({ key: newKey(), day: w.day, start: w.start, end: w.end }))
         setRows(loaded)
         setSavedSig(signature(loaded))
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your availability'))
-      .finally(() => setLoading(false))
-  }, [])
+      .catch((e) => live && setError(e instanceof Error ? e.message : 'Could not load your availability'))
+      .finally(() => live && setLoading(false))
+    return () => {
+      live = false
+    }
+  }, [load])
 
   const invalidKeys = useMemo(
     () => new Set(rows.filter((r) => r.start >= r.end).map((r) => r.key)),
@@ -71,18 +81,12 @@ export function AvailabilityEditor({ barClass }: { barClass: string }) {
     setJustSaved(false)
   }
 
-  async function save() {
+  async function persist() {
     setSaving(true)
     setError(null)
     try {
-      const windows = rows.map((r) => ({ day: r.day, start: r.start, end: r.end }))
-      const saved = await api.saveMyAvailability(windows)
-      const fresh = saved.map<Row>((w) => ({
-        key: newKey(),
-        day: w.day,
-        start: toHHMM24(w.start),
-        end: toHHMM24(w.end),
-      }))
+      const saved = await save(rows.map((r) => ({ day: r.day, start: r.start, end: r.end })))
+      const fresh = saved.map<Row>((w) => ({ key: newKey(), day: w.day, start: w.start, end: w.end }))
       setRows(fresh)
       setSavedSig(signature(fresh))
       setJustSaved(true)
@@ -101,7 +105,7 @@ export function AvailabilityEditor({ barClass }: { barClass: string }) {
         ? { text: 'Unsaved changes', tone: 'text-ink' }
         : justSaved
           ? { text: 'Saved ✓', tone: 'text-green-dark' }
-          : { text: 'Saved — repeats every week', tone: 'text-muted-ink' }
+          : { text: idleText, tone: 'text-muted-ink' }
   const showSave = dirty || saving || invalidKeys.size > 0
 
   const timeInput =
@@ -174,7 +178,7 @@ export function AvailabilityEditor({ barClass }: { barClass: string }) {
       >
         <span className={`font-body text-xs font-bold ${status.tone}`}>{status.text}</span>
         {showSave && (
-          <Button onClick={() => void save()} disabled={!canSave} className="shrink-0">
+          <Button onClick={() => void persist()} disabled={!canSave} className="shrink-0">
             {saving ? 'Saving…' : 'Save'}
           </Button>
         )}

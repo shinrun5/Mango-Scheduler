@@ -222,6 +222,9 @@ router.post('/generate', ...manageStore, async (req, res) => {
       }
     }
 
+    const scheduleRow = await prisma.schedule.findUnique({ where: { storeId } });
+    const weekStart = scheduleRow?.weekStart ?? null;
+
     const [store, employees, availability, requirements] = await Promise.all([
       prisma.store.findUnique({ where: { id: storeId } }),
       prisma.employee.findMany({
@@ -235,6 +238,29 @@ router.post('/generate', ...manageStore, async (req, res) => {
     if (!store) return res.status(404).json({ error: 'Store not found' });
     if (requirements.length === 0) {
       return res.status(400).json({ error: 'This store has no shift requirements yet' });
+    }
+
+    // For the week being scheduled, an employee's one-week override (if any) fully
+    // replaces their standing availability.
+    const empIdsInPlay = new Set(employees.map((e) => e.id));
+    const overrides = weekStart
+      ? await prisma.weekAvailability.findMany({ where: { weekStart, employeeId: { in: [...empIdsInPlay] } } })
+      : [];
+    const overrideByEmp = new Map(
+      overrides.map((o) => [o.employeeId, o.windows as unknown as { day: DayOfWeek; start: string; end: string }[]]),
+    );
+    const effectiveAvailability: { employeeId: number; day: DayOfWeek; start: string; end: string }[] = [];
+    for (const e of employees) {
+      const ov = overrideByEmp.get(e.id);
+      if (ov) {
+        for (const w of ov) effectiveAvailability.push({ employeeId: e.id, day: w.day, start: w.start, end: w.end });
+      } else {
+        for (const a of availability) {
+          if (a.employeeId === e.id) {
+            effectiveAvailability.push({ employeeId: e.id, day: a.day, start: toHHMM(a.start), end: toHHMM(a.end) });
+          }
+        }
+      }
     }
 
     const anyoneOpens = !store.requiresOpenerSkill;
@@ -253,12 +279,7 @@ router.post('/generate', ...manageStore, async (req, res) => {
           primary: es.primary,
         })),
       })),
-      availability: availability.map((a) => ({
-        employeeId: a.employeeId,
-        day: a.day,
-        start: toHHMM(a.start),
-        end: toHHMM(a.end),
-      })),
+      availability: effectiveAvailability,
       requirements: requirements.map((r) => ({
         id: r.id,
         storeId: r.storeId,

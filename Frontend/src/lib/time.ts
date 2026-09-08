@@ -99,6 +99,13 @@ export function weekRangeLabel(weekStartIso: string): string {
   return `${dayDate(weekStartIso, 0)} – ${dayDate(weekStartIso, 6)}`
 }
 
+/** The Monday of the current week, as "YYYY-MM-DD" (UTC). */
+export function thisMondayYMD(): string {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  return d.toISOString().slice(0, 10)
+}
+
 /** `weekStartIso` shifted by whole weeks, as "YYYY-MM-DD" (for PUT /schedule/week). */
 export function shiftWeekYMD(weekStartIso: string, deltaWeeks: number): string {
   const d = new Date(weekStartIso)
