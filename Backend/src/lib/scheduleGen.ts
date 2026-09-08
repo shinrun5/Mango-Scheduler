@@ -153,13 +153,44 @@ export async function generateScheduleForStore(
 
   const anyoneOpens = !store.requiresOpenerSkill;
 
+  // --- fixed (standing) shifts: place them verbatim, solve only the remaining need ---
+  const fixedShifts = await prisma.fixedShift.findMany({
+    where: { storeId },
+    include: { employee: { include: { employeeStores: { where: { storeId } } } } },
+  });
+  const fixedRows = fixedShifts.map((f) => ({
+    employeeId: f.employeeId,
+    storeId,
+    day: f.day,
+    start: f.start,
+    end: f.end,
+  }));
+  const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+  const fixedHours = new Map<number, number>();
+  const fixedDayCount = new Map<number, Set<DayOfWeek>>();
+  for (const f of fixedShifts) {
+    fixedHours.set(
+      f.employeeId,
+      (fixedHours.get(f.employeeId) ?? 0) + (f.end.getTime() - f.start.getTime()) / 3_600_000,
+    );
+    let days = fixedDayCount.get(f.employeeId);
+    if (!days) fixedDayCount.set(f.employeeId, (days = new Set<DayOfWeek>()));
+    days.add(f.day);
+  }
+  // the solver must not schedule a fixed person again on a day they're already committed
+  for (const [empId, days] of fixedDayCount) {
+    effectiveAvailability = effectiveAvailability.filter(
+      (a) => !(a.employeeId === empId && days.has(a.day)),
+    );
+  }
+
   const payload = {
     solveSeconds,
     employees: employees.map((e) => ({
       id: e.id,
       name: e.name,
-      hourLimit: e.hourLimit,
-      maxShifts: e.maxShifts,
+      hourLimit: Math.max(0, Math.round(e.hourLimit - (fixedHours.get(e.id) ?? 0))),
+      maxShifts: Math.max(0, e.maxShifts - (fixedDayCount.get(e.id)?.size ?? 0)),
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,
@@ -168,19 +199,32 @@ export async function generateScheduleForStore(
       })),
     })),
     availability: effectiveAvailability,
-    requirements: requirements.map((r) => ({
-      id: r.id,
-      storeId: r.storeId,
-      day: r.day,
-      start: toHHMM(r.start),
-      end: toHHMM(r.end),
-      head: r.managerRequired + r.seniorRequired + r.regularRequired + r.newRequired,
-      seniorMin: r.managerRequired + r.seniorRequired,
-      needOpen: r.needOpen,
-      graceMinutes: r.graceMinutes,
-      allowNew: r.newRequired > 0,
-      pairNew: store.pairNewWorkers,
-    })),
+    requirements: requirements.map((r) => {
+      // fixed shifts that fully cover this window pre-fill its headcount
+      const covering = fixedShifts.filter(
+        (f) => f.day === r.day && minOf(f.start) <= minOf(r.start) && minOf(f.end) >= minOf(r.end),
+      );
+      const covSenior = covering.filter((f) => {
+        const t = f.employee.employeeStores[0]?.proficiency;
+        return t === 'SENIOR' || t === 'MANAGER';
+      }).length;
+      const covOpener = covering.some(
+        (f) => anyoneOpens || f.employee.employeeStores[0]?.canOpen,
+      );
+      return {
+        id: r.id,
+        storeId: r.storeId,
+        day: r.day,
+        start: toHHMM(r.start),
+        end: toHHMM(r.end),
+        head: Math.max(0, r.managerRequired + r.seniorRequired + r.regularRequired + r.newRequired - covering.length),
+        seniorMin: Math.max(0, r.managerRequired + r.seniorRequired - covSenior),
+        needOpen: r.needOpen && !covOpener,
+        graceMinutes: r.graceMinutes,
+        allowNew: r.newRequired > 0,
+        pairNew: store.pairNewWorkers,
+      };
+    }),
   };
 
   const result = await callSolver(payload);
@@ -197,14 +241,16 @@ export async function generateScheduleForStore(
   if (!result.feasible) return base;
 
   const reqById = new Map(requirements.map((r) => [r.id, r]));
-  const rows = result.assignments.map((a) => {
+  const solvedRows = result.assignments.map((a) => {
     const r = reqById.get(a.requirementId)!;
     return { employeeId: a.employeeId, storeId: r.storeId, day: r.day, start: r.start, end: r.end };
   });
-  const createOp = prisma.shift.createMany({ data: rows });
+  // on a full regenerate the fixed shifts are re-materialised; on append (rare) they'd dupe
+  const allRows = replace ? [...fixedRows, ...solvedRows] : solvedRows;
+  const createOp = prisma.shift.createMany({ data: allRows });
   await (replace
     ? prisma.$transaction([prisma.shift.deleteMany({ where: { storeId } }), createOp])
     : prisma.$transaction([createOp]));
 
-  return { ...base, created: rows.length };
+  return { ...base, created: allRows.length };
 }

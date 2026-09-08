@@ -37,6 +37,25 @@ model Store {
   managers  ManagerStore[]
   schedule  Schedule?
   snapshots ScheduleSnapshot[]
+  fixedShifts FixedShift[]
+}
+
+// A standing weekly assignment: this employee always works this store/day/window.
+// The generator writes it verbatim and solves only the remaining need (see
+// lib/scheduleGen.ts). Manager-managed on the Workers screen.
+model FixedShift {
+  id         Int       @id @default(autoincrement())
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  store      Store     @relation(fields: [storeId], references: [id])
+  storeId    Int
+  day        DayOfWeek
+  start      DateTime // 1970-01-01 wall-clock, like Shift
+  end        DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([storeId])
+  @@unique([employeeId, storeId, day, start, end])
 }
 
 // Which stores a MANAGER user runs (a manager can cover several).
@@ -161,6 +180,7 @@ model Employee {
   recurringAvailability RecurringAvailability[]
   weekAvailability     WeekAvailability[]
   timeOff              TimeOffRequest[]
+  fixedShifts          FixedShift[]
   changeRequestsMade     ShiftChangeRequest[] @relation("RequestsMade")
   changeRequestsTargeted ShiftChangeRequest[] @relation("RequestsTargeted")
   // account link: an Employee starts with no login; a manager issues an

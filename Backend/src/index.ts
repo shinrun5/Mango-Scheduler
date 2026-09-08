@@ -15,6 +15,7 @@ import employeeStoreRoutes from './routes/employeeStores.js';
 import availabilityRoutes from './routes/availability.js';
 import scheduleRoutes from './routes/schedule.js';
 import notificationRoutes from './routes/notifications.js';
+import fixedShiftRoutes from './routes/fixedShifts.js';
 import { startCron } from './cron.js';
 
 const app = express();
@@ -38,6 +39,7 @@ api.use('/time-off', timeOffRoutes);
 api.use('/managers', managerRoutes);
 api.use('/overview', overviewRoutes);
 api.use('/notifications', notificationRoutes);
+api.use('/fixed-shifts', fixedShiftRoutes);
 app.use('/api', api);
 
 // In production the built frontend is served from this same origin (the app

@@ -4,6 +4,7 @@ import type {
   ChangeType,
   DayOfWeek,
   Employee,
+  FixedShift,
   EmployeeStore,
   GenerateScheduleResult,
   ManagerRow,
@@ -234,6 +235,13 @@ export const api = {
     request<{ message: string; accountLeftUnlinked: string | null }>(`/employees/${id}`, { method: 'DELETE' }),
   inviteWorker: (id: number) =>
     sendJSON<{ employeeId: number; inviteCode: string }>(`/employees/${id}/invite`, 'POST', {}),
+
+  // --- fixed (standing) shifts: an employee always works this store/day/window ---
+  getFixedShifts: (storeId: number) =>
+    getJSON<FixedShift[]>(`/fixed-shifts?storeId=${storeId}`),
+  addFixedShift: (input: { employeeId: number; storeId: number; day: DayOfWeek; start: string; end: string }) =>
+    sendJSON<FixedShift>('/fixed-shifts', 'POST', input),
+  removeFixedShift: (id: number) => request<{ ok: true }>(`/fixed-shifts/${id}`, { method: 'DELETE' }),
   /** Manager/owner adds themselves as a schedulable worker at every store they run. */
   becomeWorker: () =>
     sendJSON<{ employeeId: number; created: boolean; stores: number }>('/employees/me', 'POST', {}),

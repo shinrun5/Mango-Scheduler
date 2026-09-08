@@ -2,8 +2,9 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import { useStore } from '../lib/store-context'
-import type { RosterWorker, Store, Tier } from '../types'
+import type { DayOfWeek, FixedShift, RosterWorker, Store, Tier } from '../types'
 
 const TIERS: Tier[] = ['NEW', 'REGULAR', 'SENIOR', 'MANAGER']
 
@@ -11,16 +12,23 @@ export function Workers() {
   const { storeId } = useStore()
   const [workers, setWorkers] = useState<RosterWorker[]>([])
   const [stores, setStores] = useState<Store[]>([])
+  const [fixed, setFixed] = useState<FixedShift[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [copied, setCopied] = useState<number | null>(null)
 
   function refresh() {
-    return Promise.all([api.getRoster(), api.getStores()])
-      .then(([w, s]) => {
-        setWorkers(w)
+    return api
+      .getStores()
+      .then(async (s) => {
         setStores(s)
+        const [w, ...fx] = await Promise.all([
+          api.getRoster(),
+          ...s.map((st) => api.getFixedShifts(st.id).catch(() => [] as FixedShift[])),
+        ])
+        setWorkers(w)
+        setFixed(fx.flat())
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load workers'))
   }
@@ -169,6 +177,15 @@ export function Workers() {
                         </button>
                       ))}
                   </div>
+                  {w.stores.length > 0 && (
+                    <FixedShiftRow
+                      worker={w}
+                      storeName={storeName}
+                      fixed={fixed.filter((f) => f.employeeId === w.id)}
+                      onChange={() => void refresh()}
+                      onError={setError}
+                    />
+                  )}
                 </div>
                 <button
                   onClick={() => void remove(w)}
@@ -316,5 +333,118 @@ function AddWorkerForm({
         {busy ? 'Adding…' : 'Add'}
       </Button>
     </form>
+  )
+}
+
+function FixedShiftRow({
+  worker,
+  storeName,
+  fixed,
+  onChange,
+  onError,
+}: {
+  worker: RosterWorker
+  storeName: (id: number) => string
+  fixed: FixedShift[]
+  onChange: () => void
+  onError: (m: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [storeId, setStoreId] = useState<number>(worker.stores[0]?.storeId ?? 0)
+  const [day, setDay] = useState<DayOfWeek>('MONDAY')
+  const [start, setStart] = useState('09:00')
+  const [end, setEnd] = useState('17:00')
+  const [busy, setBusy] = useState(false)
+
+  async function add() {
+    if (start >= end) return onError('Start must be before end')
+    setBusy(true)
+    onError(null)
+    try {
+      await api.addFixedShift({ employeeId: worker.id, storeId, day, start, end })
+      setOpen(false)
+      onChange()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Could not add the fixed shift')
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function del(id: number) {
+    onError(null)
+    try {
+      await api.removeFixedShift(id)
+      onChange()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Could not remove it')
+    }
+  }
+
+  const sel = 'rounded-lg border-2 border-ink bg-cream px-1.5 py-1 font-body text-[10px] font-bold text-ink outline-none'
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+        Always works
+      </span>
+      {fixed.length === 0 && !open && (
+        <span className="font-body text-[10px] text-muted-ink">nothing fixed</span>
+      )}
+      {fixed.map((f) => (
+        <span
+          key={f.id}
+          className="flex items-center gap-1 rounded-full border-2 border-grape/60 bg-grape/10 px-2 py-0.5 font-body text-[10px] font-bold text-ink"
+        >
+          {DAY_LABEL[f.day]} · {storeName(f.storeId)} · {to12Hour(f.start)}–{to12Hour(f.end)}
+          <button
+            onClick={() => void del(f.id)}
+            aria-label="Remove fixed shift"
+            className="ml-0.5 font-heading text-xs leading-none text-muted-ink hover:text-coral-dark"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {open ? (
+        <span className="flex flex-wrap items-center gap-1">
+          <select value={storeId} onChange={(e) => setStoreId(Number(e.target.value))} className={sel}>
+            {worker.stores.map((s) => (
+              <option key={s.storeId} value={s.storeId}>
+                {storeName(s.storeId)}
+              </option>
+            ))}
+          </select>
+          <select value={day} onChange={(e) => setDay(e.target.value as DayOfWeek)} className={sel}>
+            {DAYS.map((d) => (
+              <option key={d} value={d}>
+                {DAY_LABEL[d]}
+              </option>
+            ))}
+          </select>
+          <input type="time" step={1800} value={start} onChange={(e) => setStart(e.target.value)} className={sel} />
+          <input type="time" step={1800} value={end} onChange={(e) => setEnd(e.target.value)} className={sel} />
+          <button
+            disabled={busy}
+            onClick={() => void add()}
+            className="rounded-full border-2 border-ink bg-green px-2 py-0.5 font-heading text-[10px] font-bold text-white"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => setOpen(false)}
+            className="font-heading text-[10px] font-bold text-muted-ink"
+          >
+            cancel
+          </button>
+        </span>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="rounded-full border-2 border-dashed border-grape/50 px-2 py-0.5 font-body text-[10px] font-bold text-grape hover:border-grape"
+        >
+          + fixed day
+        </button>
+      )}
+    </div>
   )
 }

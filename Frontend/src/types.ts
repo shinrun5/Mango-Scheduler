@@ -211,6 +211,16 @@ export interface SnapshotDetail extends SnapshotMeta {
   shifts: SnapshotShift[]
 }
 
+export interface FixedShift {
+  id: number
+  employeeId: number
+  employeeName: string | null
+  storeId: number
+  day: DayOfWeek
+  start: string // "HH:MM"
+  end: string
+}
+
 export interface NotificationItem {
   id: number
   kind: 'AVAILABILITY_REMINDER' | 'SCHEDULE_DRAFTED' | 'GENERIC'
