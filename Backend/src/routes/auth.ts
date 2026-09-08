@@ -1,16 +1,8 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { supabaseAdmin, supabaseAnon } from '../lib/supabase.js';
-import { requireAuth, requireOwner } from '../lib/auth.js';
+import { requireAuth } from '../lib/auth.js';
 
-/** decode the `role` claim from a Supabase JWT-style key ("" if not a JWT) */
-function keyRole(k?: string): string {
-  try {
-    return JSON.parse(Buffer.from((k ?? '').split('.')[1] ?? '', 'base64').toString()).role ?? '';
-  } catch {
-    return '';
-  }
-}
 
 const router = Router();
 
@@ -99,29 +91,6 @@ router.post('/register', async (req, res) => {
 });
 
 // GET /auth/setup-status — is there an owner yet? drives the /setup page.
-// TEMP diagnostic — remove after debugging Railway env. Owner only, leaks no secrets.
-router.get('/env-check', ...requireOwner, async (_req, res) => {
-  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  const anon = process.env.SUPABASE_ANON_KEY ?? '';
-  let probe: string;
-  try {
-    const email = `envprobe-${Date.now()}@example.com`;
-    const r = await supabaseAdmin().auth.admin.createUser({ email, password: 'envprobe-pass-123', email_confirm: true });
-    if (r.error) probe = `FAIL: ${r.error.status ?? ''} ${r.error.message}`;
-    else {
-      probe = 'OK';
-      await supabaseAdmin().auth.admin.deleteUser(r.data.user!.id).catch(() => {});
-    }
-  } catch (e) {
-    probe = `THREW: ${(e as Error).message}`;
-  }
-  res.json({
-    supabaseUrl: process.env.SUPABASE_URL ?? null,
-    anonKey: { present: !!anon, len: anon.length, prefix: anon.slice(0, 6), role: keyRole(anon) },
-    serviceKey: { present: !!svc, len: svc.length, prefix: svc.slice(0, 6), role: keyRole(svc) },
-    adminCreateUser: probe,
-  });
-});
 
 router.get('/setup-status', async (_req, res) => {
   const owners = await prisma.user.count({ where: { role: 'OWNER' } });
