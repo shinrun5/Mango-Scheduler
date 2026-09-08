@@ -111,7 +111,12 @@ export function Profile() {
             onSaved={load}
             onError={setError}
           />
-          <EitherOrDays groups={e.eitherOrDays} onSaved={load} onError={setError} />
+          <DayPrefs
+            groups={e.eitherOrDays}
+            noConsecutive={e.noConsecutiveDays}
+            onSaved={load}
+            onError={setError}
+          />
           <div className={card}>
             <FruitPicker />
           </div>
@@ -265,17 +270,20 @@ function MyLimits({
   )
 }
 
-function EitherOrDays({
+function DayPrefs({
   groups,
+  noConsecutive,
   onSaved,
   onError,
 }: {
   groups: DayOfWeek[][]
+  noConsecutive: boolean
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
   const [draft, setDraft] = useState<DayOfWeek[]>([])
   const [busy, setBusy] = useState(false)
+  const [ncBusy, setNcBusy] = useState(false)
 
   const toggle = (day: DayOfWeek) =>
     setDraft((cur) => (cur.includes(day) ? cur.filter((x) => x !== day) : [...cur, day]))
@@ -294,6 +302,19 @@ function EitherOrDays({
     }
   }
 
+  async function toggleNoConsecutive() {
+    onError(null)
+    setNcBusy(true)
+    try {
+      await api.setMyNoConsecutive(!noConsecutive)
+      await onSaved()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not save your day preference')
+    } finally {
+      setNcBusy(false)
+    }
+  }
+
   const addGroup = () => {
     if (draft.length < 2) return onError('Pick at least two days for a group')
     if (groups.length >= 5) return onError('That is the most groups you can have')
@@ -303,7 +324,29 @@ function EitherOrDays({
 
   return (
     <div className={card}>
-      <h2 className="font-heading text-sm font-bold text-ink">One of these days only</h2>
+      <h2 className="font-heading text-sm font-bold text-ink">Day preferences</h2>
+
+      <button
+        type="button"
+        onClick={() => void toggleNoConsecutive()}
+        disabled={ncBusy}
+        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border-2 border-ink bg-cream px-3 py-2 text-left disabled:opacity-60"
+      >
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink font-heading text-xs font-bold ${
+            noConsecutive ? 'bg-ink text-paper' : 'bg-paper text-transparent'
+          }`}
+        >
+          ✓
+        </span>
+        <span className="font-body text-xs text-ink">
+          <b>No back-to-back days</b> — never schedule me two days in a row
+        </span>
+      </button>
+
+      <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+        One of these days only
+      </p>
       <p className="mt-0.5 font-body text-xs text-muted-ink">
         Group days you can only do one of — e.g. Sat <b>or</b> Sun, not both.
       </p>

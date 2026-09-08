@@ -179,6 +179,8 @@ model Employee {
   // "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] = schedule at most
   // one of Sat/Sun. DayOfWeek[][]; the solver adds sum(worked[d] in group) <= 1.
   eitherOrDays Json?
+  // true => the solver never puts this person on two back-to-back days in a week
+  noConsecutiveDays Boolean @default(false)
   employeeStores EmployeeStore[]
   recurringAvailability RecurringAvailability[]
   weekAvailability     WeekAvailability[]

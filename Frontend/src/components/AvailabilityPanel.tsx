@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AvailabilityEditor, type AvailWindow } from './AvailabilityEditor'
 import { TimeOffPanel } from './TimeOffPanel'
 import { api } from '../lib/api'
@@ -21,6 +21,22 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
   const [hasOverride, setHasOverride] = useState(false)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
+  // store opening/closing + default night shift — drives the editor's quick-add buttons
+  const [hours, setHours] = useState<{
+    dayDefault: { start: string; end: string }
+    night: { start: string; end: string }
+  }>()
+
+  useEffect(() => {
+    let live = true
+    api
+      .getMyStoreHours()
+      .then((h) => live && setHours({ dayDefault: { start: h.open, end: h.close }, night: h.night }))
+      .catch(() => {}) // fall back to the editor's built-in defaults
+    return () => {
+      live = false
+    }
+  }, [])
 
   const standingLoad = useCallback(() => api.getMyAvailability().then(norm), [])
   const standingSave = useCallback((w: AvailWindow[]) => api.saveMyAvailability(w).then(norm), [])
@@ -111,6 +127,8 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           load={standingLoad}
           save={standingSave}
           idleText="Saved — repeats every week"
+          dayDefault={hours?.dayDefault}
+          night={hours?.night}
         />
       ) : (
         <AvailabilityEditor
@@ -119,6 +137,8 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           load={weekLoad}
           save={weekSave}
           idleText={hasOverride ? 'Saved — this week only' : 'Copy of your standing hours — not saved yet'}
+          dayDefault={hours?.dayDefault}
+          night={hours?.night}
         />
       )}
     </div>

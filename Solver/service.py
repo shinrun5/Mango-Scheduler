@@ -30,6 +30,8 @@ class Employee(BaseModel):
     stores: list[EmployeeStore] = []
     # "schedule me at most one of these days" groups, e.g. [["SATURDAY","SUNDAY"]]
     eitherOr: list[list[str]] = []
+    # never two back-to-back days in a week
+    noConsecutive: bool = False
 
 
 class Availability(BaseModel):

@@ -139,6 +139,8 @@ export interface Profile {
     maxShifts: number
     /** "one of these days only" groups, e.g. [["SATURDAY","SUNDAY"]] */
     eitherOrDays: DayOfWeek[][]
+    /** never schedule this person on two back-to-back days */
+    noConsecutiveDays: boolean
     standby: boolean
     stores: { storeId: number; storeName: string; proficiency: Tier; canOpen: boolean; pin: string }[]
   } | null

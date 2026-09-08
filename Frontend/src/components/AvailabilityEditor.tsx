@@ -28,11 +28,17 @@ export function AvailabilityEditor({
   load,
   save,
   idleText,
+  dayDefault,
+  night,
 }: {
   barClass: string
   load: () => Promise<AvailWindow[]>
   save: (windows: AvailWindow[]) => Promise<AvailWindow[]>
   idleText: string
+  /** first window added to a day starts here — the store's opening/closing hours */
+  dayDefault?: { start: string; end: string }
+  /** the "+ night" quick-add window — the store's default night shift */
+  night?: { start: string; end: string }
 }) {
   const [rows, setRows] = useState<Row[]>([])
   const [savedSig, setSavedSig] = useState('[]')
@@ -64,13 +70,24 @@ export function AvailabilityEditor({
   const dirty = signature(rows) !== savedSig
   const canSave = dirty && invalidKeys.size === 0 && !saving
 
+  function pushRow(day: DayOfWeek, start: string, end: string) {
+    setRows((rs) => [...rs, { key: newKey(), day, start, end }])
+    setJustSaved(false)
+  }
+
   function addRow(day: DayOfWeek) {
     const prev = rows.filter((r) => r.day === day).at(-1)
-    const start = prev ? prev.end : '17:00'
+    // first window of the day: default to the store's opening→closing hours
+    if (!prev && dayDefault) return pushRow(day, dayDefault.start, dayDefault.end)
+    const start = prev ? prev.end : dayDefault?.start ?? '17:00'
     const [h] = start.split(':').map(Number)
     const end = `${String(Math.min((h ?? 17) + 4, 23)).padStart(2, '0')}:00`
-    setRows((rs) => [...rs, { key: newKey(), day, start, end: end > start ? end : '23:00' }])
-    setJustSaved(false)
+    pushRow(day, start, end > start ? end : '23:00')
+  }
+
+  function addNight(day: DayOfWeek) {
+    const n = night ?? { start: '17:00', end: '21:00' }
+    pushRow(day, n.start, n.end)
   }
   function patchRow(key: string, patch: Partial<Pick<Row, 'start' | 'end'>>) {
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
@@ -165,6 +182,14 @@ export function AvailabilityEditor({
                 >
                   + hours
                 </button>
+                {night && (
+                  <button
+                    onClick={() => addNight(day)}
+                    className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape hover:border-ink"
+                  >
+                    + night
+                  </button>
+                )}
               </div>
             </div>
           )

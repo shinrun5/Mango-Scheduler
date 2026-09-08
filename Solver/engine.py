@@ -233,6 +233,11 @@ def solve(payload: dict) -> dict:
             if len(in_group) > 1:
                 model.Add(sum(in_group) <= 1)
 
+        # "no back-to-back days": no two adjacent days in the Mon..Sun week
+        if e.get("noConsecutive"):
+            for a, b in zip(DAYS, DAYS[1:]):
+                model.Add(worked[a] + worked[b] <= 1)
+
         sc = model.NewIntVar(0, len(DAYS), f"count_{e['id']}")
         model.Add(sc == sum(worked.values()))
         max_shifts = e.get("maxShifts")

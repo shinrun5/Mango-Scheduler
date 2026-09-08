@@ -255,9 +255,17 @@ export const api = {
   /** Replace the caller's "one of these days only" groups (e.g. [["SATURDAY","SUNDAY"]]). */
   setMyEitherOr: (groups: DayOfWeek[][]) =>
     sendJSON<{ groups: DayOfWeek[][] }>('/employees/mine/either-or', 'PUT', { groups }),
+  /** Toggle "never schedule me on two back-to-back days". */
+  setMyNoConsecutive: (on: boolean) =>
+    sendJSON<{ noConsecutiveDays: boolean }>('/employees/mine/no-consecutive', 'PUT', { on }),
 
   // --- employee self-service ---
   getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),
+  /** Opening / closing time + a default night-shift window for the caller's store(s). */
+  getMyStoreHours: () =>
+    getJSON<{ open: string; close: string; night: { start: string; end: string } }>(
+      '/availability/mine/hours',
+    ),
   /** Replace the signed-in employee's whole week. start/end are "HH:MM". */
   saveMyAvailability: (windows: { day: DayOfWeek; start: string; end: string }[]) =>
     sendJSON<RecurringAvailability[]>('/availability/mine', 'PUT', { windows }),

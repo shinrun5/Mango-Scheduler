@@ -227,6 +227,8 @@ export async function generateScheduleForStore(
       maxShifts: e.maxShifts,
       // "schedule me at most one of these days" groups (e.g. Sat OR Sun)
       eitherOr: (e.eitherOrDays as DayOfWeek[][] | null) ?? [],
+      // never two back-to-back days in a week
+      noConsecutive: e.noConsecutiveDays,
       stores: e.employeeStores.map((es) => ({
         storeId: es.storeId,
         tier: es.proficiency,

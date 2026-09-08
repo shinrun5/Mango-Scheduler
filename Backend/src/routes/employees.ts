@@ -239,6 +239,20 @@ router.put("/mine/either-or", requireAuth, async (req, res) => {
   res.json({ groups });
 });
 
+// PUT /employees/mine/no-consecutive  { on: boolean }
+// on => the solver never schedules the caller on two back-to-back days.
+router.put("/mine/no-consecutive", requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+  if (typeof req.body?.on !== "boolean") return res.status(400).json({ error: "on must be true or false" });
+
+  const e = await prisma.employee.update({
+    where: { id: employeeId },
+    data: { noConsecutiveDays: req.body.on },
+  });
+  res.json({ noConsecutiveDays: e.noConsecutiveDays });
+});
+
 // POST /employees/:id/invite
 router.post("/:id/invite", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);

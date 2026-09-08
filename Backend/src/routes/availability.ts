@@ -63,6 +63,45 @@ router.get('/mine', requireAuth, async (req, res) => {
   res.json(windows);
 });
 
+// GET /availability/mine/hours — opening / closing time and a default night-shift
+// window, derived from the shift requirements of the stores the caller works at.
+// Feeds the availability editor's "+ hours" / "+ night" defaults.
+router.get('/mine/hours', requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+
+  const links = await prisma.employeeStore.findMany({
+    where: { employeeId },
+    select: { storeId: true },
+  });
+  const storeIds = links.map((l) => l.storeId);
+  const reqs = storeIds.length
+    ? await prisma.shiftRequirement.findMany({
+        where: { storeId: { in: storeIds } },
+        select: { start: true, end: true },
+      })
+    : [];
+
+  const toMin = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+  const fromMin = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  // no requirements yet -> a sane generic day
+  let openM = 9 * 60;
+  let closeM = 21 * 60;
+  if (reqs.length > 0) {
+    openM = Math.min(...reqs.map((r) => toMin(r.start)));
+    closeM = Math.max(...reqs.map((r) => toMin(r.end)));
+  }
+  const nightM = Math.max(openM, closeM - 300); // last ~5h before close
+
+  res.json({
+    open: fromMin(openM),
+    close: fromMin(closeM),
+    night: { start: fromMin(nightM), end: fromMin(closeM) },
+  });
+});
+
 /** Replace the caller's entire weekly availability in one shot.
  * body: { windows: { day, start: "HH:MM", end: "HH:MM" }[] } */
 router.put('/mine', requireAuth, async (req, res) => {
