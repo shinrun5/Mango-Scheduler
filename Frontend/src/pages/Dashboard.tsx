@@ -6,6 +6,7 @@ import { Header } from '../components/Header'
 import { api } from '../lib/api'
 import { useStore } from '../lib/store-context'
 import { type Candidate, computeCandidates } from '../lib/candidates'
+import { type SwapOption, computeSwapOptions } from '../lib/swaps'
 import { computeGapCards, type GapCardData } from '../lib/gaps'
 import { effectiveCanOpen } from '../lib/openers'
 import {
@@ -64,9 +65,11 @@ interface PickerState {
   excludeIds: Set<number>
   requireOpener: boolean
   graceMinutes: number
+  personId: number | null
   personName: string | null
   candidates: Candidate[]
   candidatesAll: Candidate[]
+  swaps: SwapOption[]
   title: string
   subtitle: string
 }
@@ -227,6 +230,7 @@ export function Dashboard() {
     end: string
     shiftIds: number[]
     requirementId: number | null
+    personId: number | null
     personName: string | null
     excludeIds: Set<number>
     requireOpener: boolean
@@ -238,6 +242,45 @@ export function Dashboard() {
     const { e, storeId, day, start, end, excludeIds, requireOpener, graceMinutes, ...rest } = args
     const candidates = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes)
     const candidatesAll = candidatesForWindow(storeId, day, start, end, excludeIds, requireOpener, graceMinutes, true)
+
+    // direct-swap partners: only for an existing person's shift
+    let swaps: SwapOption[] = []
+    if (rest.shiftIds.length > 0 && rest.personId != null) {
+      const v = buildView(board)
+      const spans = v.stores.flatMap((st) =>
+        st.days.flatMap((d) =>
+          d.people.map((p) => ({
+            employeeId: p.employeeId,
+            name: p.name,
+            avatarFruit: p.avatarFruit,
+            storeId: st.id,
+            storeName: st.name,
+            day: d.day,
+            start: p.start,
+            end: p.end,
+            shiftIds: p.shiftIds,
+          })),
+        ),
+      )
+      const storeName = board.stores.find((s) => s.id === storeId)?.name ?? `Store ${storeId}`
+      swaps = computeSwapOptions({
+        a: {
+          employeeId: rest.personId,
+          name: rest.personName ?? '',
+          avatarFruit: board.employees.find((emp) => emp.id === rest.personId)?.avatarFruit ?? null,
+          storeId,
+          storeName,
+          day,
+          start,
+          end,
+          shiftIds: rest.shiftIds,
+        },
+        spans,
+        employeeStores: board.employeeStores,
+        availability: effectiveAvailability,
+      })
+    }
+
     setPicker({
       anchorRect: e.currentTarget.getBoundingClientRect(),
       storeId,
@@ -249,8 +292,23 @@ export function Dashboard() {
       graceMinutes,
       candidates,
       candidatesAll,
+      swaps,
       ...rest,
     })
+  }
+
+  async function handleSwap(o: SwapOption) {
+    if (!picker || picker.personId == null) return
+    const aId = picker.personId
+    const aRows = picker.shiftIds
+    setPicker(null)
+    try {
+      await Promise.all(aRows.map((id) => api.updateShift(id, { employeeId: o.employeeId })))
+      await Promise.all(o.theirShift.shiftIds.map((id) => api.updateShift(id, { employeeId: aId })))
+      setBoard(await loadBoard())
+    } catch (e) {
+      setError(String(e))
+    }
   }
 
   /** Commit a last-resort split. tail: hand [T,end] to someone (and, for an existing
@@ -500,6 +558,7 @@ export function Dashboard() {
                               end: person.end,
                               shiftIds: person.shiftIds,
                               requirementId: null,
+                              personId: person.employeeId,
                               personName: person.name,
                               excludeIds: new Set(
                                 d.people
@@ -547,6 +606,7 @@ export function Dashboard() {
                               end: g.end,
                               shiftIds: [],
                               requirementId: g.requirementId,
+                              personId: null,
                               personName: null,
                               excludeIds: new Set(already.map((s) => s.employeeId as number)),
                               requireOpener,
@@ -583,6 +643,8 @@ export function Dashboard() {
           onPick={handlePick}
           onClose={() => setPicker(null)}
           onRemove={picker.shiftIds.length > 0 ? handleRemove : undefined}
+          swaps={picker.personId != null ? picker.swaps : undefined}
+          onSwap={handleSwap}
           editHours={
             picker.shiftIds.length > 0
               ? { start: toHHMM24(picker.start), end: toHHMM24(picker.end), onSave: handleEditHours }

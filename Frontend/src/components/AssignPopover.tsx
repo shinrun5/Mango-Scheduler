@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { Candidate } from '../lib/candidates'
+import type { SwapOption } from '../lib/swaps'
 import { fruitForPerson } from '../lib/fruit'
-import { clockToMin, minToClock, to12Hour } from '../lib/time'
+import { clockToMin, DAY_LABEL, minToClock, timeRangeCompact, to12Hour } from '../lib/time'
 import { FruitAvatar } from './FruitAvatar'
 
 /** A sensible default split point: the window's midpoint, snapped to the half hour. */
@@ -86,6 +87,8 @@ export function AssignPopover({
   onRemove,
   editHours,
   split,
+  swaps,
+  onSwap,
 }: {
   title: string
   subtitle?: string
@@ -100,8 +103,12 @@ export function AssignPopover({
   /** Present only for an existing shift — change just this person's own start/end. */
   editHours?: { start: string; end: string; onSave: (startHHMM24: string, endHHMM24: string) => void }
   split?: SplitConfig
+  /** Direct-swap partners (both people cover both shifts). Existing shift only. */
+  swaps?: SwapOption[]
+  onSwap?: (option: SwapOption) => void
 }) {
   const [showAll, setShowAll] = useState(false)
+  const [showSwaps, setShowSwaps] = useState(false)
   const [splitTime, setSplitTime] = useState(() =>
     split ? defaultSplit(split.windowStart, split.windowEnd) : '',
   )
@@ -147,6 +154,45 @@ export function AssignPopover({
             {showAll ? '← only who’s free' : 'add someone not free (last-minute) →'}
           </button>
         </div>
+
+        {swaps && onSwap && (
+          <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
+            <button
+              onClick={() => setShowSwaps((v) => !v)}
+              className="flex items-center justify-between font-body text-[11px] font-bold text-ink"
+            >
+              <span>Swap this shift with someone</span>
+              <span className="font-body text-[10px] font-semibold text-muted-ink">
+                {swaps.length} {showSwaps ? '▾' : '▸'}
+              </span>
+            </button>
+            {showSwaps &&
+              (swaps.length === 0 ? (
+                <span className="font-body text-[10px] text-muted-ink">
+                  Nobody has a shift you could trade straight across.
+                </span>
+              ) : (
+                <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
+                  {swaps.map((o) => (
+                    <button
+                      key={`${o.employeeId}-${o.theirShift.shiftIds.join(',')}`}
+                      onClick={() => onSwap(o)}
+                      className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
+                    >
+                      <FruitAvatar kind={fruitForPerson(o)} size={22} />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-body text-xs font-bold text-ink">{o.name}</span>
+                        <span className="font-body text-[10px] text-muted-ink">
+                          gives you {DAY_LABEL[o.theirShift.day]} · {o.theirShift.storeName} ·{' '}
+                          {timeRangeCompact(o.theirShift.start, o.theirShift.end)}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+          </div>
+        )}
 
         {editHours && (
           <div className="flex flex-col gap-2 border-t-2 border-dashed border-cream pt-2.5">
