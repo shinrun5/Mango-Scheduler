@@ -16,7 +16,7 @@ export function Workers() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [copied, setCopied] = useState<number | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
   function refresh() {
     return api
@@ -80,15 +80,16 @@ export function Workers() {
     }
   }
 
-  function copy(id: number, code: string) {
-    navigator.clipboard?.writeText(code).then(
+  function copy(key: string, text: string) {
+    navigator.clipboard?.writeText(text).then(
       () => {
-        setCopied(id)
-        setTimeout(() => setCopied((c) => (c === id ? null : c)), 1500)
+        setCopied(key)
+        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500)
       },
       () => {},
     )
   }
+  const inviteLink = (code: string) => `${window.location.origin}/register?code=${encodeURIComponent(code)}`
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
@@ -200,13 +201,19 @@ export function Workers() {
                   <span className="font-bold text-green">✓ signed up · {w.account.email}</span>
                 ) : w.inviteCode ? (
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-ink">Invite code</span>
+                    <span className="text-muted-ink">Invite</span>
                     <code className="rounded bg-cream px-1.5 py-0.5 font-bold text-ink">{w.inviteCode}</code>
                     <button
-                      onClick={() => copy(w.id, w.inviteCode!)}
+                      onClick={() => copy(`${w.id}:code`, w.inviteCode!)}
                       className="font-bold text-ink underline"
                     >
-                      {copied === w.id ? 'copied!' : 'copy'}
+                      {copied === `${w.id}:code` ? 'copied!' : 'copy code'}
+                    </button>
+                    <button
+                      onClick={() => copy(`${w.id}:link`, inviteLink(w.inviteCode!))}
+                      className="font-bold text-sky-dark underline"
+                    >
+                      {copied === `${w.id}:link` ? 'link copied!' : 'copy sign-up link'}
                     </button>
                     <span className="text-muted-ink">— hasn't signed up yet</span>
                   </span>

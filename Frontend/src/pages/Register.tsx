@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout, Field } from '../components/AuthLayout'
 import { Button } from '../components/Button'
 import { useAuth } from '../lib/auth'
@@ -8,8 +8,10 @@ import { homePathForRole } from '../lib/roles'
 export function Register() {
   const { user, loading, register } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const linkedCode = params.get('code')?.trim() ?? ''
 
-  const [inviteCode, setInviteCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(linkedCode)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [pin, setPin] = useState('')
@@ -52,7 +54,9 @@ export function Register() {
   return (
     <AuthLayout
       title="Set up your account"
-      subtitle="Use the invite code your manager gave you"
+      subtitle={
+        linkedCode ? 'Your invite is filled in — just add your details' : 'Use the invite code your manager gave you'
+      }
       footer={
         <>
           Already set up?{' '}
@@ -66,6 +70,7 @@ export function Register() {
         <Field
           label="Invite code"
           required
+          readOnly={!!linkedCode}
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value)}
         />
