@@ -25,37 +25,49 @@ export interface SplitConfig {
   commit: (args: { which: 'head' | 'tail'; splitAt: string; employeeId: number }) => void
 }
 
+/** "9:00 AM–5:00 PM" etc, joined; empty string if no windows. */
+function hoursLabel(windows: { start: string; end: string }[]): string {
+  return windows.map((w) => `${to12Hour(w.start)}–${to12Hour(w.end)}`).join(', ')
+}
+
 function CandidateList({
   candidates,
   onPick,
   empty,
 }: {
   candidates: Candidate[]
-  onPick: (id: number) => void
+  onPick: (id: number, covered?: { start: string; end: string }) => void
   empty: string
 }) {
   return (
-    <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
+    <div className="flex max-h-52 flex-col gap-1 overflow-y-auto">
       {candidates.length === 0 && <span className="px-2 py-1.5 font-body text-xs text-muted-ink">{empty}</span>}
       {candidates.map((c) => (
         <button
           key={c.employeeId}
-          onClick={() => onPick(c.employeeId)}
-          className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
+          onClick={() => onPick(c.employeeId, c.coveredWindow ?? undefined)}
+          className="flex flex-col gap-0.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-cream"
         >
-          <FruitAvatar kind={fruitForPerson(c)} size={22} />
-          <span className="font-body text-xs font-bold text-ink">{c.name}</span>
-          {c.standby && (
-            <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">
-              on-call
+          <span className="flex items-center gap-2">
+            <FruitAvatar kind={fruitForPerson(c)} size={22} />
+            <span className="font-body text-xs font-bold text-ink">{c.name}</span>
+            {c.standby && (
+              <span className="shrink-0 rounded-full border border-ink/25 px-1.5 py-px font-body text-[10px] font-semibold text-muted-ink">
+                on-call
+              </span>
+            )}
+            {c.coversFull ? null : c.available ? (
+              <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-orange">
+                part of shift
+              </span>
+            ) : (
+              <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">not free</span>
+            )}
+          </span>
+          {!c.coversFull && c.availWindows.length > 0 && (
+            <span className="pl-7 font-body text-[10px] text-muted-ink">
+              free {hoursLabel(c.availWindows)}
             </span>
-          )}
-          {!c.available ? (
-            <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-muted-ink">not free</span>
-          ) : (
-            !c.coversFull && (
-              <span className="ml-auto shrink-0 font-body text-[10px] font-semibold text-coral-dark">partial</span>
-            )
           )}
         </button>
       ))}
@@ -81,7 +93,7 @@ export function AssignPopover({
   /** Same list but including people whose availability doesn't cover the window. */
   candidatesAll: Candidate[]
   anchorRect: DOMRect
-  onPick: (employeeId: number) => void
+  onPick: (employeeId: number, covered?: { start: string; end: string }) => void
   onClose: () => void
   /** Present only for an existing person's shift — take them off it, gap or not. */
   onRemove?: () => void

@@ -288,15 +288,24 @@ export function Dashboard() {
     }
   }
 
-  async function handlePick(employeeId: number) {
+  async function handlePick(employeeId: number, covered?: { start: string; end: string }) {
     if (!picker || !board) return
     const { shiftIds, storeId, day, start, end } = picker
     setPicker(null)
+    // `covered` = the person only works part of this window; clamp their shift to
+    // it and let the uncovered part fall out as an open gap.
+    const clampStart = covered ? withTime(start, covered.start) : start
+    const clampEnd = covered ? withTime(end, covered.end) : end
     try {
       if (shiftIds.length > 0) {
-        await Promise.all(shiftIds.map((id) => api.updateShift(id, { employeeId })))
+        if (covered) {
+          if (shiftIds.length > 1) await collapseTo(shiftIds, clampStart, clampEnd)
+          await api.updateShift(shiftIds[0], { employeeId, start: clampStart, end: clampEnd })
+        } else {
+          await Promise.all(shiftIds.map((id) => api.updateShift(id, { employeeId })))
+        }
       } else {
-        await api.createShift({ employeeId, storeId, day, start, end })
+        await api.createShift({ employeeId, storeId, day, start: clampStart, end: clampEnd })
       }
       // gap cards are derived from real coverage on the next render, so just reload
       setBoard(await loadBoard())

@@ -151,6 +151,52 @@ export async function generateScheduleForStore(
     effectiveAvailability = effectiveAvailability.filter((a) => !offDays.get(a.employeeId)?.has(a.day));
   }
 
+  // Cross-store, same day: if someone already has a shift at another store, carve
+  // that time (plus a travel buffer) out of their availability here — so the
+  // solver can still send them here for a non-overlapping window ("Mango till 4,
+  // then Ciao for the night") but never double-books them.
+  const TRAVEL_MIN = 0;
+  const toMin = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  const otherShifts = await prisma.shift.findMany({
+    where: { storeId: { not: storeId }, employeeId: { in: [...empIdsInPlay] } },
+    select: { employeeId: true, day: true, start: true, end: true },
+  });
+  if (otherShifts.length > 0) {
+    const min = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+    const pad = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+    const busy = new Map<string, [number, number][]>(); // `${empId}|${day}` -> intervals
+    for (const s of otherShifts) {
+      if (s.employeeId == null) continue;
+      const k = `${s.employeeId}|${s.day}`;
+      (busy.get(k) ?? busy.set(k, []).get(k)!).push([
+        min(s.start) - TRAVEL_MIN,
+        min(s.end) + TRAVEL_MIN,
+      ]);
+    }
+    effectiveAvailability = effectiveAvailability.flatMap((a) => {
+      const b = busy.get(`${a.employeeId}|${a.day}`);
+      if (!b) return [a];
+      let free: [number, number][] = [[toMin(a.start), toMin(a.end)]];
+      for (const [bs, be] of b) {
+        const next: [number, number][] = [];
+        for (const [fs, fe] of free) {
+          if (be <= fs || bs >= fe) next.push([fs, fe]);
+          else {
+            if (bs > fs) next.push([fs, bs]);
+            if (be < fe) next.push([be, fe]);
+          }
+        }
+        free = next;
+      }
+      return free
+        .filter(([s, e]) => e - s >= 30)
+        .map((w) => ({ employeeId: a.employeeId, day: a.day, start: pad(w[0]), end: pad(w[1]) }));
+    });
+  }
+
   const anyoneOpens = !store.requiresOpenerSkill;
 
   // --- fixed (standing) shifts: place them verbatim, solve only the remaining need ---
