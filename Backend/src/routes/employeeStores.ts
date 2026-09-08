@@ -28,25 +28,36 @@ router.get('/:employeeId/:storeId', ...anyManager, async (req, res) => {
 });
 
 // POST /employeeStores  { employeeId, storeId, pin, proficiency, canOpen?, primary? }
+/** A 4-digit PIN not already used at this store. */
+async function freePin(storeId: number): Promise<string> {
+  for (let i = 0; i < 25; i++) {
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const clash = await prisma.employeeStore.findUnique({ where: { storeId_pin: { storeId, pin } } });
+    if (!clash) return pin;
+  }
+  throw new Error('Could not allocate a free PIN for this store');
+}
+
 router.post('/', ...requireManagerFor((req) => Number(req.body?.storeId)), async (req, res) => {
-  const { employeeId, storeId, pin, proficiency, canOpen, primary } = req.body ?? {};
-  if (!employeeId || !storeId || !pin || !proficiency) {
-    return res.status(400).json({ error: 'employeeId, storeId, pin, and proficiency are required' });
+  const { employeeId, storeId, proficiency, canOpen, primary } = req.body ?? {};
+  if (!employeeId || !storeId || !proficiency) {
+    return res.status(400).json({ error: 'employeeId, storeId, and proficiency are required' });
   }
   try {
     const link = await prisma.employeeStore.create({
       data: {
         employeeId,
         storeId,
-        pin,
+        pin: typeof req.body?.pin === 'string' && req.body.pin ? req.body.pin : await freePin(storeId),
         proficiency,
         ...(canOpen !== undefined ? { canOpen } : {}),
         ...(primary !== undefined ? { primary } : {}),
       },
     });
     res.json(link);
-  } catch {
-    res.status(500).json({ error: 'Failed to create employee-store link' });
+  } catch (e) {
+    const msg = e instanceof Error && e.message.includes('Unique') ? 'Already linked to that store' : 'Failed to link';
+    res.status(500).json({ error: msg });
   }
 });
 

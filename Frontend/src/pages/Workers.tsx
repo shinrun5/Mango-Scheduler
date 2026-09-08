@@ -48,6 +48,25 @@ export function Workers() {
     }
   }
 
+  async function unlinkStore(employeeId: number, storeId: number) {
+    setError(null)
+    try {
+      await api.removeWorkerFromStore(employeeId, storeId)
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update stores')
+    }
+  }
+  async function linkStore(employeeId: number, storeId: number) {
+    setError(null)
+    try {
+      await api.addWorkerToStore({ employeeId, storeId, proficiency: 'REGULAR' })
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update stores')
+    }
+  }
+
   function copy(id: number, code: string) {
     navigator.clipboard?.writeText(code).then(
       () => {
@@ -102,7 +121,7 @@ export function Workers() {
                   <span className="font-body text-[11px] text-muted-ink">
                     {w.hourLimit}h/wk · up to {w.maxShifts} days
                   </span>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     {w.stores.length === 0 && (
                       <span className="font-body text-[11px] text-coral-dark">no store assigned</span>
                     )}
@@ -113,8 +132,26 @@ export function Workers() {
                       >
                         {storeName(s.storeId)} · {s.proficiency}
                         {s.canOpen && <StarBadgeIcon size={10} />}
+                        <button
+                          onClick={() => void unlinkStore(w.id, s.storeId)}
+                          aria-label={`Remove from ${storeName(s.storeId)}`}
+                          className="ml-0.5 font-heading text-xs leading-none text-muted-ink hover:text-coral-dark"
+                        >
+                          ×
+                        </button>
                       </span>
                     ))}
+                    {stores
+                      .filter((st) => !w.stores.some((s) => s.storeId === st.id))
+                      .map((st) => (
+                        <button
+                          key={st.id}
+                          onClick={() => void linkStore(w.id, st.id)}
+                          className="rounded-full border-2 border-dashed border-ink/40 px-2 py-0.5 font-body text-[10px] font-bold text-muted-ink hover:border-ink hover:text-ink"
+                        >
+                          + {st.name}
+                        </button>
+                      ))}
                   </div>
                 </div>
                 <button

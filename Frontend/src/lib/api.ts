@@ -195,6 +195,10 @@ export const api = {
   deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
+  addWorkerToStore: (input: { employeeId: number; storeId: number; proficiency: Tier; canOpen?: boolean }) =>
+    sendJSON<EmployeeStore>('/employeeStores', 'POST', input),
+  removeWorkerFromStore: (employeeId: number, storeId: number) =>
+    request<{ message: string }>(`/employeeStores/${employeeId}/${storeId}`, { method: 'DELETE' }),
   getShifts: () => getJSON<Shift[]>('/shifts'),
   getShiftRequirements: () => getJSON<ShiftRequirement[]>('/shiftrequirements'),
   getStoreRequirements: (storeId: number) =>
