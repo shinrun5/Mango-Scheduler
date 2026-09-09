@@ -86,8 +86,10 @@ export function computeCandidates(args: {
     availWindows.sort((x, y) => x.start.localeCompare(y.start))
     // the normal list only offers people who can cover the WHOLE window; someone who
     // merely overlaps it (e.g. a night-only person vs a morning shift) shows up only
-    // under "add someone not free", tagged partial
-    if (!coversFull && !args.ignoreAvailability) continue
+    // under "add someone not free", tagged partial. On-call workers are the exception:
+    // they carry no availability by design and exist to be dropped in by hand, so they
+    // always show (ranked last).
+    if (!coversFull && !args.ignoreAvailability && !emp.standby) continue
 
     // already committed to an overlapping shift elsewhere (or here) that day?
     const busy = shifts.some(

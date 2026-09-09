@@ -282,6 +282,7 @@ function AddWorkerForm({
   const [storeId, setStoreId] = useState<number | ''>(defaultStoreId ?? stores[0]?.id ?? '')
   const [proficiency, setProficiency] = useState<Tier>('REGULAR')
   const [canOpen, setCanOpen] = useState(false)
+  const [standby, setStandby] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
@@ -292,6 +293,7 @@ function AddWorkerForm({
         name: name.trim(),
         hourLimit,
         maxShifts,
+        standby,
         store: storeId === '' ? undefined : { storeId, proficiency, canOpen },
       })
       onDone()
@@ -366,6 +368,10 @@ function AddWorkerForm({
       <label className="flex items-center gap-1.5 pb-1.5">
         <input type="checkbox" checked={canOpen} onChange={(e) => setCanOpen(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">Can open</span>
+      </label>
+      <label className="flex items-center gap-1.5 pb-1.5" title="Never auto-scheduled — a manager drops them in by hand, and they can pick up open shifts">
+        <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
+        <span className="font-body text-[11px] font-bold text-muted-ink">On-call</span>
       </label>
       <Button type="submit" disabled={busy || !name.trim()}>
         {busy ? 'Adding…' : 'Add'}
