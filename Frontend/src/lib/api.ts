@@ -245,6 +245,7 @@ export const api = {
       maxShifts: number
       standby?: boolean
       phone?: string | null
+      avatarFruit?: string | null
     },
   ) => sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
   deleteWorker: (id: number) =>

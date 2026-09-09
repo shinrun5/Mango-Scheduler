@@ -3,7 +3,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 import { canManageStore, requireAuth, requireRole } from "../lib/auth.js";
-import { isFruit } from "../lib/fruits.js";
+import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
@@ -49,6 +49,21 @@ async function takenFruits(employeeId: number): Promise<string[]> {
     select: { avatarFruit: true },
   });
   return [...new Set(others.map((o) => o.avatarFruit as string))];
+}
+
+/** { id, avatarFruit } for everyone (bar `exceptId`) sharing any of `storeIds`. */
+async function storeMates(storeIds: number[], exceptId: number) {
+  if (storeIds.length === 0) return [];
+  return prisma.employee.findMany({
+    where: { id: { not: exceptId }, employeeStores: { some: { storeId: { in: storeIds } } } },
+    select: { id: true, avatarFruit: true },
+  });
+}
+
+/** True if `fruit` is already in use (chosen or as a default) by someone at `storeIds`. */
+async function fruitTakenAt(fruit: string, storeIds: number[], exceptId: number): Promise<boolean> {
+  const mates = await storeMates(storeIds, exceptId);
+  return mates.some((m) => (m.avatarFruit ?? fruitFor(m.id)) === fruit);
 }
 
 async function freePin(storeId: number): Promise<string> {
@@ -297,6 +312,10 @@ router.post("/", ...anyManager, async (req, res) => {
           primary: store.primary ?? true,
         },
       });
+      // give them a fruit that's actually free at this store (the id-hash default
+      // can collide with a coworker's chosen or defaulted one)
+      const fruit = firstFreeFruit(employee.id, await storeMates([storeId], employee.id));
+      await prisma.employee.update({ where: { id: employee.id }, data: { avatarFruit: fruit } });
     }
     const rows = await roster();
     res.json(rows.find((r) => r.id === employee.id));
@@ -341,6 +360,22 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const phoneVal =
     phone === undefined ? undefined : typeof phone === "string" && phone.trim() ? phone.trim() : null;
 
+  // optional avatar fruit change (must be free at the worker's store(s))
+  const rawFruit = req.body?.avatarFruit;
+  let fruitVal: string | null | undefined;
+  if (rawFruit !== undefined) {
+    if (rawFruit !== null && !isFruit(rawFruit)) {
+      return res.status(400).json({ error: "Not a known fruit" });
+    }
+    if (rawFruit !== null) {
+      const links = await prisma.employeeStore.findMany({ where: { employeeId: id }, select: { storeId: true } });
+      if (await fruitTakenAt(rawFruit, links.map((l) => l.storeId), id)) {
+        return res.status(409).json({ error: "Someone at that store already has that fruit" });
+      }
+    }
+    fruitVal = rawFruit;
+  }
+
   try {
     const updated = await prisma.employee.update({
       where: { id },
@@ -350,6 +385,7 @@ router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
         ...(d !== undefined ? { maxShifts: d } : {}),
         ...(standby !== undefined ? { standby: !!standby } : {}),
         ...(phoneVal !== undefined ? { phone: phoneVal } : {}),
+        ...(fruitVal !== undefined ? { avatarFruit: fruitVal } : {}),
       },
       include: { user: { select: { id: true } } },
     });

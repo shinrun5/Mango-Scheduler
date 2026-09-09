@@ -3,7 +3,7 @@ import { Button } from '../components/Button'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
-import { fruitForPerson } from '../lib/fruit'
+import { FRUITS, fruitFor, fruitForPerson } from '../lib/fruit'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import { useStore } from '../lib/store-context'
 import type { DayOfWeek, FixedShift, RosterWorker, Store, Tier } from '../types'
@@ -219,6 +219,17 @@ export function Workers() {
               {editing === w.id && (
                 <EditWorkerForm
                   worker={w}
+                  takenFruits={
+                    new Set(
+                      workers
+                        .filter(
+                          (o) =>
+                            o.id !== w.id &&
+                            o.stores.some((s) => w.stores.some((ws) => ws.storeId === s.storeId)),
+                        )
+                        .map((o) => o.avatarFruit ?? fruitFor(o.id)),
+                    )
+                  }
                   onDone={() => {
                     setEditing(null)
                     void refresh()
@@ -382,10 +393,12 @@ function AddWorkerForm({
 
 function EditWorkerForm({
   worker,
+  takenFruits,
   onDone,
   onError,
 }: {
   worker: RosterWorker
+  takenFruits: Set<string>
   onDone: () => void
   onError: (msg: string | null) => void
 }) {
@@ -394,6 +407,7 @@ function EditWorkerForm({
   const [hourLimit, setHourLimit] = useState(worker.hourLimit)
   const [maxShifts, setMaxShifts] = useState(worker.maxShifts)
   const [standby, setStandby] = useState(worker.standby)
+  const [fruit, setFruit] = useState<string>(worker.avatarFruit ?? fruitFor(worker.id))
   const [busy, setBusy] = useState(false)
 
   const field = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
@@ -410,6 +424,7 @@ function EditWorkerForm({
         hourLimit,
         maxShifts,
         standby,
+        avatarFruit: fruit,
       })
       onDone()
     } catch (err) {
@@ -463,6 +478,36 @@ function EditWorkerForm({
         <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
         <span className="font-body text-[11px] font-bold text-muted-ink">On-call</span>
       </label>
+      <div className="flex w-full flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">
+          Fruit{' '}
+          <span className="font-normal normal-case">— greyed ones are taken by a coworker</span>
+        </span>
+        <div className="flex flex-wrap gap-1">
+          {FRUITS.map((f) => {
+            const isMine = f === fruit
+            const locked = !isMine && takenFruits.has(f)
+            return (
+              <button
+                key={f}
+                type="button"
+                disabled={locked}
+                title={locked ? `${f} — taken` : f}
+                onClick={() => setFruit(f)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 ${
+                  isMine
+                    ? 'border-ink bg-paper shadow-[1.5px_1.5px_0_var(--color-ink)]'
+                    : locked
+                      ? 'border-ink/15 opacity-30'
+                      : 'border-ink/20 hover:bg-paper'
+                }`}
+              >
+                <FruitAvatar kind={f} size={22} />
+              </button>
+            )
+          })}
+        </div>
+      </div>
       <Button type="submit" disabled={busy || !name.trim()}>
         {busy ? 'Saving…' : 'Save'}
       </Button>
