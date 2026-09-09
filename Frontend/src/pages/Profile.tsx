@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { FruitPicker } from '../components/FruitPicker'
 import { StarBadgeIcon } from '../components/icons'
@@ -103,13 +103,12 @@ export function Profile() {
         onError={setError}
       />
 
-      {profile.role !== 'EMPLOYEE' && (
-        <ManagerAlerts
-          availabilityUpdates={profile.alerts.availabilityUpdates}
-          onSaved={load}
-          onError={setError}
-        />
-      )}
+      <AlertPrefs
+        isManager={profile.role !== 'EMPLOYEE'}
+        alerts={profile.alerts}
+        onSaved={load}
+        onError={setError}
+      />
 
       {e && (
         <>
@@ -408,22 +407,54 @@ function DayPrefs({
   )
 }
 
-function ManagerAlerts({
-  availabilityUpdates,
+function AlertToggle({
+  on,
+  label,
+  busy,
+  onClick,
+}: {
+  on: boolean
+  label: ReactNode
+  busy: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="mt-2 flex w-full items-center gap-2.5 rounded-xl border-2 border-ink bg-cream px-3 py-2 text-left disabled:opacity-60"
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink font-heading text-xs font-bold ${
+          on ? 'bg-ink text-paper' : 'bg-paper text-transparent'
+        }`}
+      >
+        ✓
+      </span>
+      <span className="font-body text-xs text-ink">{label}</span>
+    </button>
+  )
+}
+
+function AlertPrefs({
+  isManager,
+  alerts,
   onSaved,
   onError,
 }: {
-  availabilityUpdates: boolean
+  isManager: boolean
+  alerts: { availabilityUpdates: boolean; chatMessages: boolean }
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
   const [busy, setBusy] = useState(false)
 
-  async function toggle() {
+  async function save(patch: { availabilityUpdates?: boolean; chatMessages?: boolean }) {
     onError(null)
     setBusy(true)
     try {
-      await api.setAvailabilityAlerts(!availabilityUpdates)
+      await api.setAlerts(patch)
       await onSaved()
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not save your alert settings')
@@ -435,23 +466,30 @@ function ManagerAlerts({
   return (
     <div className={card}>
       <h2 className="font-heading text-sm font-bold text-ink">Alerts</h2>
-      <button
-        type="button"
-        onClick={() => void toggle()}
-        disabled={busy}
-        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border-2 border-ink bg-cream px-3 py-2 text-left disabled:opacity-60"
-      >
-        <span
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink font-heading text-xs font-bold ${
-            availabilityUpdates ? 'bg-ink text-paper' : 'bg-paper text-transparent'
-          }`}
-        >
-          ✓
-        </span>
-        <span className="font-body text-xs text-ink">
-          <b>Availability updates</b> — email + notify me when a worker changes a future week's hours
-        </span>
-      </button>
+      {isManager && (
+        <AlertToggle
+          on={alerts.availabilityUpdates}
+          busy={busy}
+          onClick={() => void save({ availabilityUpdates: !alerts.availabilityUpdates })}
+          label={
+            <>
+              <b>Availability updates</b> — email + notify me when a worker changes a future week's
+              hours
+            </>
+          }
+        />
+      )}
+      <AlertToggle
+        on={alerts.chatMessages}
+        busy={busy}
+        onClick={() => void save({ chatMessages: !alerts.chatMessages })}
+        label={
+          <>
+            <b>Chat messages</b> — email me when there are new chat messages I haven't seen (at most
+            once every 15 min)
+          </>
+        }
+      />
     </div>
   )
 }

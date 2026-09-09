@@ -132,8 +132,8 @@ export interface Profile {
   name: string | null
   phone: string | null
   role: Role
-  /** manager notification opt-ins */
-  alerts: { availabilityUpdates: boolean }
+  /** notification opt-ins */
+  alerts: { availabilityUpdates: boolean; chatMessages: boolean }
   employee: {
     id: number
     name: string
@@ -267,4 +267,16 @@ export interface GenerateScheduleResult {
   spread: number | null
   shiftsPerEmployee: Record<string, number>
   gaps: ScheduleGap[]
+}
+
+export interface ChatMessage {
+  id: number
+  storeId: number
+  body: string
+  createdAt: string
+  authorName: string
+  /** stable per-person key for the deterministic default avatar */
+  authorKey: number
+  authorFruit: string | null
+  mine: boolean
 }

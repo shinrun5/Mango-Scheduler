@@ -38,6 +38,8 @@ model Store {
   schedule  Schedule?
   snapshots ScheduleSnapshot[]
   fixedShifts FixedShift[]
+  messages    Message[]
+  messageReads MessageRead[]
 }
 
 // A standing weekly assignment: this employee always works this store/day/window.
@@ -212,13 +214,45 @@ model User {
   role       Role     @default(EMPLOYEE)
   // manager opt-in: get pinged when a worker changes a future week's availability
   notifyOnAvailabilityUpdate Boolean @default(false)
+  // opt-in: email me when there are new store-chat messages I haven't seen
+  notifyOnChatMessage Boolean  @default(false)
+  lastChatEmailAt     DateTime? // rate-limits the chat digest email
   org        Org?     @relation(fields: [orgId], references: [id])
   orgId      Int?
   employee   Employee? @relation(fields: [employeeId], references: [id])
   employeeId Int?      @unique
   managerStores ManagerStore[]
   notifications Notification[]
+  messages      Message[]
+  messageReads  MessageRead[]
   createdAt  DateTime @default(now())
+}
+
+// One store's group chat. Membership = anyone whose auth resolves this store
+// (its employees, its managers, the org owner). Plain text only.
+model Message {
+  id         Int       @id @default(autoincrement())
+  store      Store     @relation(fields: [storeId], references: [id])
+  storeId    Int
+  user       User?     @relation(fields: [userId], references: [id])
+  userId     Int?      // null once the author's account is removed
+  authorName String    // denormalised so old messages still render
+  body       String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([storeId, id])
+}
+
+// How far through a store's chat one user has read (drives the unread badge).
+model MessageRead {
+  user       User     @relation(fields: [userId], references: [id])
+  userId     Int
+  store      Store    @relation(fields: [storeId], references: [id])
+  storeId    Int
+  lastReadAt DateTime @default(now())
+
+  @@id([userId, storeId])
 }
 
 enum NotificationKind {

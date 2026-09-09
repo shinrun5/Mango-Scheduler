@@ -90,3 +90,12 @@ export function BellIcon({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
+
+export function ChatIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M4 5.5h16v11H9l-4 4v-4H4z" />
+      <path d="M8 9.5h8M8 12.5h5" />
+    </svg>
+  )
+}

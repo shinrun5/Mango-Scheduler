@@ -223,7 +223,7 @@ router.get('/profile', requireAuth, async (req, res) => {
   const u = req.user!;
   const account = await prisma.user.findUnique({
     where: { id: u.id },
-    select: { name: true, phone: true, notifyOnAvailabilityUpdate: true },
+    select: { name: true, phone: true, notifyOnAvailabilityUpdate: true, notifyOnChatMessage: true },
   });
   let employee = null;
   if (u.employeeId) {
@@ -256,22 +256,39 @@ router.get('/profile', requireAuth, async (req, res) => {
     name: account?.name ?? null,
     phone: account?.phone ?? null,
     role: u.role,
-    alerts: { availabilityUpdates: account?.notifyOnAvailabilityUpdate ?? false },
+    alerts: {
+      availabilityUpdates: account?.notifyOnAvailabilityUpdate ?? false,
+      chatMessages: account?.notifyOnChatMessage ?? false,
+    },
     employee,
   });
 });
 
-// PUT /auth/alerts  { availabilityUpdates: boolean } — manager notification opt-ins
+// PUT /auth/alerts  { availabilityUpdates?, chatMessages? } — notification opt-ins
 router.put('/alerts', requireAuth, async (req, res) => {
   const u = req.user!;
-  if (typeof req.body?.availabilityUpdates !== 'boolean') {
-    return res.status(400).json({ error: 'availabilityUpdates must be true or false' });
+  const data: { notifyOnAvailabilityUpdate?: boolean; notifyOnChatMessage?: boolean } = {};
+  if (req.body?.availabilityUpdates !== undefined) {
+    if (typeof req.body.availabilityUpdates !== 'boolean') {
+      return res.status(400).json({ error: 'availabilityUpdates must be true or false' });
+    }
+    data.notifyOnAvailabilityUpdate = req.body.availabilityUpdates;
   }
-  await prisma.user.update({
-    where: { id: u.id },
-    data: { notifyOnAvailabilityUpdate: req.body.availabilityUpdates },
+  if (req.body?.chatMessages !== undefined) {
+    if (typeof req.body.chatMessages !== 'boolean') {
+      return res.status(400).json({ error: 'chatMessages must be true or false' });
+    }
+    data.notifyOnChatMessage = req.body.chatMessages;
+  }
+  if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+
+  const updated = await prisma.user.update({ where: { id: u.id }, data });
+  res.json({
+    alerts: {
+      availabilityUpdates: updated.notifyOnAvailabilityUpdate,
+      chatMessages: updated.notifyOnChatMessage,
+    },
   });
-  res.json({ alerts: { availabilityUpdates: req.body.availabilityUpdates } });
 });
 
 // PUT /auth/profile  { name?, phone? } — edit your own name / contact number

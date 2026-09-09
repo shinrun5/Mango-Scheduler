@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarIcon, ClockIcon, SwapIcon, UserIcon } from './icons'
+import { CalendarIcon, ChatIcon, ClockIcon, SwapIcon, UserIcon } from './icons'
+import { useChatUnread } from '../lib/use-chat-unread'
 import { FruitAvatar } from './FruitAvatar'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '../lib/auth'
@@ -9,8 +10,16 @@ const NAV = [
   { to: '/my-shifts', label: 'Shifts', Icon: CalendarIcon },
   { to: '/marketplace', label: 'Market', Icon: SwapIcon },
   { to: '/availability', label: 'Availability', Icon: ClockIcon },
+  { to: '/chat', label: 'Chat', Icon: ChatIcon },
   { to: '/profile', label: 'Profile', Icon: UserIcon },
 ]
+
+const badge = (n: number) =>
+  n > 0 ? (
+    <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-coral px-1 font-body text-[10px] font-bold text-white">
+      {n > 9 ? '9+' : n}
+    </span>
+  ) : null
 
 const topTab = ({ isActive }: { isActive: boolean }) =>
   `rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
@@ -23,8 +32,9 @@ const bottomTab = ({ isActive }: { isActive: boolean }) =>
   }`
 
 /** Employee chrome: nav pills in the top bar on desktop, a bottom tab bar on phones. */
-export function EmployeeLayout(): ReactNode {
+export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNode {
   const { user, logout } = useAuth()
+  const unread = useChatUnread()
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -37,6 +47,7 @@ export function EmployeeLayout(): ReactNode {
           {NAV.map(({ to, label }) => (
             <NavLink key={to} to={to} className={topTab}>
               {label}
+              {to === '/chat' && badge(unread)}
             </NavLink>
           ))}
         </div>
@@ -58,7 +69,7 @@ export function EmployeeLayout(): ReactNode {
       </div>
 
       {/* pages add pb-24 sm:pb-6 so the fixed bottom bar never covers content */}
-      <Outlet />
+      {children ?? <Outlet />}
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-ink bg-paper pb-[env(safe-area-inset-bottom)] sm:hidden">
         {NAV.map(({ to, label, Icon }) => (
@@ -70,7 +81,12 @@ export function EmployeeLayout(): ReactNode {
                     isActive ? 'opacity-100' : 'opacity-0'
                   }`}
                 />
-                <Icon size={22} />
+                <span className="relative">
+                  <Icon size={22} />
+                  {to === '/chat' && unread > 0 && (
+                    <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-coral" />
+                  )}
+                </span>
                 {label}
               </>
             )}

@@ -2,6 +2,7 @@ import type {
   AuthUser,
   ChangeRequest,
   ChangeType,
+  ChatMessage,
   DayOfWeek,
   Employee,
   FixedShift,
@@ -131,11 +132,13 @@ export const api = {
     sendJSON<{ ok: true }>('/auth/profile', 'PUT', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
-  /** Manager opt-in: get notified when a worker updates a future week's availability. */
-  setAvailabilityAlerts: (on: boolean) =>
-    sendJSON<{ alerts: { availabilityUpdates: boolean } }>('/auth/alerts', 'PUT', {
-      availabilityUpdates: on,
-    }),
+  /** Toggle notification opt-ins (availability changes / new chat messages). */
+  setAlerts: (patch: { availabilityUpdates?: boolean; chatMessages?: boolean }) =>
+    sendJSON<{ alerts: { availabilityUpdates: boolean; chatMessages: boolean } }>(
+      '/auth/alerts',
+      'PUT',
+      patch,
+    ),
 
   // --- notifications ---
   getNotifications: () =>
@@ -345,4 +348,17 @@ export const api = {
       needOpen: boolean
     }>,
   ) => sendJSON<ShiftRequirement>(`/shiftrequirements/${id}`, 'PUT', patch),
+
+  // --- per-store group chat ---
+  /** Latest page, or (with `after`) everything newer, or (with `before`) the page just older. */
+  getChatMessages: (storeId: number, opts?: { after?: number; before?: number }) => {
+    const q = opts?.after != null ? `?after=${opts.after}` : opts?.before != null ? `?before=${opts.before}` : ''
+    return getJSON<{ messages: ChatMessage[]; hasMore: boolean }>(`/chat/${storeId}/messages${q}`)
+  },
+  sendChatMessage: (storeId: number, body: string) =>
+    sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body }),
+  markChatRead: (storeId: number) =>
+    sendJSON<{ ok: true }>(`/chat/${storeId}/read`, 'POST', {}),
+  getChatUnread: () =>
+    getJSON<{ total: number; byStore: Record<number, number> }>('/chat/unread'),
 }

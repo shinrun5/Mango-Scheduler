@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
 import { NotificationBell } from './NotificationBell'
 import { UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useChatUnread } from '../lib/use-chat-unread'
 import { StoreProvider, useStore } from '../lib/store-context'
 
 const tab = ({ isActive }: { isActive: boolean }) =>
@@ -12,21 +13,22 @@ const tab = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'bg-ink text-white' : 'bg-paper text-ink'
   }`
 
-export function ManagerLayout() {
+export function ManagerLayout({ children }: { children?: ReactNode }) {
   return (
     <StoreProvider>
-      <Chrome />
+      <Chrome>{children}</Chrome>
     </StoreProvider>
   )
 }
 
 /** Logo, store switcher, nav tabs, logout — inside StoreProvider so the switcher works.
  * On mobile the identity row and the nav strip stack; the nav scrolls sideways. */
-function Chrome() {
+function Chrome({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth()
   const location = useLocation()
   const { stores, storeId, setStoreId } = useStore()
   const [pending, setPending] = useState(0)
+  const unread = useChatUnread()
 
   useEffect(() => {
     Promise.all([api.getChangeRequests('PENDING'), api.getTimeOff(true)])
@@ -94,6 +96,9 @@ function Chrome() {
           <NavLink to="/requests" className={tab}>
             Requests{pending > 0 ? ` (${pending})` : ''}
           </NavLink>
+          <NavLink to="/chat" className={tab}>
+            Chat{unread > 0 ? ` (${unread > 9 ? '9+' : unread})` : ''}
+          </NavLink>
           <NavLink to="/stores" className={tab}>
             Stores
           </NavLink>
@@ -105,7 +110,7 @@ function Chrome() {
           </NavLink>
         </div>
       </div>
-      <Outlet />
+      {children ?? <Outlet />}
     </div>
   )
 }

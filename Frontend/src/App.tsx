@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
 import { Availability } from './pages/Availability'
+import { Chat } from './pages/Chat'
 import { Dashboard } from './pages/Dashboard'
 import { History } from './pages/History'
 import { Login } from './pages/Login'
@@ -27,6 +28,17 @@ function RootRedirect() {
     )
   }
   return <Navigate to={user ? homePathForRole(user.role) : '/login'} replace />
+}
+
+/** One /chat URL for everyone — wrapped in whichever chrome matches the role. */
+function ChatScreen() {
+  const { user } = useAuth()
+  const Layout = user?.role === 'EMPLOYEE' ? EmployeeLayout : ManagerLayout
+  return (
+    <Layout>
+      <Chat />
+    </Layout>
+  )
 }
 
 export default function App() {
@@ -57,6 +69,10 @@ export default function App() {
             <Route path="/availability" element={<Availability />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/chat" element={<ChatScreen />} />
         </Route>
 
         <Route path="/" element={<RootRedirect />} />
