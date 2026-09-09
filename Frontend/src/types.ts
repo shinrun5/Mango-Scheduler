@@ -201,6 +201,18 @@ export interface MyShift extends Shift {
   coworkers: ShiftCoworker[]
 }
 
+export interface TeamShift {
+  storeId: number
+  day: DayOfWeek
+  start: string
+  end: string
+  /** null = an open (unassigned) slot */
+  employeeId: number | null
+  name: string
+  avatarKey: number
+  avatarFruit: string | null
+}
+
 export interface MyShiftsResponse {
   published: boolean
   /** false while a new week is being drafted — shifts are shown read-only, no swaps */
@@ -208,6 +220,8 @@ export interface MyShiftsResponse {
   publishedAt: string | null
   weekStart: string | null
   shifts: MyShift[]
+  /** every shift at the shown store(s) — the whole team's week */
+  team: TeamShift[]
   stores: {
     storeId: number
     storeName: string
@@ -301,4 +315,13 @@ export interface ChatMessage {
   authorKey: number
   authorFruit: string | null
   mine: boolean
+}
+
+export interface DmPeer {
+  userId: number
+  name: string
+  avatarKey: number
+  avatarFruit: string | null
+  unread: number
+  lastMessageAt: string | null
 }

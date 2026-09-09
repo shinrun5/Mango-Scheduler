@@ -230,7 +230,26 @@ model User {
   notifications Notification[]
   messages      Message[]
   messageReads  MessageRead[]
+  dmSent        DirectMessage[] @relation("DmSent")
+  dmReceived    DirectMessage[] @relation("DmReceived")
   createdAt  DateTime @default(now())
+}
+
+// A 1-to-1 private message between two logins who share a store. No channel/thread
+// row — a conversation is just every DirectMessage between the pair. `readAt` is
+// set when the recipient has seen it (drives the unread badge).
+model DirectMessage {
+  id          Int       @id @default(autoincrement())
+  sender      User      @relation("DmSent", fields: [senderId], references: [id])
+  senderId    Int
+  recipient   User      @relation("DmReceived", fields: [recipientId], references: [id])
+  recipientId Int
+  body        String
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  @@index([senderId, recipientId, id])
+  @@index([recipientId, senderId, id])
 }
 
 // One store's group chat. Membership = anyone whose auth resolves this store

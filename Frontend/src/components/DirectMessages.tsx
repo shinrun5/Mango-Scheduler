@@ -1,49 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Button } from '../components/Button'
-import { DirectMessages } from '../components/DirectMessages'
-import { MessageList } from '../components/MessageList'
+import { Button } from './Button'
+import { FruitAvatar } from './FruitAvatar'
+import { MessageList } from './MessageList'
 import { api } from '../lib/api'
-import type { ChatMessage, Store } from '../types'
+import { fruitForPerson } from '../lib/fruit'
+import { relativeTime } from '../lib/time'
+import type { ChatMessage, DmPeer } from '../types'
 
 const POLL_MS = 3000
-const STORE_KEY = 'fruitcrew.chatStoreId'
 
-const readStoreId = (): number | null => {
-  try {
-    return Number(localStorage.getItem(STORE_KEY)) || null
-  } catch {
-    return null
-  }
-}
-
-export function Chat() {
-  const [mode, setMode] = useState<'store' | 'direct'>('store')
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col p-4 pb-24 sm:p-6 sm:pb-6">
-      <div className="flex items-center gap-2">
-        <h1 className="font-heading text-lg font-bold text-ink">Chat</h1>
-        <div className="ml-auto flex gap-1.5">
-          {(['store', 'direct'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
-                mode === m ? 'bg-ink text-white' : 'bg-paper text-ink'
-              }`}
-            >
-              {m === 'store' ? 'Store' : 'Direct'}
-            </button>
-          ))}
-        </div>
-      </div>
-      {mode === 'store' ? <StoreChat /> : <DirectMessages />}
-    </div>
-  )
-}
-
-function StoreChat() {
-  const [stores, setStores] = useState<Store[]>([])
-  const [storeId, setStoreId] = useState<number | null>(null)
+/** Private 1-to-1 messaging: a list of people who share a store with you, and a
+ * thread with whoever you pick. */
+export function DirectMessages() {
+  const [peers, setPeers] = useState<DmPeer[]>([])
+  const [active, setActive] = useState<DmPeer | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -55,77 +25,57 @@ function StoreChat() {
   const stickToBottom = useRef(true)
   const lastId = messages.length ? messages[messages.length - 1].id : 0
 
-  useEffect(() => {
-    api
-      .getStores()
-      .then((list) => {
-        setStores(list)
-        const saved = readStoreId()
-        setStoreId(list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null)
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your stores'))
-  }, [])
+  const loadPeers = useCallback(
+    () => api.getDmPeers().then((r) => setPeers(r.peers)).catch(() => {}),
+    [],
+  )
 
-  const pickStore = (id: number) => {
-    setStoreId(id)
-    try {
-      localStorage.setItem(STORE_KEY, String(id))
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // initial page whenever the store changes
   useEffect(() => {
-    if (storeId == null) return
+    loadPeers().finally(() => setLoading(false))
+  }, [loadPeers])
+
+  // open a thread
+  useEffect(() => {
+    if (!active) return
     let live = true
-    setLoading(true)
     setMessages([])
     stickToBottom.current = true
     api
-      .getChatMessages(storeId)
+      .getDmMessages(active.userId)
       .then((r) => {
         if (!live) return
         setMessages(r.messages)
         setHasMore(r.hasMore)
-        void api.markChatRead(storeId).catch(() => {})
+        void api.markDmRead(active.userId).then(loadPeers).catch(() => {})
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : 'Could not load messages'))
-      .finally(() => live && setLoading(false))
     return () => {
       live = false
     }
-  }, [storeId])
+  }, [active, loadPeers])
 
-  // poll for new messages while the tab is visible
+  // poll the open thread + the peer list while visible
   useEffect(() => {
-    if (storeId == null) return
     const tick = async () => {
       if (document.visibilityState !== 'visible') return
+      void loadPeers()
+      if (!active) return
       try {
-        const r = await api.getChatMessages(storeId, { after: lastId })
+        const r = await api.getDmMessages(active.userId, { after: lastId })
         if (r.messages.length === 0) return
         setMessages((cur) => {
           const seen = new Set(cur.map((m) => m.id))
           return [...cur, ...r.messages.filter((m) => !seen.has(m.id))]
         })
-        void api.markChatRead(storeId).catch(() => {})
+        void api.markDmRead(active.userId).then(loadPeers).catch(() => {})
       } catch {
         /* keep polling */
       }
     }
     const h = setInterval(tick, POLL_MS)
-    const onVis = () => {
-      if (document.visibilityState === 'visible') void tick()
-    }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      clearInterval(h)
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [storeId, lastId])
+    return () => clearInterval(h)
+  }, [active, lastId, loadPeers])
 
-  // remember whether we're pinned to the bottom before each render
   const onScroll = () => {
     const el = scrollRef.current
     if (!el) return
@@ -138,12 +88,11 @@ function StoreChat() {
   }, [messages])
 
   const loadEarlier = useCallback(async () => {
-    if (storeId == null || messages.length === 0) return
-    const before = messages[0].id
+    if (!active || messages.length === 0) return
     const el = scrollRef.current
     const prevHeight = el?.scrollHeight ?? 0
     try {
-      const r = await api.getChatMessages(storeId, { before })
+      const r = await api.getDmMessages(active.userId, { before: messages[0].id })
       stickToBottom.current = false
       setHasMore(r.hasMore)
       setMessages((cur) => {
@@ -156,18 +105,19 @@ function StoreChat() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load older messages')
     }
-  }, [storeId, messages])
+  }, [active, messages])
 
   async function send() {
     const body = draft.trim()
-    if (!body || sending || storeId == null) return
+    if (!body || sending || !active) return
     setSending(true)
     setError(null)
     try {
-      const { message } = await api.sendChatMessage(storeId, body)
+      const { message } = await api.sendDm(active.userId, body)
       setDraft('')
       stickToBottom.current = true
       setMessages((cur) => (cur.some((m) => m.id === message.id) ? cur : [...cur, message]))
+      void loadPeers()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send')
     } finally {
@@ -175,36 +125,69 @@ function StoreChat() {
     }
   }
 
-  return (
-    <div className="flex flex-col">
-      {stores.length > 1 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {stores.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => pickStore(s.id)}
-              className={`rounded-full border-2 border-ink px-2.5 py-1 font-heading text-xs font-bold ${
-                s.id === storeId ? 'bg-ink text-white' : 'bg-paper text-ink'
-              }`}
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <p className="mt-1 mb-3 font-body text-xs text-muted-ink">
-        Everyone who works this store — messages are visible to the whole crew and their managers.
-      </p>
+  if (loading) return <p className="mt-4 font-body text-sm text-muted-ink">Loading…</p>
 
+  if (!active) {
+    if (peers.length === 0) {
+      return (
+        <p className="mt-4 font-body text-sm text-muted-ink">
+          Nobody to message yet — your coworkers show up here once they have an account.
+        </p>
+      )
+    }
+    return (
+      <div className="mt-3 flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
+        {peers.map((p) => (
+          <button
+            key={p.userId}
+            onClick={() => setActive(p)}
+            className="flex items-center gap-2.5 border-b-2 border-ink/10 px-3 py-2.5 text-left last:border-b-0 hover:bg-cream"
+          >
+            <FruitAvatar
+              kind={fruitForPerson({ employeeId: p.avatarKey, avatarFruit: p.avatarFruit })}
+              size={28}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-heading text-sm font-bold text-ink">{p.name}</span>
+              {p.lastMessageAt && (
+                <span className="font-body text-[11px] text-muted-ink">
+                  {relativeTime(p.lastMessageAt)}
+                </span>
+              )}
+            </span>
+            {p.unread > 0 && (
+              <span className="rounded-full bg-coral px-1.5 font-body text-[10px] font-bold text-white">
+                {p.unread > 9 ? '9+' : p.unread}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 flex flex-col">
+      <button
+        onClick={() => setActive(null)}
+        className="mb-2 self-start font-body text-xs font-bold text-sky-dark"
+      >
+        ← everyone
+      </button>
       <div className="flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
+        <div className="flex items-center gap-2 border-b-2 border-ink/10 bg-cream px-3 py-2">
+          <FruitAvatar
+            kind={fruitForPerson({ employeeId: active.avatarKey, avatarFruit: active.avatarFruit })}
+            size={22}
+          />
+          <span className="font-heading text-sm font-bold text-ink">{active.name}</span>
+        </div>
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="max-h-[calc(100vh-16rem)] min-h-[16rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
+          className="max-h-[calc(100vh-19rem)] min-h-[14rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
         >
-          {loading ? (
-            <p className="py-8 text-center font-body text-sm text-muted-ink">Loading…</p>
-          ) : messages.length === 0 ? (
+          {messages.length === 0 ? (
             <p className="py-8 text-center font-body text-sm text-muted-ink">
               No messages yet — say hi 👋
             </p>
@@ -220,11 +203,10 @@ function StoreChat() {
                   </button>
                 </div>
               )}
-              <MessageList messages={messages} />
+              <MessageList messages={messages} peerName={active.name} />
             </>
           )}
         </div>
-
         <div className="flex items-end gap-2 border-t-2 border-ink/10 p-2.5">
           <textarea
             value={draft}
@@ -236,7 +218,7 @@ function StoreChat() {
               }
             }}
             rows={1}
-            placeholder="Message the crew…"
+            placeholder={`Message ${active.name.split(' ')[0]}…`}
             className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
           />
           <Button onClick={() => void send()} disabled={sending || !draft.trim()} className="shrink-0">
@@ -244,7 +226,6 @@ function StoreChat() {
           </Button>
         </div>
       </div>
-
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
     </div>
   )

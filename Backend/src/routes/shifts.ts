@@ -32,6 +32,17 @@ interface Coworker {
   avatarFruit: string | null;
 }
 
+interface TeamShift {
+  storeId: number;
+  day: DayOfWeek;
+  start: string;
+  end: string;
+  employeeId: number | null; // null = an open (unassigned) slot
+  name: string;
+  avatarKey: number;
+  avatarFruit: string | null;
+}
+
 // The signed-in employee's own shifts, per store.
 //   - store's schedule is published  -> live Shift rows (marketplace actions work)
 //   - a draft is in progress but the store has a posted snapshot -> that frozen
@@ -56,6 +67,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     coworkers: Coworker[];
   }[] = [];
   const stores: { storeId: number; storeName: string; publishedAt: Date | null; weekStart: Date | null; live: boolean }[] = [];
+  const team: TeamShift[] = [];
   let synthetic = 0;
 
   for (const l of links) {
@@ -63,27 +75,41 @@ router.get('/mine', requireAuth, async (req, res) => {
     if (!sched) continue;
 
     if (sched.publishedAt) {
-      const [rows, others] = await Promise.all([
-        prisma.shift.findMany({
-          where: { employeeId, storeId: l.storeId },
-          orderBy: [{ day: 'asc' }, { start: 'asc' }],
-        }),
-        prisma.shift.findMany({
-          where: { storeId: l.storeId, employeeId: { not: null, notIn: [employeeId] } },
-          select: {
-            employeeId: true,
-            day: true,
-            start: true,
-            end: true,
-            employee: { select: { name: true, avatarFruit: true } },
-          },
-        }),
-      ]);
-      for (const r of rows) {
+      const all = await prisma.shift.findMany({
+        where: { storeId: l.storeId },
+        select: {
+          id: true,
+          employeeId: true,
+          day: true,
+          start: true,
+          end: true,
+          employee: { select: { name: true, avatarFruit: true } },
+        },
+        orderBy: [{ day: 'asc' }, { start: 'asc' }],
+      });
+      for (const s of all) {
+        team.push({
+          storeId: l.storeId,
+          day: s.day,
+          start: s.start.toISOString(),
+          end: s.end.toISOString(),
+          employeeId: s.employeeId,
+          name: s.employee?.name ?? 'Open shift',
+          avatarKey: s.employeeId ?? 0,
+          avatarFruit: s.employee?.avatarFruit ?? null,
+        });
+      }
+      for (const r of all.filter((s) => s.employeeId === employeeId)) {
         const mS = minOf(r.start);
         const mE = minOf(r.end);
-        const coworkers: Coworker[] = others
-          .filter((o) => o.day === r.day && overlaps(mS, mE, minOf(o.start), minOf(o.end)))
+        const coworkers: Coworker[] = all
+          .filter(
+            (o) =>
+              o.employeeId != null &&
+              o.employeeId !== employeeId &&
+              o.day === r.day &&
+              overlaps(mS, mE, minOf(o.start), minOf(o.end)),
+          )
           .map((o) => ({
             name: o.employee?.name ?? 'A coworker',
             avatarKey: o.employeeId ?? 0,
@@ -92,7 +118,7 @@ router.get('/mine', requireAuth, async (req, res) => {
         shiftsOut.push({
           id: r.id,
           employeeId: r.employeeId,
-          storeId: r.storeId,
+          storeId: l.storeId,
           day: r.day,
           start: r.start.toISOString(),
           end: r.end.toISOString(),
@@ -116,18 +142,30 @@ router.get('/mine', requireAuth, async (req, res) => {
         start: string;
         end: string;
       }[];
-      // current fruit for anyone I might be working with
-      const coworkerIds = [
-        ...new Set(frozen.filter((f) => f.employeeId != null && f.employeeId !== employeeId).map((f) => f.employeeId!)),
+      // current fruit for everyone on the frozen week
+      const otherIds = [
+        ...new Set(frozen.filter((f) => f.employeeId != null).map((f) => f.employeeId!)),
       ];
       const fruitById = new Map(
         (
           await prisma.employee.findMany({
-            where: { id: { in: coworkerIds } },
+            where: { id: { in: otherIds } },
             select: { id: true, avatarFruit: true },
           })
         ).map((e) => [e.id, e.avatarFruit]),
       );
+      for (const f of frozen) {
+        team.push({
+          storeId: l.storeId,
+          day: f.day,
+          start: clockIso(f.start),
+          end: clockIso(f.end),
+          employeeId: f.employeeId,
+          name: f.employeeName ?? (f.employeeId == null ? 'Open shift' : 'A coworker'),
+          avatarKey: f.employeeId ?? 0,
+          avatarFruit: f.employeeId != null ? fruitById.get(f.employeeId) ?? null : null,
+        });
+      }
       for (const f of frozen) {
         if (f.employeeId !== employeeId) continue;
         const mS = minHHMM(f.start);
@@ -166,6 +204,7 @@ router.get('/mine', requireAuth, async (req, res) => {
   }
 
   shiftsOut.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start));
+  team.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start) || a.name.localeCompare(b.name));
 
   res.json({
     published: stores.length > 0,
@@ -174,6 +213,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     publishedAt: stores[0]?.publishedAt ?? null,
     weekStart: stores[0]?.weekStart ?? null,
     shifts: shiftsOut,
+    team,
     stores,
   });
 });

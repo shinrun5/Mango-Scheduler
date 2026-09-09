@@ -3,6 +3,7 @@ import type {
   ChangeRequest,
   ChangeType,
   ChatMessage,
+  DmPeer,
   DayOfWeek,
   Employee,
   FixedShift,
@@ -371,5 +372,15 @@ export const api = {
   markChatRead: (storeId: number) =>
     sendJSON<{ ok: true }>(`/chat/${storeId}/read`, 'POST', {}),
   getChatUnread: () =>
-    getJSON<{ total: number; byStore: Record<number, number> }>('/chat/unread'),
+    getJSON<{ total: number; byStore: Record<number, number>; dm: number }>('/chat/unread'),
+
+  // --- direct messages ---
+  getDmPeers: () => getJSON<{ peers: DmPeer[] }>('/chat/dm/peers'),
+  getDmMessages: (peerId: number, opts?: { after?: number; before?: number }) => {
+    const q = opts?.after != null ? `?after=${opts.after}` : opts?.before != null ? `?before=${opts.before}` : ''
+    return getJSON<{ messages: ChatMessage[]; hasMore: boolean }>(`/chat/dm/${peerId}/messages${q}`)
+  },
+  sendDm: (peerId: number, body: string) =>
+    sendJSON<{ message: ChatMessage }>(`/chat/dm/${peerId}/messages`, 'POST', { body }),
+  markDmRead: (peerId: number) => sendJSON<{ ok: true }>(`/chat/dm/${peerId}/read`, 'POST', {}),
 }

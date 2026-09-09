@@ -4,7 +4,7 @@ import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
 import { DAY_LABEL, DAYS, dayDate, relativeTime, timeRange, weekRangeLabel } from '../lib/time'
-import type { ChangeRequest, MyShiftsResponse, Shift, ShiftCoworker, Store } from '../types'
+import type { ChangeRequest, MyShiftsResponse, Shift, ShiftCoworker, TeamShift, Store } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   PENDING: 'border-orange bg-orange/10 text-ink',
@@ -20,6 +20,7 @@ export function MyShifts() {
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [view, setView] = useState<'mine' | 'team'>('mine')
 
   const refresh = useCallback(
     () =>
@@ -110,7 +111,29 @@ export function MyShifts() {
         </div>
       )}
 
-      {byDay.length === 0 ? (
+      <div className="mt-3 flex gap-2">
+        {(['mine', 'team'] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
+              view === v ? 'bg-ink text-white' : 'bg-paper text-ink'
+            }`}
+          >
+            {v === 'mine' ? 'My shifts' : 'Whole team'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'team' ? (
+        <TeamWeek
+          team={data.team}
+          weekStart={data.weekStart}
+          myEmployeeId={data.shifts.find((s) => s.employeeId != null)?.employeeId ?? null}
+          multiStore={data.stores.length > 1}
+          storeName={storeName}
+        />
+      ) : byDay.length === 0 ? (
         <EmptyState
           title="You're off this week"
           body="No shifts on the posted schedule. Check Market for shifts up for grabs."
@@ -263,6 +286,85 @@ export function MyShifts() {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function TeamWeek({
+  team,
+  weekStart,
+  myEmployeeId,
+  multiStore,
+  storeName,
+}: {
+  team: TeamShift[]
+  weekStart: string | null
+  myEmployeeId: number | null
+  multiStore: boolean
+  storeName: (id: number) => string
+}) {
+  const byDay = DAYS.map((day) => ({
+    day,
+    shifts: team
+      .filter((s) => s.day === day)
+      .sort((a, b) => a.start.localeCompare(b.start) || a.name.localeCompare(b.name)),
+  })).filter((d) => d.shifts.length > 0)
+
+  if (byDay.length === 0) {
+    return <EmptyState title="Nothing on the schedule" body="No shifts posted for this week yet." />
+  }
+
+  return (
+    <div className="mt-4 flex flex-col gap-2.5">
+      {byDay.map(({ day, shifts }) => (
+        <div
+          key={day}
+          className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]"
+        >
+          <div className="flex items-baseline gap-1.5 border-b-2 border-ink/10 bg-cream px-3 py-1.5">
+            <span className="font-heading text-sm font-bold text-ink">{DAY_LABEL[day]}</span>
+            {weekStart && (
+              <span className="font-body text-[11px] font-semibold text-muted-ink">
+                {dayDate(weekStart, DAYS.indexOf(day))}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col divide-y divide-ink/10">
+            {shifts.map((s, i) => {
+              const mine = s.employeeId != null && s.employeeId === myEmployeeId
+              const open = s.employeeId == null
+              return (
+                <div
+                  key={`${s.storeId}-${s.start}-${s.employeeId ?? 'open'}-${i}`}
+                  className={`flex items-center gap-2 px-3 py-2 ${mine ? 'bg-sky/10' : ''}`}
+                >
+                  {open ? (
+                    <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 border-dashed border-ink/40 text-[10px] text-muted-ink">
+                      ?
+                    </span>
+                  ) : (
+                    <FruitAvatar
+                      kind={fruitForPerson({ employeeId: s.avatarKey, avatarFruit: s.avatarFruit })}
+                      size={18}
+                    />
+                  )}
+                  <span
+                    className={`min-w-0 flex-1 truncate font-body text-xs ${
+                      open ? 'italic text-muted-ink' : mine ? 'font-bold text-ink' : 'text-ink'
+                    }`}
+                  >
+                    {mine ? 'You' : s.name}
+                    {multiStore && <span className="text-muted-ink"> · {storeName(s.storeId)}</span>}
+                  </span>
+                  <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">
+                    {timeRange(s.start, s.end)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
