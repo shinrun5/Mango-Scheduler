@@ -1,251 +1,288 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Button } from '../components/Button'
-import { DirectMessages } from '../components/DirectMessages'
-import { MessageList } from '../components/MessageList'
+import { useCallback, useEffect, useState } from 'react'
+import { ChatThread, type ThreadIO } from '../components/ChatThread'
+import { FruitAvatar } from '../components/FruitAvatar'
+import { ChatIcon } from '../components/icons'
 import { api } from '../lib/api'
-import type { ChatMessage, Store } from '../types'
+import { fruitForPerson } from '../lib/fruit'
+import { relativeTime } from '../lib/time'
+import type { Conversation, DmPeer } from '../types'
 
-const POLL_MS = 3000
-const STORE_KEY = 'fruitcrew.chatStoreId'
+type Open =
+  | { kind: 'store'; storeId: number; name: string }
+  | { kind: 'dm'; userId: number; name: string; avatarKey: number; avatarFruit: string | null }
 
-const readStoreId = (): number | null => {
-  try {
-    return Number(localStorage.getItem(STORE_KEY)) || null
-  } catch {
-    return null
-  }
-}
+const LIST_POLL_MS = 12_000
 
 export function Chat() {
-  const [mode, setMode] = useState<'store' | 'direct'>('store')
+  const [convos, setConvos] = useState<Conversation[] | null>(null)
+  const [open, setOpen] = useState<Open | null>(null)
+  const [picking, setPicking] = useState(false)
+
+  const load = useCallback(
+    () => api.getChatConversations().then((r) => setConvos(r.conversations)).catch(() => setConvos([])),
+    [],
+  )
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // refresh the list while it's on screen
+  useEffect(() => {
+    if (open) return
+    const h = setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, LIST_POLL_MS)
+    return () => clearInterval(h)
+  }, [open, load])
+
+  const back = () => {
+    setOpen(null)
+    void load()
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col p-4 pb-24 sm:p-6 sm:pb-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col overflow-x-hidden p-4 pb-24 sm:p-6 sm:pb-8">
       <div className="flex items-center gap-2">
-        <h1 className="font-heading text-lg font-bold text-ink">Chat</h1>
-        <div className="ml-auto flex gap-1.5">
-          {(['store', 'direct'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-full border-2 border-ink px-3 py-1 font-heading text-xs font-bold ${
-                mode === m ? 'bg-ink text-white' : 'bg-paper text-ink'
-              }`}
-            >
-              {m === 'store' ? 'Store' : 'Direct'}
-            </button>
-          ))}
-        </div>
+        <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-bold text-ink">
+          {open ? open.name : 'Chat'}
+        </h1>
+        {!open && (
+          <button
+            onClick={() => setPicking(true)}
+            className="shrink-0 rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+          >
+            ＋ New
+          </button>
+        )}
       </div>
-      {mode === 'store' ? <StoreChat /> : <DirectMessages />}
+
+      {open ? (
+        <div className="mt-3">
+          {open.kind === 'store' ? (
+            <ChatThread
+              convKey={`s${open.storeId}`}
+              onBack={back}
+              onActivity={load}
+              placeholder="Message the crew…"
+              header={
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="text-muted-ink">
+                    <ChatIcon size={18} />
+                  </span>
+                  <span className="truncate font-heading text-sm font-bold text-ink">
+                    {open.name} · store
+                  </span>
+                </span>
+              }
+              io={
+                {
+                  fetchPage: (o) => api.getChatMessages(open.storeId, o),
+                  send: (b) => api.sendChatMessage(open.storeId, b),
+                  markRead: () => api.markChatRead(open.storeId),
+                } satisfies ThreadIO
+              }
+            />
+          ) : (
+            <ChatThread
+              convKey={`d${open.userId}`}
+              onBack={back}
+              onActivity={load}
+              peerName={open.name}
+              placeholder={`Message ${open.name.split(' ')[0]}…`}
+              header={
+                <span className="flex min-w-0 items-center gap-2">
+                  <FruitAvatar
+                    kind={fruitForPerson({ employeeId: open.avatarKey, avatarFruit: open.avatarFruit })}
+                    size={22}
+                  />
+                  <span className="truncate font-heading text-sm font-bold text-ink">{open.name}</span>
+                </span>
+              }
+              io={
+                {
+                  fetchPage: (o) => api.getDmMessages(open.userId, o),
+                  send: (b) => api.sendDm(open.userId, b),
+                  markRead: () => api.markDmRead(open.userId),
+                } satisfies ThreadIO
+              }
+            />
+          )}
+        </div>
+      ) : (
+        <ConversationList convos={convos} onOpen={setOpen} />
+      )}
+
+      {picking && (
+        <PeerPicker
+          onClose={() => setPicking(false)}
+          onPick={(p) => {
+            setPicking(false)
+            setOpen({ kind: 'dm', userId: p.userId, name: p.name, avatarKey: p.avatarKey, avatarFruit: p.avatarFruit })
+          }}
+        />
+      )}
     </div>
   )
 }
 
-function StoreChat() {
-  const [stores, setStores] = useState<Store[]>([])
-  const [storeId, setStoreId] = useState<number | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [hasMore, setHasMore] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [draft, setDraft] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+function Unread({ n }: { n: number }) {
+  if (n <= 0) return null
+  return (
+    <span className="shrink-0 rounded-full bg-coral px-1.5 font-body text-[10px] font-bold text-white">
+      {n > 9 ? '9+' : n}
+    </span>
+  )
+}
 
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const stickToBottom = useRef(true)
-  const lastId = messages.length ? messages[messages.length - 1].id : 0
+function ConversationList({
+  convos,
+  onOpen,
+}: {
+  convos: Conversation[] | null
+  onOpen: (o: Open) => void
+}) {
+  if (!convos) return <p className="mt-4 font-body text-sm text-muted-ink">Loading…</p>
+  if (convos.length === 0) {
+    return (
+      <p className="mt-4 font-body text-sm text-muted-ink">
+        No chats yet. Your store channel shows up here, and “＋ New” starts a private message.
+      </p>
+    )
+  }
+  return (
+    <div className="mt-3 flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
+      {convos.map((c) => {
+        const key = c.kind === 'store' ? `s${c.storeId}` : `d${c.userId}`
+        return (
+          <button
+            key={key}
+            onClick={() =>
+              onOpen(
+                c.kind === 'store'
+                  ? { kind: 'store', storeId: c.storeId, name: c.name }
+                  : { kind: 'dm', userId: c.userId, name: c.name, avatarKey: c.avatarKey, avatarFruit: c.avatarFruit },
+              )
+            }
+            className="flex w-full items-center gap-2.5 border-b-2 border-ink/10 px-3 py-2.5 text-left last:border-b-0 hover:bg-cream"
+          >
+            <span className="shrink-0">
+              {c.kind === 'store' ? (
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-ink bg-cream text-ink">
+                  <ChatIcon size={16} />
+                </span>
+              ) : (
+                <FruitAvatar
+                  kind={fruitForPerson({ employeeId: c.avatarKey, avatarFruit: c.avatarFruit })}
+                  size={28}
+                />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-heading text-sm font-bold text-ink">
+                  {c.name}
+                  {c.kind === 'store' && (
+                    <span className="ml-1 font-body text-[10px] font-semibold text-muted-ink">store</span>
+                  )}
+                </span>
+                {c.lastAt && (
+                  <span className="shrink-0 whitespace-nowrap font-body text-[10px] text-muted-ink">
+                    {relativeTime(c.lastAt)}
+                  </span>
+                )}
+                <Unread n={c.unread} />
+              </div>
+              <div className="truncate font-body text-xs text-muted-ink">
+                {c.lastMessage ?? 'No messages yet'}
+              </div>
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PeerPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: DmPeer) => void }) {
+  const [peers, setPeers] = useState<DmPeer[]>([])
+  const [noAccount, setNoAccount] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     api
-      .getStores()
-      .then((list) => {
-        setStores(list)
-        const saved = readStoreId()
-        setStoreId(list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null)
+      .getDmPeers()
+      .then((r) => {
+        setPeers(r.peers)
+        setNoAccount(r.noAccount)
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your stores'))
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
-  const pickStore = (id: number) => {
-    setStoreId(id)
-    try {
-      localStorage.setItem(STORE_KEY, String(id))
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // initial page whenever the store changes
-  useEffect(() => {
-    if (storeId == null) return
-    let live = true
-    setLoading(true)
-    setMessages([])
-    stickToBottom.current = true
-    api
-      .getChatMessages(storeId)
-      .then((r) => {
-        if (!live) return
-        setMessages(r.messages)
-        setHasMore(r.hasMore)
-        void api.markChatRead(storeId).catch(() => {})
-      })
-      .catch((e) => live && setError(e instanceof Error ? e.message : 'Could not load messages'))
-      .finally(() => live && setLoading(false))
-    return () => {
-      live = false
-    }
-  }, [storeId])
-
-  // poll for new messages while the tab is visible
-  useEffect(() => {
-    if (storeId == null) return
-    const tick = async () => {
-      if (document.visibilityState !== 'visible') return
-      try {
-        const r = await api.getChatMessages(storeId, { after: lastId })
-        if (r.messages.length === 0) return
-        setMessages((cur) => {
-          const seen = new Set(cur.map((m) => m.id))
-          return [...cur, ...r.messages.filter((m) => !seen.has(m.id))]
-        })
-        void api.markChatRead(storeId).catch(() => {})
-      } catch {
-        /* keep polling */
-      }
-    }
-    const h = setInterval(tick, POLL_MS)
-    const onVis = () => {
-      if (document.visibilityState === 'visible') void tick()
-    }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      clearInterval(h)
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [storeId, lastId])
-
-  // remember whether we're pinned to the bottom before each render
-  const onScroll = () => {
-    const el = scrollRef.current
-    if (!el) return
-    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-  }
-  useLayoutEffect(() => {
-    if (stickToBottom.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages])
-
-  const loadEarlier = useCallback(async () => {
-    if (storeId == null || messages.length === 0) return
-    const before = messages[0].id
-    const el = scrollRef.current
-    const prevHeight = el?.scrollHeight ?? 0
-    try {
-      const r = await api.getChatMessages(storeId, { before })
-      stickToBottom.current = false
-      setHasMore(r.hasMore)
-      setMessages((cur) => {
-        const seen = new Set(cur.map((m) => m.id))
-        return [...r.messages.filter((m) => !seen.has(m.id)), ...cur]
-      })
-      requestAnimationFrame(() => {
-        if (el) el.scrollTop = el.scrollHeight - prevHeight
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load older messages')
-    }
-  }, [storeId, messages])
-
-  async function send() {
-    const body = draft.trim()
-    if (!body || sending || storeId == null) return
-    setSending(true)
-    setError(null)
-    try {
-      const { message } = await api.sendChatMessage(storeId, body)
-      setDraft('')
-      stickToBottom.current = true
-      setMessages((cur) => (cur.some((m) => m.id === message.id) ? cur : [...cur, message]))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send')
-    } finally {
-      setSending(false)
-    }
-  }
+  const term = q.trim().toLowerCase()
+  const shown = term ? peers.filter((p) => p.name.toLowerCase().includes(term)) : peers
+  const multiStore = new Set(peers.flatMap((p) => p.sharedStores)).size > 1
 
   return (
-    <div className="flex flex-col">
-      {stores.length > 1 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {stores.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => pickStore(s.id)}
-              className={`rounded-full border-2 border-ink px-2.5 py-1 font-heading text-xs font-bold ${
-                s.id === storeId ? 'bg-ink text-white' : 'bg-paper text-ink'
-              }`}
-            >
-              {s.name}
-            </button>
-          ))}
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/30 sm:items-center" onClick={onClose}>
+      <div
+        className="max-h-[80vh] w-full max-w-md overflow-hidden rounded-t-2xl border-[2.5px] border-ink bg-paper shadow-[4px_4px_0_var(--color-ink)] sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 border-b-2 border-ink/10 px-3 py-2.5">
+          <span className="font-heading text-sm font-bold text-ink">New message</span>
+          <button
+            onClick={onClose}
+            className="ml-auto rounded-full px-2 font-heading text-lg font-bold leading-none text-muted-ink hover:text-ink"
+            aria-label="Close"
+          >
+            ×
+          </button>
         </div>
-      )}
-      <p className="mt-1 mb-3 font-body text-xs text-muted-ink">
-        Everyone who works this store — messages are visible to the whole crew and their managers.
-      </p>
-
-      <div className="flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="max-h-[calc(100vh-16rem)] min-h-[16rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
-        >
+        <div className="p-3">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search coworkers…"
+            className="w-full rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
+          />
+        </div>
+        <div className="max-h-[52vh] overflow-y-auto px-2 pb-3">
           {loading ? (
-            <p className="py-8 text-center font-body text-sm text-muted-ink">Loading…</p>
-          ) : messages.length === 0 ? (
-            <p className="py-8 text-center font-body text-sm text-muted-ink">
-              No messages yet — say hi 👋
-            </p>
+            <p className="px-2 py-4 font-body text-sm text-muted-ink">Loading…</p>
+          ) : shown.length === 0 ? (
+            <p className="px-2 py-4 font-body text-sm text-muted-ink">Nobody matches.</p>
           ) : (
-            <>
-              {hasMore && (
-                <div className="mb-2 text-center">
-                  <button
-                    onClick={() => void loadEarlier()}
-                    className="rounded-full border-2 border-ink/30 px-3 py-1 font-heading text-[11px] font-bold text-ink hover:border-ink"
-                  >
-                    Load earlier
-                  </button>
-                </div>
-              )}
-              <MessageList messages={messages} />
-            </>
+            shown.map((p) => (
+              <button
+                key={p.userId}
+                onClick={() => onPick(p)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-cream"
+              >
+                <FruitAvatar
+                  kind={fruitForPerson({ employeeId: p.avatarKey, avatarFruit: p.avatarFruit })}
+                  size={26}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-heading text-sm font-bold text-ink">{p.name}</span>
+                  {multiStore && p.sharedStores.length > 0 && (
+                    <span className="block truncate font-body text-[11px] text-muted-ink">
+                      {p.sharedStores.join(', ')}
+                    </span>
+                  )}
+                </span>
+                <Unread n={p.unread} />
+              </button>
+            ))
+          )}
+          {!loading && noAccount.length > 0 && (
+            <p className="mt-2 px-2 font-body text-[11px] text-muted-ink">
+              Not on the app yet: {noAccount.join(', ')}
+            </p>
           )}
         </div>
-
-        <div className="flex items-end gap-2 border-t-2 border-ink/10 p-2.5">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                void send()
-              }
-            }}
-            rows={1}
-            placeholder="Message the crew…"
-            className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
-          />
-          <Button onClick={() => void send()} disabled={sending || !draft.trim()} className="shrink-0">
-            {sending ? '…' : 'Send'}
-          </Button>
-        </div>
       </div>
-
-      {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
     </div>
   )
 }

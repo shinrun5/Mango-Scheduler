@@ -354,6 +354,28 @@ export interface DmPeer {
   name: string
   avatarKey: number
   avatarFruit: string | null
+  /** names of the store(s) you and this person both work */
+  sharedStores: string[]
   unread: number
   lastMessageAt: string | null
 }
+
+export type Conversation =
+  | {
+      kind: 'store'
+      storeId: number
+      name: string
+      lastMessage: string | null
+      lastAt: string | null
+      unread: number
+    }
+  | {
+      kind: 'dm'
+      userId: number
+      name: string
+      avatarKey: number
+      avatarFruit: string | null
+      lastMessage: string
+      lastAt: string
+      unread: number
+    }

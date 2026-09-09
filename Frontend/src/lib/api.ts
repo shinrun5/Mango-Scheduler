@@ -3,6 +3,7 @@ import type {
   ChangeRequest,
   ChangeType,
   ChatMessage,
+  Conversation,
   DmPeer,
   DayHours,
   DayOfWeek,
@@ -423,7 +424,8 @@ export const api = {
     getJSON<{ total: number; byStore: Record<number, number>; dm: number }>('/chat/unread'),
 
   // --- direct messages ---
-  getDmPeers: () => getJSON<{ peers: DmPeer[] }>('/chat/dm/peers'),
+  getChatConversations: () => getJSON<{ conversations: Conversation[] }>('/chat/conversations'),
+  getDmPeers: () => getJSON<{ peers: DmPeer[]; noAccount: string[] }>('/chat/dm/peers'),
   getDmMessages: (peerId: number, opts?: { after?: number; before?: number }) => {
     const q = opts?.after != null ? `?after=${opts.after}` : opts?.before != null ? `?before=${opts.before}` : ''
     return getJSON<{ messages: ChatMessage[]; hasMore: boolean }>(`/chat/dm/${peerId}/messages${q}`)

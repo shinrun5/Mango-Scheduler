@@ -162,6 +162,105 @@ router.get('/unread', requireAuth, async (req, res) => {
   res.json({ total: storeTotal + dm, byStore, dm });
 });
 
+// GET /chat/conversations — the caller's chat list: every store channel + every
+// DM thread that has messages, each with a last-message preview + unread count,
+// newest activity first.
+router.get('/conversations', requireAuth, async (req, res) => {
+  const me = req.user!.id;
+  const storeIds = req.user!.storeIds;
+  const firstName = (n: string) => n.split(' ')[0] || n;
+
+  // --- store channels ---
+  type Row =
+    | { kind: 'store'; storeId: number; name: string; lastMessage: string | null; lastAt: string | null; unread: number }
+    | {
+        kind: 'dm';
+        userId: number;
+        name: string;
+        avatarKey: number;
+        avatarFruit: string | null;
+        lastMessage: string;
+        lastAt: string;
+        unread: number;
+      };
+  const rows: Row[] = [];
+
+  if (storeIds.length > 0) {
+    const [stores, reads] = await Promise.all([
+      prisma.store.findMany({ where: { id: { in: storeIds } }, select: { id: true, name: true } }),
+      prisma.messageRead.findMany({ where: { userId: me, storeId: { in: storeIds } } }),
+    ]);
+    const readAt = new Map(reads.map((r) => [r.storeId, r.lastReadAt]));
+    for (const s of stores) {
+      const [last, unread] = await Promise.all([
+        prisma.message.findFirst({
+          where: { storeId: s.id, deletedAt: null },
+          orderBy: { id: 'desc' },
+          select: { body: true, createdAt: true, authorName: true, userId: true },
+        }),
+        prisma.message.count({
+          where: {
+            storeId: s.id,
+            deletedAt: null,
+            userId: { not: me },
+            ...(readAt.get(s.id) ? { createdAt: { gt: readAt.get(s.id)! } } : {}),
+          },
+        }),
+      ]);
+      rows.push({
+        kind: 'store',
+        storeId: s.id,
+        name: s.name,
+        lastMessage: last
+          ? `${last.userId === me ? 'You' : firstName(last.authorName)}: ${last.body}`
+          : null,
+        lastAt: last?.createdAt.toISOString() ?? null,
+        unread,
+      });
+    }
+  }
+
+  // --- DM threads (those with at least one message) ---
+  const dmMsgs = await prisma.directMessage.findMany({
+    where: { OR: [{ senderId: me }, { recipientId: me }] },
+    orderBy: { id: 'desc' },
+    take: 1000,
+    select: { senderId: true, recipientId: true, body: true, createdAt: true, readAt: true },
+  });
+  const byPeer = new Map<number, { body: string; at: Date; mine: boolean }>();
+  const unreadByPeer = new Map<number, number>();
+  for (const m of dmMsgs) {
+    const peer = m.senderId === me ? m.recipientId : m.senderId;
+    if (!byPeer.has(peer)) byPeer.set(peer, { body: m.body, at: m.createdAt, mine: m.senderId === me });
+    if (m.recipientId === me && m.readAt == null) {
+      unreadByPeer.set(peer, (unreadByPeer.get(peer) ?? 0) + 1);
+    }
+  }
+  const peerIds = [...byPeer.keys()];
+  if (peerIds.length > 0) {
+    const peerUsers = await prisma.user.findMany({
+      where: { id: { in: peerIds } },
+      select: { id: true, name: true, email: true, employee: { select: { id: true, name: true, avatarFruit: true } } },
+    });
+    for (const u of peerUsers) {
+      const l = byPeer.get(u.id)!;
+      rows.push({
+        kind: 'dm',
+        userId: u.id,
+        name: u.employee?.name ?? u.name ?? u.email,
+        avatarKey: u.employee?.id ?? u.id,
+        avatarFruit: u.employee?.avatarFruit ?? null,
+        lastMessage: `${l.mine ? 'You: ' : ''}${l.body}`,
+        lastAt: l.at.toISOString(),
+        unread: unreadByPeer.get(u.id) ?? 0,
+      });
+    }
+  }
+
+  rows.sort((a, b) => (b.lastAt ?? '').localeCompare(a.lastAt ?? ''));
+  res.json({ conversations: rows });
+});
+
 /** Everyone who belongs to a store's chat: its employees, its managers, the org owner. */
 async function storeMemberUserIds(storeId: number): Promise<number[]> {
   const store = await prisma.store.findUnique({ where: { id: storeId }, select: { orgId: true } });
@@ -258,20 +357,45 @@ function dmWire(
   };
 }
 
-// GET /chat/dm/peers — logins you can DM, with unread + last-activity
+// GET /chat/dm/peers — logins you can DM (with the store(s) you share), plus the
+// names of coworkers who don't have an account yet.
 router.get('/dm/peers', requireAuth, async (req, res) => {
   const me = req.user!;
-  if (me.storeIds.length === 0) return res.json({ peers: [] });
+  if (me.storeIds.length === 0) return res.json({ peers: [], noAccount: [] });
 
-  const people = await prisma.user.findMany({
-    where: { id: { not: me.id }, ...dmPeerWhere(me.storeIds) },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      employee: { select: { id: true, name: true, avatarFruit: true } },
-    },
-  });
+  const myStores = new Set(me.storeIds);
+  const storeNames = new Map(
+    (await prisma.store.findMany({ where: { id: { in: me.storeIds } }, select: { id: true, name: true } })).map(
+      (s) => [s.id, s.name],
+    ),
+  );
+
+  const [people, noAccountRows] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { not: me.id }, ...dmPeerWhere(me.storeIds) },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        orgId: true,
+        managerStores: { select: { storeId: true } },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            avatarFruit: true,
+            employeeStores: { select: { storeId: true } },
+          },
+        },
+      },
+    }),
+    prisma.employee.findMany({
+      where: { user: null, standby: false, employeeStores: { some: { storeId: { in: me.storeIds } } } },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
 
   const unreadRows = await prisma.directMessage.groupBy({
     by: ['senderId'],
@@ -292,12 +416,23 @@ router.get('/dm/peers', requireAuth, async (req, res) => {
     if (!lastBy.has(other)) lastBy.set(other, r.createdAt);
   }
 
+  const sharedStoreNames = (p: (typeof people)[number]): string[] => {
+    const ids =
+      p.role === 'OWNER' && p.orgId === me.orgId
+        ? me.storeIds // same org owner -> shares every store I'm on
+        : [...p.managerStores.map((m) => m.storeId), ...(p.employee?.employeeStores.map((e) => e.storeId) ?? [])];
+    return [...new Set(ids.filter((id) => myStores.has(id)))]
+      .map((id) => storeNames.get(id))
+      .filter((n): n is string => !!n);
+  };
+
   const peers = people
     .map((p) => ({
       userId: p.id,
       name: p.employee?.name ?? p.name ?? p.email,
       avatarKey: p.employee?.id ?? p.id,
       avatarFruit: p.employee?.avatarFruit ?? null,
+      sharedStores: sharedStoreNames(p),
       unread: unreadBy.get(p.id) ?? 0,
       lastMessageAt: lastBy.get(p.id)?.toISOString() ?? null,
     }))
@@ -306,7 +441,7 @@ router.get('/dm/peers', requireAuth, async (req, res) => {
         (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '') ||
         a.name.localeCompare(b.name),
     );
-  res.json({ peers });
+  res.json({ peers, noAccount: noAccountRows.map((r) => r.name) });
 });
 
 // GET /chat/dm/:peerId/messages?after=<id>&before=<id>
