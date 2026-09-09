@@ -108,6 +108,10 @@ model Schedule {
   publishedAt   DateTime?
   publishedById Int?
   weekStart     DateTime?
+  // the ScheduleSnapshot employees currently see. Set on publish, and it OUTLIVES
+  // a later draft/regenerate — so workers keep seeing the last posted week until
+  // the manager posts the next one. Cleared on unpublish. (plain column, no FK)
+  postedSnapshotId Int?
   updatedAt     DateTime  @updatedAt
 }
 

@@ -82,6 +82,7 @@ export function Dashboard() {
   const [picker, setPicker] = useState<PickerState | null>(null)
   const [slotEditor, setSlotEditor] = useState<{ anchorRect: DOMRect; requirements: ShiftRequirement[] } | null>(null)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
+  const [postedWeekStart, setPostedWeekStart] = useState<string | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
   const [weekStart, setWeekStart] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -98,6 +99,7 @@ export function Dashboard() {
       .then((s) => {
         setPublishedAt(s.publishedAt)
         setWeekStart(s.weekStart)
+        setPostedWeekStart(s.postedWeekStart)
       })
       .catch(() => {})
   }, [storeId])
@@ -143,6 +145,8 @@ export function Dashboard() {
     try {
       const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
       setPublishedAt(s.publishedAt)
+      const st = await api.getScheduleStatus(storeId)
+      setPostedWeekStart(st.postedWeekStart)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -186,6 +190,7 @@ export function Dashboard() {
       setBoard(await loadBoard())
       const s = await api.getScheduleStatus(storeId)
       setPublishedAt(s.publishedAt)
+      setPostedWeekStart(s.postedWeekStart)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -474,6 +479,7 @@ export function Dashboard() {
         onSave={solved ? () => void saveToHistory() : undefined}
         saving={saving}
         publishedAt={publishedAt}
+        workersSeeWeek={!publishedAt ? postedWeekStart : null}
         onPublish={() => void togglePublish(true)}
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}

@@ -101,6 +101,13 @@ export function MyShifts() {
 
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
+      {data.published && !data.live && (
+        <div className="mt-3 rounded-xl border-2 border-orange bg-orange/10 px-3 py-2 font-body text-xs text-ink">
+          Your manager is putting together the next schedule. This is the last one they posted —
+          shift changes are paused until the new one goes up.
+        </div>
+      )}
+
       {byDay.length === 0 ? (
         <EmptyState
           title="You're off this week"
@@ -135,7 +142,7 @@ export function MyShifts() {
                             {storeName(s.storeId)}
                           </div>
                         </div>
-                        {pending ? (
+                        {!data.live ? null : pending ? (
                           <span className="flex shrink-0 flex-col items-end gap-0.5 text-right font-body text-[11px] font-bold text-orange">
                             {pending.openOffer ? 'on the marketplace' : 'change requested'}
                             <button
@@ -154,7 +161,7 @@ export function MyShifts() {
                           </button>
                         )}
                       </div>
-                      {expanded === s.id && !pending && (
+                      {data.live && expanded === s.id && !pending && (
                         <RequestPanel
                           shiftId={s.id}
                           onDrop={(note) => act(() => api.createChangeRequest({ type: 'DROP', shiftId: s.id, note }))}
@@ -177,7 +184,7 @@ export function MyShifts() {
         </div>
       )}
 
-      {openShifts.length > 0 && (
+      {data.live && openShifts.length > 0 && (
         <>
           <h2 className="mt-6 font-heading text-sm font-bold text-ink">Open shifts you can pick up</h2>
           <div className="mt-2 flex flex-col gap-1.5">

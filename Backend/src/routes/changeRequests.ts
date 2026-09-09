@@ -135,6 +135,17 @@ router.post('/', requireAuth, async (req, res) => {
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
+  // no swaps/drops/pickups while the schedule for that store is only a draft
+  const sched = await prisma.schedule.findUnique({
+    where: { storeId: shift.storeId },
+    select: { publishedAt: true },
+  });
+  if (!sched?.publishedAt) {
+    return res
+      .status(409)
+      .json({ error: "This week's schedule isn't live right now — changes are paused while it's being finalised." });
+  }
+
   const openPending = await prisma.shiftChangeRequest.findFirst({ where: { shiftId, status: 'PENDING' } });
   if (openPending) return res.status(409).json({ error: 'There is already a pending request for this shift' });
 

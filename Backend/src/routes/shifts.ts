@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import type { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireManagerFor, requireRole } from '../lib/auth.js';
 
@@ -17,7 +18,13 @@ async function requireManagerOfShift(req: Request, res: Response, next: NextFunc
   next();
 }
 
-// The signed-in employee's own shifts, per store, each gated on that store being posted.
+const clockIso = (hhmm: string) => `1970-01-01T${hhmm}:00.000Z`;
+
+// The signed-in employee's own shifts, per store.
+//   - store's schedule is published  -> live Shift rows (marketplace actions work)
+//   - a draft is in progress but the store has a posted snapshot -> that frozen
+//     week, read-only ("live: false"), so workers keep seeing last posted week
+//   - neither -> nothing
 router.get('/mine', requireAuth, async (req, res) => {
   const employeeId = req.user?.employeeId;
   if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
@@ -27,26 +34,83 @@ router.get('/mine', requireAuth, async (req, res) => {
     include: { store: { include: { schedule: true } } },
   });
 
-  const published = links.filter((l) => l.store.schedule?.publishedAt);
-  const shifts = published.length
-    ? await prisma.shift.findMany({
-        where: { employeeId, storeId: { in: published.map((l) => l.storeId) } },
-        orderBy: [{ day: 'asc' }, { start: 'asc' }],
-      })
-    : [];
+  const shiftsOut: {
+    id: number;
+    employeeId: number | null;
+    storeId: number;
+    day: DayOfWeek;
+    start: string;
+    end: string;
+  }[] = [];
+  const stores: { storeId: number; storeName: string; publishedAt: Date | null; weekStart: Date | null; live: boolean }[] = [];
+  let synthetic = 0;
 
-  // union shape (kept simple for now); weekStart from any posted store
+  for (const l of links) {
+    const sched = l.store.schedule;
+    if (!sched) continue;
+
+    if (sched.publishedAt) {
+      const rows = await prisma.shift.findMany({
+        where: { employeeId, storeId: l.storeId },
+        orderBy: [{ day: 'asc' }, { start: 'asc' }],
+      });
+      for (const r of rows) {
+        shiftsOut.push({
+          id: r.id,
+          employeeId: r.employeeId,
+          storeId: r.storeId,
+          day: r.day,
+          start: r.start.toISOString(),
+          end: r.end.toISOString(),
+        });
+      }
+      stores.push({
+        storeId: l.storeId,
+        storeName: l.store.name,
+        publishedAt: sched.publishedAt,
+        weekStart: sched.weekStart,
+        live: true,
+      });
+    } else if (sched.postedSnapshotId) {
+      const snap = await prisma.scheduleSnapshot.findUnique({ where: { id: sched.postedSnapshotId } });
+      if (!snap) continue;
+      const frozen = snap.shifts as {
+        employeeId: number | null;
+        day: DayOfWeek;
+        start: string;
+        end: string;
+      }[];
+      for (const f of frozen) {
+        if (f.employeeId !== employeeId) continue;
+        shiftsOut.push({
+          id: -++synthetic, // read-only; no marketplace actions in this state
+          employeeId,
+          storeId: l.storeId,
+          day: f.day,
+          start: clockIso(f.start),
+          end: clockIso(f.end),
+        });
+      }
+      stores.push({
+        storeId: l.storeId,
+        storeName: l.store.name,
+        publishedAt: snap.savedAt,
+        weekStart: snap.weekStart,
+        live: false,
+      });
+    }
+  }
+
+  shiftsOut.sort((a, b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start));
+
   res.json({
-    published: published.length > 0,
-    publishedAt: published[0]?.store.schedule?.publishedAt ?? null,
-    weekStart: published[0]?.store.schedule?.weekStart ?? null,
-    shifts,
-    stores: published.map((l) => ({
-      storeId: l.storeId,
-      storeName: l.store.name,
-      publishedAt: l.store.schedule?.publishedAt ?? null,
-      weekStart: l.store.schedule?.weekStart ?? null,
-    })),
+    published: stores.length > 0,
+    // marketplace is only offered when every shown store is on its live schedule
+    live: stores.length > 0 && stores.every((s) => s.live),
+    publishedAt: stores[0]?.publishedAt ?? null,
+    weekStart: stores[0]?.weekStart ?? null,
+    shifts: shiftsOut,
+    stores,
   });
 });
 

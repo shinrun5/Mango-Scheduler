@@ -26,29 +26,68 @@ router.get('/status', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'No access to that store' });
   }
   const schedule = await prisma.schedule.findUnique({ where: { storeId } });
+  const postedSnap = schedule?.postedSnapshotId
+    ? await prisma.scheduleSnapshot.findUnique({
+        where: { id: schedule.postedSnapshotId },
+        select: { weekStart: true },
+      })
+    : null;
   res.json({
     publishedAt: schedule?.publishedAt ?? null,
     weekStart: schedule?.weekStart ?? mondayUTC(),
+    // the week workers currently see (may lag the working week while a draft is in progress)
+    postedWeekStart: postedSnap?.weekStart ?? null,
   });
 });
 
 router.post('/publish', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
+  const existing = await prisma.schedule.findUnique({ where: { storeId } });
+  const weekStart = existing?.weekStart ?? mondayUTC();
+
+  // Freeze what workers will now see. Kept as the store's single 'posted' snapshot
+  // (reused in place) so a later regenerate can't take this week away from them.
+  const shifts = await freezeShifts(storeId);
+  let postedSnapshotId = existing?.postedSnapshotId ?? null;
+  if (postedSnapshotId) {
+    const still = await prisma.scheduleSnapshot.findUnique({
+      where: { id: postedSnapshotId },
+      select: { id: true },
+    });
+    if (!still) postedSnapshotId = null;
+  }
+  if (postedSnapshotId) {
+    await prisma.scheduleSnapshot.update({
+      where: { id: postedSnapshotId },
+      data: { shifts, weekStart, label: 'posted', savedAt: new Date(), savedById: req.user!.id },
+    });
+  } else {
+    const snap = await prisma.scheduleSnapshot.create({
+      data: { storeId, weekStart, label: 'posted', savedById: req.user!.id, shifts },
+    });
+    postedSnapshotId = snap.id;
+  }
+
   const schedule = await prisma.schedule.upsert({
     where: { storeId },
-    create: { storeId, publishedAt: new Date(), publishedById: req.user!.id },
-    update: { publishedAt: new Date(), publishedById: req.user!.id },
+    create: { storeId, publishedAt: new Date(), publishedById: req.user!.id, postedSnapshotId },
+    update: { publishedAt: new Date(), publishedById: req.user!.id, postedSnapshotId },
   });
   res.json({ publishedAt: schedule.publishedAt });
 });
 
 router.post('/unpublish', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
+  const existing = await prisma.schedule.findUnique({ where: { storeId } });
   const schedule = await prisma.schedule.upsert({
     where: { storeId },
     create: { storeId, publishedAt: null },
-    update: { publishedAt: null },
+    update: { publishedAt: null, postedSnapshotId: null },
   });
+  // taking it down means workers should see nothing — drop the frozen copy too
+  if (existing?.postedSnapshotId) {
+    await prisma.scheduleSnapshot.deleteMany({ where: { id: existing.postedSnapshotId } });
+  }
   res.json({ publishedAt: schedule.publishedAt });
 });
 
@@ -95,7 +134,8 @@ router.get('/snapshots', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
   const limit = Math.min(Number(req.query.limit) || 30, 100);
   const rows = await prisma.scheduleSnapshot.findMany({
-    where: { storeId },
+    // the live 'posted' snapshot is the current schedule, not history — hide it
+    where: { storeId, NOT: { label: 'posted' } },
     orderBy: { savedAt: 'desc' },
     take: limit,
     select: { id: true, storeId: true, weekStart: true, label: true, savedAt: true },

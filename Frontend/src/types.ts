@@ -190,9 +190,18 @@ export interface ChangeRequest {
 
 export interface MyShiftsResponse {
   published: boolean
+  /** false while a new week is being drafted — shifts are shown read-only, no swaps */
+  live: boolean
   publishedAt: string | null
   weekStart: string | null
   shifts: Shift[]
+  stores: {
+    storeId: number
+    storeName: string
+    publishedAt: string | null
+    weekStart: string | null
+    live: boolean
+  }[]
 }
 
 export interface SnapshotMeta {

@@ -303,7 +303,9 @@ export const api = {
 
   // --- publish state + calendar week (per store) ---
   getScheduleStatus: (storeId: number) =>
-    getJSON<{ publishedAt: string | null; weekStart: string }>(`/schedule/status?storeId=${storeId}`),
+    getJSON<{ publishedAt: string | null; weekStart: string; postedWeekStart: string | null }>(
+      `/schedule/status?storeId=${storeId}`,
+    ),
   publishSchedule: (storeId: number) =>
     sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', { storeId }),
   unpublishSchedule: (storeId: number) =>

@@ -12,6 +12,7 @@ export function Header({
   onSave,
   saving,
   publishedAt,
+  workersSeeWeek,
   onPublish,
   onUnpublish,
   publishBusy,
@@ -24,6 +25,8 @@ export function Header({
   onSave?: () => void
   saving?: boolean
   publishedAt?: string | null
+  /** set while a draft is in progress: the earlier week workers are still seeing */
+  workersSeeWeek?: string | null
   onPublish?: () => void
   onUnpublish?: () => void
   publishBusy?: boolean
@@ -57,6 +60,12 @@ export function Header({
             {gapCount} gap{gapCount === 1 ? '' : 's'} this week
           </span>
         </div>
+      )}
+
+      {workersSeeWeek && (
+        <span className="rounded-full border-2 border-ink/20 px-2.5 py-1 font-body text-[11px] font-bold text-muted-ink">
+          Workers still see week of {weekRangeLabel(workersSeeWeek)}
+        </span>
       )}
 
       <div className="ml-auto flex flex-wrap items-center gap-3">
