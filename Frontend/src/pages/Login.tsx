@@ -3,9 +3,11 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthLayout, Field } from '../components/AuthLayout'
 import { Button } from '../components/Button'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 
 export function Login() {
+  const t = useT()
   const { user, loading, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation() as { state?: { from?: { pathname?: string } } }
@@ -34,19 +36,19 @@ export function Login() {
   return (
     <AuthLayout
       title="Fruit Crew"
-      subtitle="Sign in to your schedule"
+      subtitle={t('auth.login.subtitle')}
       footer={
         <div className="flex flex-col gap-1">
           <span>
-            Got an invite code?{' '}
+            {t('auth.login.inviteQ')}{' '}
             <Link to="/register" className="font-bold text-ink underline">
-              Set up your account
+              {t('auth.login.setup')}
             </Link>
           </span>
           <span>
-            New company?{' '}
+            {t('auth.login.newCompanyQ')}{' '}
             <Link to="/setup" className="font-bold text-ink underline">
-              Create the owner account
+              {t('auth.login.createOwner')}
             </Link>
           </span>
         </div>
@@ -54,7 +56,7 @@ export function Login() {
     >
       <form onSubmit={onSubmit}>
         <Field
-          label="Email"
+          label={t('auth.email')}
           type="email"
           autoComplete="email"
           required
@@ -62,7 +64,7 @@ export function Login() {
           onChange={(e) => setEmail(e.target.value)}
         />
         <Field
-          label="Password"
+          label={t('auth.password')}
           type="password"
           autoComplete="current-password"
           required
@@ -71,7 +73,7 @@ export function Login() {
         />
         {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
         <Button type="submit" disabled={busy} className="w-full justify-center">
-          {busy ? 'Signing in…' : 'Log in'}
+          {busy ? t('auth.login.busy') : t('auth.login.button')}
         </Button>
       </form>
     </AuthLayout>

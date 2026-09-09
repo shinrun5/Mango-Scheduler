@@ -4,6 +4,7 @@ import { FruitAvatar } from '../components/FruitAvatar'
 import { ChatIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
 import type { Conversation, DmPeer } from '../types'
 
@@ -14,6 +15,7 @@ type Open =
 const LIST_POLL_MS = 12_000
 
 export function Chat() {
+  const t = useT()
   const [convos, setConvos] = useState<Conversation[] | null>(null)
   const [open, setOpen] = useState<Open | null>(null)
   const [picking, setPicking] = useState(false)
@@ -44,14 +46,14 @@ export function Chat() {
     <div className="mx-auto flex w-full max-w-2xl flex-col overflow-x-hidden p-4 pb-24 sm:p-6 sm:pb-8">
       <div className="flex items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-bold text-ink">
-          {open ? open.name : 'Chat'}
+          {open ? open.name : t('chat.title')}
         </h1>
         {!open && (
           <button
             onClick={() => setPicking(true)}
             className="shrink-0 rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
           >
-            ＋ New
+            {t('chat.new')}
           </button>
         )}
       </div>
@@ -63,14 +65,14 @@ export function Chat() {
               convKey={`s${open.storeId}`}
               onBack={back}
               onActivity={load}
-              placeholder="Message the crew…"
+              placeholder={t('chat.messagePlaceholder')}
               header={
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="text-muted-ink">
                     <ChatIcon size={18} />
                   </span>
                   <span className="truncate font-heading text-sm font-bold text-ink">
-                    {open.name} · store
+                    {open.name} · {t('chat.store')}
                   </span>
                 </span>
               }
@@ -88,7 +90,7 @@ export function Chat() {
               onBack={back}
               onActivity={load}
               peerName={open.name}
-              placeholder={`Message ${open.name.split(' ')[0]}…`}
+              placeholder={t('chat.dmPlaceholder', { name: open.name.split(' ')[0] })}
               header={
                 <span className="flex min-w-0 items-center gap-2">
                   <FruitAvatar
@@ -141,13 +143,10 @@ function ConversationList({
   convos: Conversation[] | null
   onOpen: (o: Open) => void
 }) {
-  if (!convos) return <p className="mt-4 font-body text-sm text-muted-ink">Loading…</p>
+  const t = useT()
+  if (!convos) return <p className="mt-4 font-body text-sm text-muted-ink">{t('common.loading')}</p>
   if (convos.length === 0) {
-    return (
-      <p className="mt-4 font-body text-sm text-muted-ink">
-        No chats yet. Your store channel shows up here, and “＋ New” starts a private message.
-      </p>
-    )
+    return <p className="mt-4 font-body text-sm text-muted-ink">{t('chat.empty')}</p>
   }
   return (
     <div className="mt-3 flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
@@ -182,7 +181,7 @@ function ConversationList({
                 <span className="min-w-0 flex-1 truncate font-heading text-sm font-bold text-ink">
                   {c.name}
                   {c.kind === 'store' && (
-                    <span className="ml-1 font-body text-[10px] font-semibold text-muted-ink">store</span>
+                    <span className="ml-1 font-body text-[10px] font-semibold text-muted-ink">{t('chat.store')}</span>
                   )}
                 </span>
                 {c.lastAt && (
@@ -193,7 +192,7 @@ function ConversationList({
                 <Unread n={c.unread} />
               </div>
               <div className="truncate font-body text-xs text-muted-ink">
-                {c.lastMessage ?? 'No messages yet'}
+                {c.lastMessage ?? t('chat.noMessagesYet')}
               </div>
             </div>
           </button>
@@ -204,6 +203,7 @@ function ConversationList({
 }
 
 function PeerPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: DmPeer) => void }) {
+  const t = useT()
   const [peers, setPeers] = useState<DmPeer[]>([])
   const [noAccount, setNoAccount] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -231,11 +231,11 @@ function PeerPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: DmPe
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b-2 border-ink/10 px-3 py-2.5">
-          <span className="font-heading text-sm font-bold text-ink">New message</span>
+          <span className="font-heading text-sm font-bold text-ink">{t('chat.newMessage')}</span>
           <button
             onClick={onClose}
             className="ml-auto rounded-full px-2 font-heading text-lg font-bold leading-none text-muted-ink hover:text-ink"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             ×
           </button>
@@ -244,15 +244,15 @@ function PeerPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: DmPe
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search coworkers…"
+            placeholder={t('chat.searchCoworkers')}
             className="w-full rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
           />
         </div>
         <div className="max-h-[52vh] overflow-y-auto px-2 pb-3">
           {loading ? (
-            <p className="px-2 py-4 font-body text-sm text-muted-ink">Loading…</p>
+            <p className="px-2 py-4 font-body text-sm text-muted-ink">{t('common.loading')}</p>
           ) : shown.length === 0 ? (
-            <p className="px-2 py-4 font-body text-sm text-muted-ink">Nobody matches.</p>
+            <p className="px-2 py-4 font-body text-sm text-muted-ink">{t('chat.nobodyMatches')}</p>
           ) : (
             shown.map((p) => (
               <button
@@ -278,7 +278,7 @@ function PeerPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: DmPe
           )}
           {!loading && noAccount.length > 0 && (
             <p className="mt-2 px-2 font-body text-[11px] text-muted-ink">
-              Not on the app yet: {noAccount.join(', ')}
+              {t('chat.notOnApp', { names: noAccount.join(', ') })}
             </p>
           )}
         </div>

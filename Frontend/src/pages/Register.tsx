@@ -3,9 +3,11 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout, Field } from '../components/AuthLayout'
 import { Button } from '../components/Button'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { homePathForRole } from '../lib/roles'
 
 export function Register() {
+  const t = useT()
   const { user, loading, register } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -53,45 +55,45 @@ export function Register() {
 
   return (
     <AuthLayout
-      title="Set up your account"
+      title={t('auth.register.title')}
       subtitle={
-        linkedCode ? 'Your invite is filled in — just add your details' : 'Use the invite code your manager gave you'
+        linkedCode ? t('auth.register.subtitleLinked') : t('auth.register.subtitle')
       }
       footer={
         <>
-          Already set up?{' '}
+          {t('auth.register.haveAccountQ')}{' '}
           <Link to="/login" className="font-bold text-ink underline">
-            Log in
+            {t('auth.register.login')}
           </Link>
         </>
       }
     >
       <form onSubmit={onSubmit}>
         <Field
-          label="Invite code"
+          label={t('auth.register.inviteCode')}
           required
           readOnly={!!linkedCode}
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value)}
         />
-        <Field label="Full name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <Field label={t('auth.register.fullName')} required value={name} onChange={(e) => setName(e.target.value)} />
         <Field
-          label="Phone number"
+          label={t('auth.register.phone')}
           type="tel"
           autoComplete="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
         <Field
-          label="Clock-in PIN (4 digits)"
+          label={t('auth.register.pin')}
           inputMode="numeric"
           maxLength={4}
-          placeholder="optional — your manager set one already"
+          placeholder={t('auth.register.pinPlaceholder')}
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
         />
         <Field
-          label="Email"
+          label={t('auth.email')}
           type="email"
           autoComplete="email"
           required
@@ -99,7 +101,7 @@ export function Register() {
           onChange={(e) => setEmail(e.target.value)}
         />
         <Field
-          label="Password"
+          label={t('auth.password')}
           type="password"
           autoComplete="new-password"
           required
@@ -108,7 +110,7 @@ export function Register() {
         />
         {error && <p className="mb-3 font-body text-xs font-bold text-coral-dark">{error}</p>}
         <Button type="submit" disabled={busy} className="w-full justify-center">
-          {busy ? 'Creating…' : 'Create account'}
+          {busy ? t('auth.register.busy') : t('auth.register.button')}
         </Button>
       </form>
     </AuthLayout>

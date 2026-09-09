@@ -3,6 +3,7 @@ import { CalendarIcon } from '../components/icons'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 import {
   DAY_LABEL,
   DAYS,
@@ -23,6 +24,7 @@ const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
 }
 
 export function MyShifts() {
+  const t = useT()
   const [data, setData] = useState<MyShiftsResponse | null>(null)
   const [stores, setStores] = useState<Store[]>([])
   const [openShifts, setOpenShifts] = useState<Shift[]>([])
@@ -67,15 +69,15 @@ export function MyShifts() {
   }
 
   if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
-  if (!data) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
+  if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   if (!data.published) {
     return (
       <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
-        <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
+        <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
         <EmptyState
-          title="Nothing posted yet"
-          body="Your manager hasn't put up this week's schedule. Check back soon."
+          title={t('myshifts.nothingPosted.title')}
+          body={t('myshifts.nothingPosted.body')}
         />
       </div>
     )
@@ -96,16 +98,21 @@ export function MyShifts() {
   )
   const meta = [
     byDay.length > 0 &&
-      `${data.shifts.length} shift${data.shifts.length === 1 ? '' : 's'} · ~${totalHours}h`,
-    data.publishedAt && `posted ${relativeTime(data.publishedAt)}`,
+      t(data.shifts.length === 1 ? 'myshifts.shiftCount.one' : 'myshifts.shiftCount', {
+        n: data.shifts.length,
+        hours: totalHours,
+      }),
+    data.publishedAt && t('myshifts.postedAgo', { ago: relativeTime(data.publishedAt) }),
   ].filter(Boolean)
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
-      <h1 className="font-heading text-lg font-bold text-ink">My Shifts</h1>
+      <h1 className="font-heading text-lg font-bold text-ink">{t('myshifts.title')}</h1>
       <div className="mt-0.5 font-body text-xs text-muted-ink">
         {data.weekStart && (
-          <span className="font-bold text-ink">Week of {weekRangeLabel(data.weekStart)}</span>
+          <span className="font-bold text-ink">
+            {t('myshifts.weekOf', { range: weekRangeLabel(data.weekStart) })}
+          </span>
         )}
         {data.weekStart && meta.length > 0 && ' · '}
         {meta.join(' · ')}
@@ -115,8 +122,7 @@ export function MyShifts() {
 
       {data.published && !data.live && (
         <div className="mt-3 rounded-xl border-2 border-orange bg-orange/10 px-3 py-2 font-body text-xs text-ink">
-          Your manager is putting together the next schedule. This is the last one they posted —
-          shift changes are paused until the new one goes up.
+          {t('myshifts.draftBanner')}
         </div>
       )}
 
@@ -129,7 +135,7 @@ export function MyShifts() {
               view === v ? 'bg-ink text-white' : 'bg-paper text-ink'
             }`}
           >
-            {v === 'mine' ? 'My shifts' : 'Whole team'}
+            {v === 'mine' ? t('myshifts.tab.mine') : t('myshifts.tab.team')}
           </button>
         ))}
       </div>
@@ -144,8 +150,8 @@ export function MyShifts() {
         />
       ) : byDay.length === 0 ? (
         <EmptyState
-          title="You're off this week"
-          body="No shifts on the posted schedule. Check Market for shifts up for grabs."
+          title={t('myshifts.offThisWeek.title')}
+          body={t('myshifts.offThisWeek.body')}
         />
       ) : (
         <div className="mt-4 flex flex-col gap-2.5">
@@ -178,12 +184,14 @@ export function MyShifts() {
                         </div>
                         {!data.live ? null : pending ? (
                           <span className="flex shrink-0 flex-col items-end gap-0.5 text-right font-body text-[11px] font-bold text-orange">
-                            {pending.openOffer ? 'on the marketplace' : 'change requested'}
+                            {pending.openOffer
+                              ? t('myshifts.onMarketplace')
+                              : t('myshifts.changeRequested')}
                             <button
                               onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
                               className="font-bold text-muted-ink underline"
                             >
-                              {pending.openOffer ? 'withdraw' : 'cancel'}
+                              {pending.openOffer ? t('myshifts.withdraw') : t('common.cancel')}
                             </button>
                           </span>
                         ) : (
@@ -191,11 +199,11 @@ export function MyShifts() {
                             onClick={() => setExpanded((e) => (e === s.id ? null : s.id))}
                             className="shrink-0 rounded-full px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark active:bg-sky/10"
                           >
-                            {expanded === s.id ? 'Close' : 'Request change'}
+                            {expanded === s.id ? t('common.close') : t('myshifts.requestChange')}
                           </button>
                         )}
                       </div>
-                      {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} />}
+                      {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
                       {data.live && expanded === s.id && !pending && (
                         <RequestPanel
                           shift={{ id: s.id, start: s.start, end: s.end }}
@@ -215,7 +223,7 @@ export function MyShifts() {
 
       {data.live && openShifts.length > 0 && (
         <>
-          <h2 className="mt-6 font-heading text-sm font-bold text-ink">Open shifts you can pick up</h2>
+          <h2 className="mt-6 font-heading text-sm font-bold text-ink">{t('myshifts.openShifts.title')}</h2>
           <div className="mt-2 flex flex-col gap-1.5">
             {openShifts.map((s) => {
               const pending = pendingFor(s.id)
@@ -232,12 +240,12 @@ export function MyShifts() {
                   </div>
                   {pending ? (
                     <span className="flex shrink-0 items-center gap-1.5 font-body text-[11px] font-bold text-orange">
-                      requested
+                      {t('myshifts.requested')}
                       <button
                         onClick={() => void act(() => api.cancelChangeRequest(pending.id))}
                         className="font-bold text-muted-ink underline"
                       >
-                        cancel
+                        {t('common.cancel')}
                       </button>
                     </span>
                   ) : (
@@ -245,7 +253,7 @@ export function MyShifts() {
                       onClick={() => void act(() => api.createChangeRequest({ type: 'PICKUP', shiftId: s.id }))}
                       className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white"
                     >
-                      Pick up
+                      {t('myshifts.pickUp')}
                     </button>
                   )}
                 </div>
@@ -257,23 +265,23 @@ export function MyShifts() {
 
       {requests.length > 0 && (
         <>
-          <h2 className="mt-6 font-heading text-sm font-bold text-ink">My requests</h2>
+          <h2 className="mt-6 font-heading text-sm font-bold text-ink">{t('myshifts.myRequests')}</h2>
           <div className="mt-2 flex flex-col gap-1.5">
             {requests.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-2 font-body text-xs">
                 <span className="font-bold text-ink">
                   {r.type === 'DROP'
-                    ? 'Drop'
+                    ? t('myshifts.req.drop')
                     : r.type === 'PICKUP'
-                      ? 'Pick up'
-                      : `Give to ${r.targetEmployee?.name ?? '—'}`}
+                      ? t('myshifts.req.pickup')
+                      : t('myshifts.req.giveTo', { name: r.targetEmployee?.name ?? '—' })}
                 </span>
                 <span className="text-muted-ink">
                   {DAY_LABEL[r.shift.day]}{' '}
                   {r.handoffStart && r.handoffEnd
-                    ? `${timeRange(r.handoffStart, r.handoffEnd)} (part)`
+                    ? `${timeRange(r.handoffStart, r.handoffEnd)} ${t('myshifts.req.part')}`
                     : timeRange(r.shift.start, r.shift.end)}{' '}
-                  at {storeName(r.shift.storeId)}
+                  · {storeName(r.shift.storeId)}
                 </span>
                 <span
                   className={`rounded-full border px-1.5 py-px text-[10px] font-bold ${STATUS_STYLE[r.status]}`}
@@ -285,7 +293,7 @@ export function MyShifts() {
                     onClick={() => void act(() => api.cancelChangeRequest(r.id))}
                     className="font-bold text-muted-ink underline"
                   >
-                    cancel
+                    {t('common.cancel')}
                   </button>
                 )}
               </div>
@@ -310,6 +318,7 @@ function TeamWeek({
   multiStore: boolean
   storeName: (id: number) => string
 }) {
+  const t = useT()
   const byDay = DAYS.map((day) => ({
     day,
     shifts: team
@@ -318,7 +327,7 @@ function TeamWeek({
   })).filter((d) => d.shifts.length > 0)
 
   if (byDay.length === 0) {
-    return <EmptyState title="Nothing on the schedule" body="No shifts posted for this week yet." />
+    return <EmptyState title={t('myshifts.teamEmpty.title')} body={t('myshifts.teamEmpty.body')} />
   }
 
   return (
@@ -360,7 +369,7 @@ function TeamWeek({
                       open ? 'italic text-muted-ink' : mine ? 'font-bold text-ink' : 'text-ink'
                     }`}
                   >
-                    {mine ? 'You' : s.name}
+                    {mine ? t('myshifts.you') : s.name}
                     {multiStore && <span className="text-muted-ink"> · {storeName(s.storeId)}</span>}
                   </span>
                   <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">
@@ -376,10 +385,10 @@ function TeamWeek({
   )
 }
 
-function CoworkerRow({ people }: { people: ShiftCoworker[] }) {
+function CoworkerRow({ people, label }: { people: ShiftCoworker[]; label: string }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="font-body text-[11px] font-bold text-muted-ink">Working with</span>
+      <span className="font-body text-[11px] font-bold text-muted-ink">{label}</span>
       {people.map((p, i) => (
         <span key={`${p.avatarKey}-${i}`} className="flex items-center gap-1">
           <FruitAvatar
@@ -406,7 +415,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 }
 
 type ReqInput = {
-  type: 'DROP' | 'SWAP'
+  type: 'SWAP'
   targetEmployeeId?: number
   note?: string
   handoffStart?: string
@@ -420,6 +429,7 @@ function RequestPanel({
   shift: { id: number; start: string; end: string }
   onSubmit: (input: ReqInput) => void
 }) {
+  const t = useT()
   const shiftStart = toHHMM24(shift.start)
   const shiftEnd = toHHMM24(shift.end)
   const [targets, setTargets] = useState<{ id: number; name: string }[]>([])
@@ -437,8 +447,8 @@ function RequestPanel({
   const isWhole = pStart === shiftStart && pEnd === shiftEnd
   const partValid = !part || (inRange && !isWhole)
   const handoff = part && inRange && !isWhole
-  const base = (type: 'DROP' | 'SWAP', targetEmployeeId?: number): ReqInput => ({
-    type,
+  const base = (targetEmployeeId?: number): ReqInput => ({
+    type: 'SWAP',
     ...(targetEmployeeId ? { targetEmployeeId } : {}),
     ...(note.trim() ? { note: note.trim() } : {}),
     ...(handoff ? { handoffStart: pStart, handoffEnd: pEnd } : {}),
@@ -459,7 +469,7 @@ function RequestPanel({
               (m === 'part') === part ? 'bg-ink text-white' : 'bg-paper text-ink'
             }`}
           >
-            {m === 'whole' ? 'Whole shift' : 'Part of it'}
+            {m === 'whole' ? t('req.wholeShift') : t('req.partOfIt')}
           </button>
         ))}
         {part && (
@@ -473,41 +483,32 @@ function RequestPanel({
       {part && !partValid && (
         <p className="font-body text-[11px] font-bold text-coral-dark">
           {isWhole
-            ? "That's your whole shift — trim it, or switch to “Whole shift”."
-            : `Pick a window inside ${to12Hour(shiftStart)}–${to12Hour(shiftEnd)}.`}
+            ? t('req.wholeHint')
+            : t('req.rangeHint', { range: `${to12Hour(shiftStart)}–${to12Hour(shiftEnd)}` })}
         </p>
       )}
 
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="Optional note for your manager"
+        placeholder={t('req.notePlaceholder')}
         className="rounded-lg border-2 border-ink/30 bg-paper px-2.5 py-1.5 font-body text-xs text-ink outline-none"
       />
-      <div className="flex gap-2">
-        <button
-          disabled={!partValid}
-          onClick={() => onSubmit(base('SWAP'))}
-          className={`${pill} flex-1 border-ink bg-green text-white disabled:opacity-40`}
-        >
-          Post to the crew
-        </button>
-        <button
-          disabled={!partValid}
-          onClick={() => onSubmit(base('DROP'))}
-          className={`${pill} flex-1 border-coral text-coral-dark disabled:opacity-40`}
-        >
-          Drop it
-        </button>
-      </div>
+      <button
+        disabled={!partValid}
+        onClick={() => onSubmit(base())}
+        className={`${pill} w-full border-ink bg-green text-white disabled:opacity-40`}
+      >
+        {t('req.postToCrew')}
+      </button>
       <div className="flex items-center gap-2">
-        <span className="shrink-0 font-body text-[11px] text-muted-ink">or give to</span>
+        <span className="shrink-0 font-body text-[11px] text-muted-ink">{t('req.orGiveTo')}</span>
         <select
           value={target}
           onChange={(e) => setTarget(e.target.value === '' ? '' : Number(e.target.value))}
           className="min-w-0 flex-1 rounded-lg border-2 border-ink bg-paper px-2 py-1.5 font-body text-xs text-ink outline-none"
         >
-          <option value="">choose…</option>
+          <option value="">{t('req.choose')}</option>
           {targets.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
@@ -516,10 +517,10 @@ function RequestPanel({
         </select>
         <button
           disabled={target === '' || !partValid}
-          onClick={() => target !== '' && onSubmit(base('SWAP', target))}
+          onClick={() => target !== '' && onSubmit(base(target))}
           className={`${pill} shrink-0 border-ink bg-paper text-ink disabled:opacity-40`}
         >
-          Send
+          {t('common.send')}
         </button>
       </div>
     </div>

@@ -1,10 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { SwapIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS, dayDate, timeRange } from '../lib/time'
 import type { ChangeRequest, Store } from '../types'
 
 export function Marketplace() {
+  const t = useT()
   const [data, setData] = useState<{
     available: ChangeRequest[]
     claimed: ChangeRequest[]
@@ -36,7 +38,7 @@ export function Marketplace() {
     const d = weekStart ? `${dayDate(weekStart, DAYS.indexOf(r.shift.day))} · ` : ''
     const hrs =
       r.handoffStart && r.handoffEnd
-        ? `${timeRange(r.handoffStart, r.handoffEnd)} (part of a shift)`
+        ? `${timeRange(r.handoffStart, r.handoffEnd)} ${t('market.partOfShift')}`
         : timeRange(r.shift.start, r.shift.end)
     return `${DAY_LABEL[r.shift.day]} ${d}${hrs} · ${storeName(r.shift.storeId)}`
   }
@@ -55,17 +57,15 @@ export function Marketplace() {
   }
 
   if (error && !data) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
-  if (!data) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
+  if (!data) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const nothing =
     data.available.length === 0 && data.claimed.length === 0 && data.posted.length === 0
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
-      <h1 className="font-heading text-lg font-bold text-ink">Marketplace</h1>
-      <p className="mt-0.5 font-body text-sm text-muted-ink">
-        Shifts your coworkers can't work. Claim one and your manager confirms it.
-      </p>
+      <h1 className="font-heading text-lg font-bold text-ink">{t('market.title')}</h1>
+      <p className="mt-0.5 font-body text-sm text-muted-ink">{t('market.subtitle')}</p>
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {nothing ? (
@@ -73,27 +73,27 @@ export function Marketplace() {
           <span className="text-muted-ink">
             <SwapIcon size={30} />
           </span>
-          <span className="font-heading text-sm font-bold text-ink">Board's clear</span>
+          <span className="font-heading text-sm font-bold text-ink">{t('market.boardClear')}</span>
           <span className="max-w-xs font-body text-xs text-muted-ink">
-            No shifts up for grabs right now. Post one from My Shifts if you need cover.
+            {t('market.boardClearBody')}
           </span>
         </div>
       ) : (
-        <Section title="Up for grabs">
+        <Section title={t('market.available')}>
           {data.available.length === 0 ? (
-            <Empty>Nothing up for grabs right now.</Empty>
+            <Empty>{t('market.nothingUp')}</Empty>
           ) : (
             data.available.map((r) => (
               <Card key={r.id}>
                 <Line>{when(r)}</Line>
-                <Sub>offered by {r.requestedBy.name}</Sub>
+                <Sub>{t('market.offeredBy', { name: r.requestedBy.name })}</Sub>
                 {r.note && <Note>“{r.note}”</Note>}
                 <button
                   disabled={busy === r.id}
                   onClick={() => void act(r.id, () => api.claimOffer(r.id))}
                   className="mt-2 self-start rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
                 >
-                  Claim
+                  {t('market.claim')}
                 </button>
               </Card>
             ))
@@ -102,17 +102,17 @@ export function Marketplace() {
       )}
 
       {data.claimed.length > 0 && (
-        <Section title="You claimed — waiting for your manager">
+        <Section title={t('market.claimedWaiting')}>
           {data.claimed.map((r) => (
             <Card key={r.id}>
               <Line>{when(r)}</Line>
-              <Sub>from {r.requestedBy.name}</Sub>
+              <Sub>{t('market.fromName', { name: r.requestedBy.name })}</Sub>
               <button
                 disabled={busy === r.id}
                 onClick={() => void act(r.id, () => api.unclaimOffer(r.id))}
                 className="mt-2 self-start font-body text-[11px] font-bold text-muted-ink underline"
               >
-                back out
+                {t('market.backOut')}
               </button>
             </Card>
           ))}
@@ -120,21 +120,21 @@ export function Marketplace() {
       )}
 
       {data.posted.length > 0 && (
-        <Section title="You posted">
+        <Section title={t('market.youPosted')}>
           {data.posted.map((r) => (
             <Card key={r.id}>
               <Line>{when(r)}</Line>
               <Sub>
                 {r.targetEmployee
-                  ? `${r.targetEmployee.name} claimed it — waiting for your manager`
-                  : 'on the board — no claims yet'}
+                  ? t('market.someoneClaimed', { name: r.targetEmployee.name })
+                  : t('market.noClaims')}
               </Sub>
               <button
                 disabled={busy === r.id}
                 onClick={() => void act(r.id, () => api.cancelChangeRequest(r.id))}
                 className="mt-2 self-start font-body text-[11px] font-bold text-coral-dark underline"
               >
-                withdraw
+                {t('market.withdraw')}
               </button>
             </Card>
           ))}

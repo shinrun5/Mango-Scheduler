@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { FruitAvatar } from './FruitAvatar'
+import { LangToggle } from './LangToggle'
 import { NotificationBell } from './NotificationBell'
 import { UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { StoreProvider, useStore } from '../lib/store-context'
@@ -26,6 +28,7 @@ export function ManagerLayout({ children }: { children?: ReactNode }) {
  * On mobile the identity row and the nav strip stack; the nav scrolls sideways. */
 function Chrome({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth()
+  const t = useT()
   const location = useLocation()
   const { stores, storeId, setStoreId } = useStore()
   const [pending, setPending] = useState(0)
@@ -63,6 +66,7 @@ function Chrome({ children }: { children?: ReactNode }) {
                 ))}
               </select>
             )}
+            <LangToggle />
             <NotificationBell />
             <NavLink
               to="/account"
@@ -77,7 +81,7 @@ function Chrome({ children }: { children?: ReactNode }) {
               onClick={() => void logout()}
               className="shrink-0 rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
             >
-              Log out
+              {t('nav.logout')}
             </button>
           </div>
         </div>

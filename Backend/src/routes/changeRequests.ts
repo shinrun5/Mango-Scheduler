@@ -144,8 +144,13 @@ router.post('/', requireAuth, async (req, res) => {
   if (!me) return res.status(400).json({ error: "Your account isn't linked to an employee" });
 
   const { type, shiftId, targetEmployeeId, note } = req.body ?? {};
-  if (!['DROP', 'SWAP', 'PICKUP'].includes(type)) {
-    return res.status(400).json({ error: 'type must be DROP, SWAP or PICKUP' });
+  if (type === 'DROP') {
+    return res.status(400).json({
+      error: 'Shifts can’t just be dropped — swap it with a coworker, or ask a manager to move it.',
+    });
+  }
+  if (!['SWAP', 'PICKUP'].includes(type)) {
+    return res.status(400).json({ error: 'type must be SWAP or PICKUP' });
   }
   if (!Number.isInteger(shiftId)) return res.status(400).json({ error: 'shiftId is required' });
 

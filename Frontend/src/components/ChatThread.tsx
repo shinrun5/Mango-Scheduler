@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from './Button'
 import { MessageList } from './MessageList'
+import { useT } from '../lib/i18n'
 import type { ChatMessage } from '../types'
 
 const POLL_MS = 3000
@@ -30,6 +31,7 @@ export function ChatThread({
   onBack: () => void
   onActivity?: () => void
 }) {
+  const t = useT()
   const ioRef = useRef(io)
   const actRef = useRef(onActivity)
   useLayoutEffect(() => {
@@ -138,7 +140,7 @@ export function ChatThread({
       <div className="flex items-center gap-1.5 border-b-2 border-ink/10 bg-cream px-2 py-2">
         <button
           onClick={onBack}
-          aria-label="Back to chats"
+          aria-label={t('chat.everyone')}
           className="shrink-0 rounded-full px-2 font-heading text-xl font-bold leading-none text-ink hover:text-sky-dark"
         >
           ‹
@@ -151,9 +153,9 @@ export function ChatThread({
         className="max-h-[calc(100vh-15rem)] min-h-[14rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
       >
         {loading ? (
-          <p className="py-8 text-center font-body text-sm text-muted-ink">Loading…</p>
+          <p className="py-8 text-center font-body text-sm text-muted-ink">{t('common.loading')}</p>
         ) : messages.length === 0 ? (
-          <p className="py-8 text-center font-body text-sm text-muted-ink">No messages yet — say hi 👋</p>
+          <p className="py-8 text-center font-body text-sm text-muted-ink">{t('chat.noMessages')}</p>
         ) : (
           <>
             {hasMore && (
@@ -162,7 +164,7 @@ export function ChatThread({
                   onClick={() => void loadEarlier()}
                   className="rounded-full border-2 border-ink/30 px-3 py-1 font-heading text-[11px] font-bold text-ink hover:border-ink"
                 >
-                  Load earlier
+                  {t('chat.loadEarlier')}
                 </button>
               </div>
             )}
@@ -185,7 +187,7 @@ export function ChatThread({
           className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
         />
         <Button onClick={() => void send()} disabled={sending || !draft.trim()} className="shrink-0">
-          {sending ? '…' : 'Send'}
+          {sending ? '…' : t('common.send')}
         </Button>
       </div>
       {error && (

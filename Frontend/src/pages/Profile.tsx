@@ -4,6 +4,7 @@ import { FruitPicker } from '../components/FruitPicker'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 import type { DayOfWeek, Profile as ProfileData } from '../types'
 
 const DAYS: { key: DayOfWeek; label: string }[] = [
@@ -22,6 +23,7 @@ const field =
   'w-full rounded-xl border-[2.5px] border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper'
 
 export function Profile() {
+  const t = useT()
   const { refreshUser } = useAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,14 +41,14 @@ export function Profile() {
   }, [load])
 
   if (error && !profile) return <div className="p-6 font-body text-sm text-coral-dark">{error}</div>
-  if (!profile) return <div className="p-6 font-body text-sm text-muted-ink">Loading…</div>
+  if (!profile) return <div className="p-6 font-body text-sm text-muted-ink">{t('common.loading')}</div>
 
   const e = profile.employee
   const displayName = profile.name ?? e?.name ?? profile.email
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6 sm:pb-6">
-      <h1 className="font-heading text-lg font-bold text-ink">Profile</h1>
+      <h1 className="font-heading text-lg font-bold text-ink">{t('profile.title')}</h1>
 
       <div className={card}>
         <div className="flex flex-wrap items-center gap-2">
@@ -56,7 +58,7 @@ export function Profile() {
           </span>
           {e?.standby && (
             <span className="rounded-full border border-ink/25 px-1.5 py-px font-body text-[9px] font-bold text-muted-ink">
-              on-call
+              {t('profile.onCall')}
             </span>
           )}
         </div>
@@ -66,11 +68,11 @@ export function Profile() {
         {e ? (
           <>
             <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-              Works at
+              {t('profile.worksAt')}
             </p>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {e.stores.length === 0 && (
-                <span className="font-body text-xs text-coral-dark">no store assigned yet</span>
+                <span className="font-body text-xs text-coral-dark">{t('profile.noStore')}</span>
               )}
               {e.stores.map((s) => (
                 <span
@@ -87,7 +89,7 @@ export function Profile() {
         ) : (
           <p className="mt-3 font-body text-xs text-muted-ink">
             {profile.role === 'EMPLOYEE'
-              ? "Your account isn't linked to an employee record yet — ask your manager."
+              ? t('profile.notLinked')
               : 'Add yourself to the schedule from "My hours" to pick up shifts.'}
           </p>
         )}
@@ -146,6 +148,7 @@ function EditDetails({
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
+  const t = useT()
   const [n, setN] = useState(name)
   const [p, setP] = useState(phone)
   const [busy, setBusy] = useState(false)
@@ -156,7 +159,7 @@ function EditDetails({
     ev.preventDefault()
     onError(null)
     setDone(false)
-    if (!n.trim()) return onError('Name cannot be empty')
+    if (!n.trim()) return onError(t('profile.nameEmpty'))
     setBusy(true)
     try {
       await api.updateProfile({ name: n.trim(), phone: p.trim() })
@@ -171,14 +174,14 @@ function EditDetails({
 
   return (
     <form onSubmit={submit} className={card}>
-      <h2 className="font-heading text-sm font-bold text-ink">Your details</h2>
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.details')}</h2>
       <div className="mt-2 flex flex-col gap-2">
         <label className="block">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">Name</span>
+          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.name')}</span>
           <input value={n} onChange={(ev) => setN(ev.target.value)} className={field} />
         </label>
         <label className="block">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">Phone number</span>
+          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.phone')}</span>
           <input
             type="tel"
             autoComplete="tel"
@@ -190,9 +193,9 @@ function EditDetails({
       </div>
       <div className="mt-3 flex items-center gap-3">
         <Button type="submit" disabled={busy || !dirty}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? t('common.saving') : t('common.save')}
         </Button>
-        {done && !dirty && <span className="font-body text-xs font-bold text-green">Saved ✓</span>}
+        {done && !dirty && <span className="font-body text-xs font-bold text-green">{t('common.saved')}</span>}
       </div>
     </form>
   )
@@ -209,6 +212,7 @@ function MyLimits({
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
+  const t = useT()
   const [h, setH] = useState(String(hourLimit))
   const [d, setD] = useState(String(maxShifts))
   const [busy, setBusy] = useState(false)
@@ -237,13 +241,11 @@ function MyLimits({
 
   return (
     <form onSubmit={submit} className={card}>
-      <h2 className="font-heading text-sm font-bold text-ink">Your weekly limits</h2>
-      <p className="mt-0.5 font-body text-xs text-muted-ink">
-        The scheduler never books you past these.
-      </p>
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.limits')}</h2>
+      <p className="mt-0.5 font-body text-xs text-muted-ink">{t('profile.limitsHint')}</p>
       <div className="mt-2 flex gap-2">
         <label className="block flex-1">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">Max days / week</span>
+          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.maxDays')}</span>
           <input
             type="number"
             inputMode="numeric"
@@ -255,7 +257,7 @@ function MyLimits({
           />
         </label>
         <label className="block flex-1">
-          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">Max hours / week</span>
+          <span className="mb-1 block font-body text-xs font-bold text-muted-ink">{t('profile.maxHours')}</span>
           <input
             type="number"
             inputMode="numeric"
@@ -269,9 +271,9 @@ function MyLimits({
       </div>
       <div className="mt-3 flex items-center gap-3">
         <Button type="submit" disabled={busy || !dirty}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? t('common.saving') : t('common.save')}
         </Button>
-        {done && !dirty && <span className="font-body text-xs font-bold text-green">Saved ✓</span>}
+        {done && !dirty && <span className="font-body text-xs font-bold text-green">{t('common.saved')}</span>}
       </div>
     </form>
   )
@@ -288,6 +290,7 @@ function DayPrefs({
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
+  const t = useT()
   const [draft, setDraft] = useState<DayOfWeek[]>([])
   const [busy, setBusy] = useState(false)
   const [ncBusy, setNcBusy] = useState(false)
@@ -331,7 +334,7 @@ function DayPrefs({
 
   return (
     <div className={card}>
-      <h2 className="font-heading text-sm font-bold text-ink">Day preferences</h2>
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.dayPrefs')}</h2>
 
       <button
         type="button"
@@ -347,16 +350,14 @@ function DayPrefs({
           ✓
         </span>
         <span className="font-body text-xs text-ink">
-          <b>No back-to-back days</b> — never schedule me two days in a row
+          <b>{t('profile.noBackToBack')}</b> — {t('profile.noBackToBackHint')}
         </span>
       </button>
 
       <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-        One of these days only
+        {t('profile.oneOfThese')}
       </p>
-      <p className="mt-0.5 font-body text-xs text-muted-ink">
-        Group days you can only do one of — e.g. Sat <b>or</b> Sun, not both.
-      </p>
+      <p className="mt-0.5 font-body text-xs text-muted-ink">{t('profile.oneOfTheseHint')}</p>
 
       {groups.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1.5">
@@ -366,7 +367,7 @@ function DayPrefs({
               className="flex items-center justify-between rounded-xl border-2 border-ink bg-cream px-2.5 py-1.5"
             >
               <span className="font-body text-xs font-bold text-ink">
-                {g.map(dayLabel).join(' or ')}
+                {g.map(dayLabel).join(` ${t('profile.orJoin')} `)}
               </span>
               <button
                 type="button"
@@ -374,7 +375,7 @@ function DayPrefs({
                 disabled={busy}
                 className="font-body text-xs font-bold text-coral-dark underline disabled:opacity-50"
               >
-                Remove
+                {t('profile.remove')}
               </button>
             </li>
           ))}
@@ -400,7 +401,7 @@ function DayPrefs({
       </div>
       <div className="mt-3">
         <Button type="button" onClick={addGroup} disabled={busy || draft.length < 2}>
-          {busy ? 'Saving…' : 'Add group'}
+          {busy ? t('common.saving') : t('profile.addGroup')}
         </Button>
       </div>
     </div>
@@ -448,6 +449,7 @@ function AlertPrefs({
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
 
   async function save(patch: {
@@ -469,7 +471,7 @@ function AlertPrefs({
 
   return (
     <div className={card}>
-      <h2 className="font-heading text-sm font-bold text-ink">Alerts</h2>
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.alerts')}</h2>
       {isManager && (
         <AlertToggle
           on={alerts.availabilityUpdates}
@@ -477,8 +479,7 @@ function AlertPrefs({
           onClick={() => void save({ availabilityUpdates: !alerts.availabilityUpdates })}
           label={
             <>
-              <b>Availability updates</b> — email + notify me when a worker changes a future week's
-              hours
+              <b>{t('profile.alert.availability')}</b> — {t('profile.alert.availabilityHint')}
             </>
           }
         />
@@ -489,7 +490,7 @@ function AlertPrefs({
         onClick={() => void save({ marketplacePosts: !alerts.marketplacePosts })}
         label={
           <>
-            <b>Marketplace posts</b> — email me when a coworker puts a shift up for grabs
+            <b>{t('profile.alert.marketplace')}</b> — {t('profile.alert.marketplaceHint')}
           </>
         }
       />
@@ -499,8 +500,7 @@ function AlertPrefs({
         onClick={() => void save({ chatMessages: !alerts.chatMessages })}
         label={
           <>
-            <b>Chat messages</b> — email me when there are new chat messages I haven't seen (at most
-            once every 15 min)
+            <b>{t('profile.alert.chat')}</b> — {t('profile.alert.chatHint')}
           </>
         }
       />
@@ -509,6 +509,7 @@ function AlertPrefs({
 }
 
 function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
+  const t = useT()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -537,12 +538,12 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
 
   return (
     <form onSubmit={submit} className={card}>
-      <h2 className="font-heading text-sm font-bold text-ink">Change password</h2>
+      <h2 className="font-heading text-sm font-bold text-ink">{t('profile.changePassword')}</h2>
       <div className="mt-2 flex flex-col gap-2">
         <input
           type="password"
           autoComplete="current-password"
-          placeholder="Current password"
+          placeholder={t('profile.currentPassword')}
           required
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
@@ -551,7 +552,7 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
         <input
           type="password"
           autoComplete="new-password"
-          placeholder="New password"
+          placeholder={t('profile.newPassword')}
           required
           value={next}
           onChange={(e) => setNext(e.target.value)}
@@ -560,7 +561,7 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
         <input
           type="password"
           autoComplete="new-password"
-          placeholder="Confirm new password"
+          placeholder={t('profile.confirmPassword')}
           required
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
@@ -569,9 +570,9 @@ function ChangePassword({ onError }: { onError: (m: string | null) => void }) {
       </div>
       <div className="mt-3 flex items-center gap-3">
         <Button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Update password'}
+          {busy ? t('common.saving') : t('profile.updatePassword')}
         </Button>
-        {done && <span className="font-body text-xs font-bold text-green">Password updated ✓</span>}
+        {done && <span className="font-body text-xs font-bold text-green">{t('profile.passwordUpdated')}</span>}
       </div>
     </form>
   )

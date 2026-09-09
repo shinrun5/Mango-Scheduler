@@ -3,20 +3,25 @@ import { AvailabilityEditor, type AvailWindow } from './AvailabilityEditor'
 import type { DayHours, DayOfWeek } from '../types'
 import { TimeOffPanel } from './TimeOffPanel'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { shiftWeekYMD, thisMondayYMD, toHHMM24, weekRangeLabel } from '../lib/time'
 
 const norm = (ws: { day: AvailWindow['day']; start: string; end: string }[]): AvailWindow[] =>
   ws.map((w) => ({ day: w.day, start: toHHMM24(w.start), end: toHHMM24(w.end) }))
 
-const WEEKS = [0, 1, 2, 3, 4].map((n) => {
-  const ymd = shiftWeekYMD(`${thisMondayYMD()}T00:00:00.000Z`, n)
-  const label = n === 0 ? 'This week' : n === 1 ? 'Next week' : `In ${n} weeks`
-  return { ymd, label: `${label} — ${weekRangeLabel(`${ymd}T00:00:00.000Z`)}` }
-})
+const WEEKS = [0, 1, 2, 3, 4].map((n) => ({
+  n,
+  ymd: shiftWeekYMD(`${thisMondayYMD()}T00:00:00.000Z`, n),
+}))
 
 /** The availability screen: your standing weekly hours, or a one-week override.
  * `barClass` is passed straight through to the editor's sticky save bar. */
 export function AvailabilityPanel({ barClass }: { barClass: string }) {
+  const t = useT()
+  const weekLabel = (n: number, ymd: string) => {
+    const head = n === 0 ? t('avail.thisWeek') : n === 1 ? t('avail.nextWeek') : t('avail.inNWeeks', { n })
+    return `${head} — ${weekRangeLabel(`${ymd}T00:00:00.000Z`)}`
+  }
   const [mode, setMode] = useState<'standing' | 'week' | 'timeoff'>('standing')
   const [week, setWeek] = useState(WEEKS[0].ymd)
   const [hasOverride, setHasOverride] = useState(false)
@@ -89,13 +94,13 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     <div className="flex flex-col gap-3">
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
         <button className={`shrink-0 ${tab(mode === 'standing')}`} onClick={() => setMode('standing')}>
-          Every week
+          {t('avail.tab.every')}
         </button>
         <button className={`shrink-0 ${tab(mode === 'week')}`} onClick={() => setMode('week')}>
-          Just one week
+          {t('avail.tab.week')}
         </button>
         <button className={`shrink-0 ${tab(mode === 'timeoff')}`} onClick={() => setMode('timeoff')}>
-          Time off
+          {t('avail.tab.timeoff')}
         </button>
       </div>
 
@@ -108,14 +113,12 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           >
             {WEEKS.map((w) => (
               <option key={w.ymd} value={w.ymd}>
-                {w.label}
+                {weekLabel(w.n, w.ymd)}
               </option>
             ))}
           </select>
           <p className="font-body text-xs text-muted-ink">
-            {hasOverride
-              ? 'This week has its own hours — your standing hours apply every other week.'
-              : 'Starts from your standing hours. Saving here only changes this one week.'}
+            {hasOverride ? t('avail.week.hasOverride') : t('avail.week.fromStanding')}
           </p>
           {hasOverride && (
             <button
@@ -123,13 +126,13 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
               disabled={busy}
               className="self-start font-body text-xs font-bold text-coral-dark underline"
             >
-              Remove this week's override
+              {t('avail.week.removeOverride')}
             </button>
           )}
           {!hasOverride &&
             (confirmed ? (
               <p className="font-body text-xs font-bold text-green-dark">
-                ✓ You've confirmed your usual hours for this week — your manager can see it.
+                {t('avail.week.confirmed')}
               </p>
             ) : (
               <button
@@ -137,7 +140,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
                 disabled={busy}
                 className="self-start rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
               >
-                My usual hours are right for this week
+                {t('avail.week.confirmBtn')}
               </button>
             ))}
         </div>
@@ -151,7 +154,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           barClass={barClass}
           load={standingLoad}
           save={standingSave}
-          idleText="Saved — repeats every week"
+          idleText={t('avail.idle.every')}
           hoursByDay={hoursByDay}
         />
       ) : (
@@ -160,7 +163,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           barClass={barClass}
           load={weekLoad}
           save={weekSave}
-          idleText={hasOverride ? 'Saved — this week only' : 'Copy of your standing hours — not saved yet'}
+          idleText={hasOverride ? t('avail.idle.weekSaved') : t('avail.idle.weekCopy')}
           hoursByDay={hoursByDay}
         />
       )}

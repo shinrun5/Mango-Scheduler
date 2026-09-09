@@ -4,17 +4,19 @@ import { CalendarIcon, ChatIcon, ClockIcon, NoteIcon, SwapIcon, UserIcon } from 
 import { useChatUnread } from '../lib/use-chat-unread'
 import { useNotesCount } from '../lib/use-notes-count'
 import { FruitAvatar } from './FruitAvatar'
+import { LangToggle } from './LangToggle'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
 
 const NAV = [
-  { to: '/my-shifts', label: 'Shifts', short: 'Shifts', Icon: CalendarIcon },
-  { to: '/marketplace', label: 'Market', short: 'Market', Icon: SwapIcon },
-  { to: '/availability', label: 'Availability', short: 'Hours', Icon: ClockIcon },
-  { to: '/chat', label: 'Chat', short: 'Chat', Icon: ChatIcon },
-  { to: '/notes', label: 'Notes', short: 'Notes', Icon: NoteIcon },
-  { to: '/profile', label: 'Profile', short: 'You', Icon: UserIcon },
-]
+  { to: '/my-shifts', label: 'nav.shifts', short: 'nav.shifts', Icon: CalendarIcon },
+  { to: '/marketplace', label: 'nav.market', short: 'nav.market', Icon: SwapIcon },
+  { to: '/availability', label: 'nav.availability', short: 'nav.hours', Icon: ClockIcon },
+  { to: '/chat', label: 'nav.chat', short: 'nav.chat', Icon: ChatIcon },
+  { to: '/notes', label: 'nav.notes', short: 'nav.notes', Icon: NoteIcon },
+  { to: '/profile', label: 'nav.profile', short: 'nav.you', Icon: UserIcon },
+] as const
 
 const badge = (n: number) =>
   n > 0 ? (
@@ -36,6 +38,7 @@ const bottomTab = ({ isActive }: { isActive: boolean }) =>
 /** Employee chrome: nav pills in the top bar on desktop, a bottom tab bar on phones. */
 export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNode {
   const { user, logout } = useAuth()
+  const t = useT()
   const unread = useChatUnread()
   const notes = useNotesCount()
   const badgeFor = (to: string) => (to === '/chat' ? unread : to === '/notes' ? notes : 0)
@@ -50,12 +53,13 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
         <div className="hidden items-center gap-2 sm:flex">
           {NAV.map(({ to, label }) => (
             <NavLink key={to} to={to} className={topTab}>
-              {label}
+              {t(label)}
               {badge(badgeFor(to))}
             </NavLink>
           ))}
         </div>
         <div className="flex items-center gap-2.5">
+          <LangToggle />
           <NavLink
             to="/profile"
             className="hidden font-body text-xs font-semibold text-muted-ink hover:text-ink md:inline"
@@ -67,7 +71,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
             onClick={() => void logout()}
             className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
           >
-            Log out
+            {t('nav.logout')}
           </button>
         </div>
       </div>
@@ -91,7 +95,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
                     <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-coral" />
                   )}
                 </span>
-                {short}
+                {t(short)}
               </>
             )}
           </NavLink>

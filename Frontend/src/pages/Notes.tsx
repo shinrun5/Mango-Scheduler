@@ -3,21 +3,23 @@ import { Button } from '../components/Button'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
+import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
 import type { ShiftNote, ShiftNoteCategory, Store } from '../types'
 
 const POLL_MS = 10_000
 const STORE_KEY = 'fruitcrew.notesStoreId'
 
-const CATS: { key: ShiftNoteCategory; label: string; cls: string }[] = [
-  { key: 'GENERAL', label: 'Note', cls: 'border-ink/25 bg-cream text-muted-ink' },
-  { key: 'REFUND', label: 'Refund', cls: 'border-green bg-green/10 text-green-dark' },
-  { key: 'COMPLAINT', label: 'Complaint', cls: 'border-coral bg-coral-bg text-coral-dark' },
-  { key: 'LOST_FOUND', label: 'Lost & found', cls: 'border-sky-dark bg-sky/10 text-sky-dark' },
-  { key: 'STOCK', label: 'Stock', cls: 'border-orange bg-orange/10 text-ink' },
-  { key: 'MAINTENANCE', label: 'Fix', cls: 'border-grape bg-grape/10 text-grape' },
+const CATS: { key: ShiftNoteCategory; cls: string }[] = [
+  { key: 'GENERAL', cls: 'border-ink/25 bg-cream text-muted-ink' },
+  { key: 'REFUND', cls: 'border-green bg-green/10 text-green-dark' },
+  { key: 'COMPLAINT', cls: 'border-coral bg-coral-bg text-coral-dark' },
+  { key: 'LOST_FOUND', cls: 'border-sky-dark bg-sky/10 text-sky-dark' },
+  { key: 'STOCK', cls: 'border-orange bg-orange/10 text-ink' },
+  { key: 'MAINTENANCE', cls: 'border-grape bg-grape/10 text-grape' },
 ]
 const catOf = (k: string) => CATS.find((c) => c.key === k) ?? CATS[0]
+const catKey = (k: ShiftNoteCategory) => `notes.cat.${k}` as const
 
 const readStoreId = (): number | null => {
   try {
@@ -28,6 +30,7 @@ const readStoreId = (): number | null => {
 }
 
 export function Notes() {
+  const t = useT()
   const [stores, setStores] = useState<Store[]>([])
   const [storeId, setStoreId] = useState<number | null>(null)
   const [open, setOpen] = useState<ShiftNote[]>([])
@@ -115,7 +118,7 @@ export function Notes() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col p-4 pb-24 sm:p-6 sm:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-heading text-lg font-bold text-ink">Shift notes</h1>
+        <h1 className="font-heading text-lg font-bold text-ink">{t('notes.title')}</h1>
         {stores.length > 1 && (
           <div className="flex flex-wrap gap-1.5">
             {stores.map((s) => (
@@ -132,10 +135,7 @@ export function Notes() {
           </div>
         )}
       </div>
-      <p className="mt-1 mb-3 font-body text-xs text-muted-ink">
-        Anything the next shift should know — refunds coming back, complaints, found items, low
-        stock. Tick one off once it's handled.
-      </p>
+      <p className="mt-1 mb-3 font-body text-xs text-muted-ink">{t('notes.subtitle')}</p>
 
       {/* composer */}
       <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-2.5 shadow-[3px_3px_0_var(--color-ink)]">
@@ -143,7 +143,7 @@ export function Notes() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={2}
-          placeholder="Leave a note for the next shift…"
+          placeholder={t('notes.placeholder')}
           className="w-full resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
         />
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -155,7 +155,7 @@ export function Notes() {
                 cat === c.key ? c.cls : 'border-ink/15 text-muted-ink'
               }`}
             >
-              {c.label}
+              {t(catKey(c.key))}
             </button>
           ))}
           <Button
@@ -163,7 +163,7 @@ export function Notes() {
             disabled={busy || !draft.trim()}
             className="ml-auto shrink-0"
           >
-            {busy ? '…' : 'Post'}
+            {busy ? '…' : t('common.post')}
           </Button>
         </div>
       </div>
@@ -171,9 +171,9 @@ export function Notes() {
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       {loading ? (
-        <p className="mt-4 font-body text-sm text-muted-ink">Loading…</p>
+        <p className="mt-4 font-body text-sm text-muted-ink">{t('common.loading')}</p>
       ) : open.length === 0 ? (
-        <p className="mt-4 font-body text-sm text-muted-ink">Nothing open — all clear.</p>
+        <p className="mt-4 font-body text-sm text-muted-ink">{t('notes.allClear')}</p>
       ) : (
         <div className="mt-3 flex flex-col gap-2">
           {open.map((n) => (
@@ -188,7 +188,7 @@ export function Notes() {
             onClick={() => setShowDone((v) => !v)}
             className="font-body text-[11px] font-bold text-sky-dark"
           >
-            {showDone ? 'Hide recently done ▴' : `Recently done (${done.length}) ▾`}
+            {showDone ? `${t('notes.hideDone')} ▴` : `${t('notes.recentlyDone', { n: done.length })} ▾`}
           </button>
           {showDone && (
             <div className="mt-2 flex flex-col gap-2">
@@ -219,6 +219,7 @@ function NoteCard({
   onReopen?: () => void
   onDelete: () => void
 }) {
+  const t = useT()
   const c = catOf(n.category)
   const resolved = !!n.resolvedAt
   return (
@@ -236,11 +237,11 @@ function NoteCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {n.category !== 'GENERAL' && (
               <span className={`rounded-full border-2 px-1.5 py-px font-body text-[10px] font-bold ${c.cls}`}>
-                {c.label}
+                {t(catKey(n.category))}
               </span>
             )}
             <span className="font-body text-[11px] font-bold text-muted-ink">
-              {n.mine ? 'You' : n.authorName.split(' ')[0]} · {relativeTime(n.createdAt)}
+              {n.mine ? t('common.you') : n.authorName.split(' ')[0]} · {relativeTime(n.createdAt)}
             </span>
           </div>
           <p
@@ -252,7 +253,10 @@ function NoteCard({
           </p>
           {resolved && n.resolvedName && (
             <p className="mt-0.5 font-body text-[11px] text-muted-ink">
-              done by {n.resolvedName.split(' ')[0]} {relativeTime(n.resolvedAt!)}
+              {t('notes.doneBy', {
+                name: n.resolvedName.split(' ')[0],
+                ago: relativeTime(n.resolvedAt!),
+              })}
             </p>
           )}
         </div>
@@ -262,7 +266,7 @@ function NoteCard({
               onClick={onResolve}
               className="rounded-full border-2 border-green bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white"
             >
-              ✓ Done
+              {t('notes.markDone')}
             </button>
           )}
           {onReopen && (
@@ -270,14 +274,14 @@ function NoteCard({
               onClick={onReopen}
               className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
             >
-              Reopen
+              {t('notes.reopen')}
             </button>
           )}
           <button
             onClick={onDelete}
             className="font-body text-[11px] font-bold text-muted-ink underline"
           >
-            delete
+            {t('common.delete')}
           </button>
         </div>
       </div>

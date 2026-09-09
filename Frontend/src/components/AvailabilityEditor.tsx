@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from './Button'
+import { useT } from '../lib/i18n'
 import { DAY_LABEL, DAYS } from '../lib/time'
 import type { DayHours, DayOfWeek } from '../types'
 
@@ -38,6 +39,7 @@ export function AvailabilityEditor({
   /** the store's resolved hours per weekday — drives the quick-add buttons */
   hoursByDay?: Partial<Record<DayOfWeek, DayHours>>
 }) {
+  const t = useT()
   const [rows, setRows] = useState<Row[]>([])
   const [savedSig, setSavedSig] = useState('[]')
   const [loading, setLoading] = useState(true)
@@ -121,18 +123,18 @@ export function AvailabilityEditor({
   const status = error
     ? { text: error, tone: 'text-coral-dark' }
     : invalidKeys.size > 0
-      ? { text: 'Fix the highlighted times', tone: 'text-coral-dark' }
+      ? { text: t('avail.fixTimes'), tone: 'text-coral-dark' }
       : dirty
-        ? { text: 'Unsaved changes', tone: 'text-ink' }
+        ? { text: t('avail.unsaved'), tone: 'text-ink' }
         : justSaved
-          ? { text: 'Saved ✓', tone: 'text-green-dark' }
+          ? { text: t('common.saved'), tone: 'text-green-dark' }
           : { text: idleText, tone: 'text-muted-ink' }
   const showSave = dirty || saving || invalidKeys.size > 0
 
   const timeInput =
     'w-[6.75rem] shrink-0 rounded-lg border-2 bg-cream px-1.5 py-1 font-body text-[13px] text-ink outline-none sm:w-[7rem] sm:px-2 sm:text-sm'
 
-  if (loading) return <p className="font-body text-sm text-muted-ink">Loading…</p>
+  if (loading) return <p className="font-body text-sm text-muted-ink">{t('common.loading')}</p>
 
   return (
     <>
@@ -151,7 +153,7 @@ export function AvailabilityEditor({
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 {dayRows.length === 0 && (
                   <span className="font-body text-xs text-muted-ink">
-                    {storeClosed ? 'Store closed' : 'Not available'}
+                    {storeClosed ? t('avail.storeClosed') : t('avail.notAvailable')}
                   </span>
                 )}
                 {dayRows.map((r) => {
@@ -175,7 +177,7 @@ export function AvailabilityEditor({
                       />
                       <button
                         onClick={() => removeRow(r.key)}
-                        aria-label="Remove"
+                        aria-label={t('avail.remove')}
                         className="rounded-full px-1 font-heading text-base font-bold leading-none text-muted-ink hover:text-coral-dark"
                       >
                         ×
@@ -189,7 +191,7 @@ export function AvailabilityEditor({
                       onClick={() => addAllDay(day)}
                       className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
                     >
-                      + all day
+                      {t('avail.addAllDay')}
                     </button>
                   )}
                   {!storeClosed && (
@@ -197,14 +199,14 @@ export function AvailabilityEditor({
                       onClick={() => addNight(day)}
                       className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape hover:border-ink"
                     >
-                      + night
+                      {t('avail.addNight')}
                     </button>
                   )}
                   <button
                     onClick={() => addRow(day)}
                     className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
                   >
-                    + hours
+                    {t('avail.addHours')}
                   </button>
                 </div>
               </div>
@@ -223,7 +225,7 @@ export function AvailabilityEditor({
         </span>
         {showSave && (
           <Button onClick={() => void persist()} disabled={!canSave} className="shrink-0">
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         )}
       </div>
