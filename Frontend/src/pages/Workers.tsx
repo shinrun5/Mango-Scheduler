@@ -1,7 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
+import { FruitAvatar } from '../components/FruitAvatar'
 import { StarBadgeIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { fruitForPerson } from '../lib/fruit'
 import { DAY_LABEL, DAYS, to12Hour } from '../lib/time'
 import { useStore } from '../lib/store-context'
 import type { DayOfWeek, FixedShift, RosterWorker, Store, Tier } from '../types'
@@ -135,7 +137,14 @@ export function Workers() {
               className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="flex min-w-0 gap-2.5">
+                  <span className="mt-0.5 shrink-0">
+                    <FruitAvatar
+                      kind={fruitForPerson({ employeeId: w.id, avatarFruit: w.avatarFruit })}
+                      size={34}
+                    />
+                  </span>
+                  <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-heading text-sm font-bold text-ink">{w.name}</span>
                     {w.standby && (
@@ -189,6 +198,7 @@ export function Workers() {
                       onError={setError}
                     />
                   )}
+                  </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <button
