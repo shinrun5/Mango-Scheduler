@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CalendarIcon } from '../components/icons'
+import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
+import { fruitForPerson } from '../lib/fruit'
 import { DAY_LABEL, DAYS, dayDate, relativeTime, timeRange, weekRangeLabel } from '../lib/time'
-import type { ChangeRequest, MyShiftsResponse, Shift, Store } from '../types'
+import type { ChangeRequest, MyShiftsResponse, Shift, ShiftCoworker, Store } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
   PENDING: 'border-orange bg-orange/10 text-ink',
@@ -161,6 +163,7 @@ export function MyShifts() {
                           </button>
                         )}
                       </div>
+                      {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} />}
                       {data.live && expanded === s.id && !pending && (
                         <RequestPanel
                           shiftId={s.id}
@@ -260,6 +263,23 @@ export function MyShifts() {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function CoworkerRow({ people }: { people: ShiftCoworker[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-body text-[11px] font-bold text-muted-ink">Working with</span>
+      {people.map((p, i) => (
+        <span key={`${p.avatarKey}-${i}`} className="flex items-center gap-1">
+          <FruitAvatar
+            kind={fruitForPerson({ employeeId: p.avatarKey, avatarFruit: p.avatarFruit })}
+            size={16}
+          />
+          <span className="font-body text-[11px] font-semibold text-ink">{p.name}</span>
+        </span>
+      ))}
     </div>
   )
 }

@@ -19,6 +19,18 @@ async function requireManagerOfShift(req: Request, res: Response, next: NextFunc
 }
 
 const clockIso = (hhmm: string) => `1970-01-01T${hhmm}:00.000Z`;
+const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+const minHHMM = (s: string) => {
+  const [h, m] = s.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+};
+const overlaps = (aS: number, aE: number, bS: number, bE: number) => aS < bE && bS < aE;
+
+interface Coworker {
+  name: string;
+  avatarKey: number; // employeeId — feeds the deterministic default fruit
+  avatarFruit: string | null;
+}
 
 // The signed-in employee's own shifts, per store.
 //   - store's schedule is published  -> live Shift rows (marketplace actions work)
@@ -41,6 +53,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     day: DayOfWeek;
     start: string;
     end: string;
+    coworkers: Coworker[];
   }[] = [];
   const stores: { storeId: number; storeName: string; publishedAt: Date | null; weekStart: Date | null; live: boolean }[] = [];
   let synthetic = 0;
@@ -50,11 +63,32 @@ router.get('/mine', requireAuth, async (req, res) => {
     if (!sched) continue;
 
     if (sched.publishedAt) {
-      const rows = await prisma.shift.findMany({
-        where: { employeeId, storeId: l.storeId },
-        orderBy: [{ day: 'asc' }, { start: 'asc' }],
-      });
+      const [rows, others] = await Promise.all([
+        prisma.shift.findMany({
+          where: { employeeId, storeId: l.storeId },
+          orderBy: [{ day: 'asc' }, { start: 'asc' }],
+        }),
+        prisma.shift.findMany({
+          where: { storeId: l.storeId, employeeId: { not: null, notIn: [employeeId] } },
+          select: {
+            employeeId: true,
+            day: true,
+            start: true,
+            end: true,
+            employee: { select: { name: true, avatarFruit: true } },
+          },
+        }),
+      ]);
       for (const r of rows) {
+        const mS = minOf(r.start);
+        const mE = minOf(r.end);
+        const coworkers: Coworker[] = others
+          .filter((o) => o.day === r.day && overlaps(mS, mE, minOf(o.start), minOf(o.end)))
+          .map((o) => ({
+            name: o.employee?.name ?? 'A coworker',
+            avatarKey: o.employeeId ?? 0,
+            avatarFruit: o.employee?.avatarFruit ?? null,
+          }));
         shiftsOut.push({
           id: r.id,
           employeeId: r.employeeId,
@@ -62,6 +96,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           day: r.day,
           start: r.start.toISOString(),
           end: r.end.toISOString(),
+          coworkers,
         });
       }
       stores.push({
@@ -76,12 +111,40 @@ router.get('/mine', requireAuth, async (req, res) => {
       if (!snap) continue;
       const frozen = snap.shifts as {
         employeeId: number | null;
+        employeeName: string | null;
         day: DayOfWeek;
         start: string;
         end: string;
       }[];
+      // current fruit for anyone I might be working with
+      const coworkerIds = [
+        ...new Set(frozen.filter((f) => f.employeeId != null && f.employeeId !== employeeId).map((f) => f.employeeId!)),
+      ];
+      const fruitById = new Map(
+        (
+          await prisma.employee.findMany({
+            where: { id: { in: coworkerIds } },
+            select: { id: true, avatarFruit: true },
+          })
+        ).map((e) => [e.id, e.avatarFruit]),
+      );
       for (const f of frozen) {
         if (f.employeeId !== employeeId) continue;
+        const mS = minHHMM(f.start);
+        const mE = minHHMM(f.end);
+        const coworkers: Coworker[] = frozen
+          .filter(
+            (o) =>
+              o.employeeId != null &&
+              o.employeeId !== employeeId &&
+              o.day === f.day &&
+              overlaps(mS, mE, minHHMM(o.start), minHHMM(o.end)),
+          )
+          .map((o) => ({
+            name: o.employeeName ?? 'A coworker',
+            avatarKey: o.employeeId ?? 0,
+            avatarFruit: fruitById.get(o.employeeId!) ?? null,
+          }));
         shiftsOut.push({
           id: -++synthetic, // read-only; no marketplace actions in this state
           employeeId,
@@ -89,6 +152,7 @@ router.get('/mine', requireAuth, async (req, res) => {
           day: f.day,
           start: clockIso(f.start),
           end: clockIso(f.end),
+          coworkers,
         });
       }
       stores.push({

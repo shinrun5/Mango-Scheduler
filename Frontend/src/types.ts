@@ -189,13 +189,25 @@ export interface ChangeRequest {
   targetEmployee: { id: number; name: string } | null
 }
 
+export interface ShiftCoworker {
+  name: string
+  /** employeeId — feeds the deterministic default fruit */
+  avatarKey: number
+  avatarFruit: string | null
+}
+
+export interface MyShift extends Shift {
+  /** everyone else on at the same store whose hours overlap this shift */
+  coworkers: ShiftCoworker[]
+}
+
 export interface MyShiftsResponse {
   published: boolean
   /** false while a new week is being drafted — shifts are shown read-only, no swaps */
   live: boolean
   publishedAt: string | null
   weekStart: string | null
-  shifts: Shift[]
+  shifts: MyShift[]
   stores: {
     storeId: number
     storeName: string
