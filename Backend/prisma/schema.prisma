@@ -31,9 +31,10 @@ model Store {
   // true => a NEW-tier worker is never scheduled solo on a window; the solver
   // keeps at least one REGULAR-or-above coworker on the same window with them
   pairNewWorkers      Boolean @default(false)
-  // store hours, "HH:MM" 24h — used as the availability editor's quick-add
+  // default store hours, "HH:MM" 24h — the availability editor's quick-add
   // defaults ("+ all day" = open→close, "+ night" = nightStart→close). Null =
-  // fall back to the span of the store's shift requirements.
+  // fall back to the span of the store's shift requirements. Per-weekday
+  // exceptions live in StoreHours; dated exceptions in StoreHoliday.
   openTime   String?
   closeTime  String?
   nightStart String?
@@ -46,6 +47,41 @@ model Store {
   fixedShifts FixedShift[]
   messages    Message[]
   messageReads MessageRead[]
+  weekdayHours StoreHours[]
+  holidays    StoreHoliday[]
+}
+
+// A weekday whose hours differ from the store default (e.g. late Fridays, short
+// Sundays). `closed` = the store isn't open that weekday at all. Null time +
+// !closed means "same as the store default for that field".
+model StoreHours {
+  id         Int       @id @default(autoincrement())
+  store      Store     @relation(fields: [storeId], references: [id])
+  storeId    Int
+  day        DayOfWeek
+  closed     Boolean   @default(false)
+  openTime   String?
+  closeTime  String?
+  nightStart String?
+
+  @@unique([storeId, day])
+}
+
+// A specific date the store's hours differ (a holiday). `closed` (default) = no
+// shifts generated for that date's weekday when it falls in the scheduled week.
+model StoreHoliday {
+  id         Int       @id @default(autoincrement())
+  store      Store     @relation(fields: [storeId], references: [id])
+  storeId    Int
+  date       DateTime  // UTC midnight
+  label      String?
+  closed     Boolean   @default(true)
+  openTime   String?
+  closeTime  String?
+  nightStart String?
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
 }
 
 // A standing weekly assignment: this employee always works this store/day/window.

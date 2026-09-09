@@ -1,10 +1,28 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import { DayOfWeek } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireOwner } from '../lib/auth.js';
 
 const router = Router();
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const DAY_SET = new Set<string>(Object.values(DayOfWeek));
+
+/** After requireAuth: the caller must manage store :id. Leaves it on req for reuse. */
+function requireManagerOfParamStore(req: Request, res: Response, next: NextFunction) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  if (!canManageStore(req.user, id)) return res.status(403).json({ error: 'You do not manage that store' });
+  next();
+}
+
+/** UTC-midnight Date from "YYYY-MM-DD", or null. */
+function parseDate(s: unknown): Date | null {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 /** undefined = leave alone, null = clear, string = validated "HH:MM" (or an error). */
 function hhmmPatch(v: unknown): undefined | null | string {
   if (v === undefined) return undefined;
@@ -87,6 +105,101 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// --- per-weekday + per-date store hours -------------------------------------
+
+// GET /stores/:id/hours — default hours + weekday exceptions + holidays
+router.get('/:id/hours', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  const [store, weekday, holidays] = await Promise.all([
+    prisma.store.findUnique({
+      where: { id: storeId },
+      select: { openTime: true, closeTime: true, nightStart: true },
+    }),
+    prisma.storeHours.findMany({ where: { storeId }, orderBy: { day: 'asc' } }),
+    prisma.storeHoliday.findMany({ where: { storeId }, orderBy: { date: 'asc' } }),
+  ]);
+  res.json({
+    default: { openTime: store?.openTime ?? null, closeTime: store?.closeTime ?? null, nightStart: store?.nightStart ?? null },
+    weekday: weekday.map((w) => ({
+      day: w.day,
+      closed: w.closed,
+      openTime: w.openTime,
+      closeTime: w.closeTime,
+      nightStart: w.nightStart,
+    })),
+    holidays: holidays.map((h) => ({
+      id: h.id,
+      date: h.date.toISOString().slice(0, 10),
+      label: h.label,
+      closed: h.closed,
+      openTime: h.openTime,
+      closeTime: h.closeTime,
+      nightStart: h.nightStart,
+    })),
+  });
+});
+
+const hhmmOrNull = (v: unknown): string | null | 'ERR' => {
+  if (v === undefined || v === null || v === '') return null;
+  return typeof v === 'string' && HHMM.test(v) ? v : 'ERR';
+};
+
+// PUT /stores/:id/hours  { weekday: [{ day, closed, openTime, closeTime, nightStart }] }
+// Replaces the whole weekday-exception set (send only the days that differ).
+router.put('/:id/hours', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  const raw = req.body?.weekday;
+  if (!Array.isArray(raw)) return res.status(400).json({ error: 'weekday must be an array' });
+
+  const rows: { storeId: number; day: DayOfWeek; closed: boolean; openTime: string | null; closeTime: string | null; nightStart: string | null }[] = [];
+  const seen = new Set<string>();
+  for (const w of raw) {
+    if (!DAY_SET.has(w?.day)) return res.status(400).json({ error: `Invalid day: ${w?.day}` });
+    if (seen.has(w.day)) return res.status(400).json({ error: `Duplicate day: ${w.day}` });
+    seen.add(w.day);
+    const o = hhmmOrNull(w.openTime);
+    const c = hhmmOrNull(w.closeTime);
+    const n = hhmmOrNull(w.nightStart);
+    if ([o, c, n].includes('ERR')) return res.status(400).json({ error: 'Times must be "HH:MM" (24-hour)' });
+    rows.push({ storeId, day: w.day, closed: !!w.closed, openTime: o as string | null, closeTime: c as string | null, nightStart: n as string | null });
+  }
+
+  await prisma.$transaction([
+    prisma.storeHours.deleteMany({ where: { storeId } }),
+    prisma.storeHours.createMany({ data: rows }),
+  ]);
+  res.json({ ok: true });
+});
+
+// POST /stores/:id/holidays  { date, label?, closed?, openTime?, closeTime?, nightStart? }
+router.post('/:id/holidays', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  const date = parseDate(req.body?.date);
+  if (!date) return res.status(400).json({ error: 'date must be "YYYY-MM-DD"' });
+  const o = hhmmOrNull(req.body?.openTime);
+  const c = hhmmOrNull(req.body?.closeTime);
+  const n = hhmmOrNull(req.body?.nightStart);
+  if ([o, c, n].includes('ERR')) return res.status(400).json({ error: 'Times must be "HH:MM" (24-hour)' });
+  const label = typeof req.body?.label === 'string' && req.body.label.trim() ? req.body.label.trim() : null;
+  const closed = req.body?.closed === undefined ? true : !!req.body.closed;
+
+  const h = await prisma.storeHoliday.upsert({
+    where: { storeId_date: { storeId, date } },
+    create: { storeId, date, label, closed, openTime: o as string | null, closeTime: c as string | null, nightStart: n as string | null },
+    update: { label, closed, openTime: o as string | null, closeTime: c as string | null, nightStart: n as string | null },
+  });
+  res.status(201).json({ id: h.id, date: h.date.toISOString().slice(0, 10), label: h.label, closed: h.closed });
+});
+
+// DELETE /stores/:id/holidays/:hid
+router.delete('/:id/holidays/:hid', requireAuth, requireManagerOfParamStore, async (req, res) => {
+  const storeId = Number(req.params.id);
+  const hid = Number(req.params.hid);
+  if (!Number.isInteger(hid)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  await prisma.storeHoliday.deleteMany({ where: { id: hid, storeId } });
+  res.json({ ok: true });
+});
+
 // DELETE /stores/:id  (owner) — refuses while anything still points at it
 router.delete('/:id', ...requireOwner, async (req, res) => {
   const id = Number(req.params.id);
@@ -109,6 +222,8 @@ router.delete('/:id', ...requireOwner, async (req, res) => {
       prisma.scheduleSnapshot.deleteMany({ where: { storeId: id } }),
       prisma.schedule.deleteMany({ where: { storeId: id } }),
       prisma.managerStore.deleteMany({ where: { storeId: id } }),
+      prisma.storeHours.deleteMany({ where: { storeId: id } }),
+      prisma.storeHoliday.deleteMany({ where: { storeId: id } }),
       prisma.store.delete({ where: { id } }),
     ]);
     res.json({ message: 'Store deleted' });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AvailabilityEditor, type AvailWindow } from './AvailabilityEditor'
+import type { DayHours, DayOfWeek } from '../types'
 import { TimeOffPanel } from './TimeOffPanel'
 import { api } from '../lib/api'
 import { shiftWeekYMD, thisMondayYMD, toHHMM24, weekRangeLabel } from '../lib/time'
@@ -22,17 +23,14 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
   const [confirmed, setConfirmed] = useState(false)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
-  // store opening/closing + default night shift — drives the editor's quick-add buttons
-  const [hours, setHours] = useState<{
-    dayDefault: { start: string; end: string }
-    night: { start: string; end: string }
-  }>()
+  // store hours per weekday — drives the editor's quick-add buttons
+  const [hoursByDay, setHoursByDay] = useState<Record<DayOfWeek, DayHours>>()
 
   useEffect(() => {
     let live = true
     api
       .getMyStoreHours()
-      .then((h) => live && setHours({ dayDefault: { start: h.open, end: h.close }, night: h.night }))
+      .then((h) => live && setHoursByDay(h.byDay))
       .catch(() => {}) // fall back to the editor's built-in defaults
     return () => {
       live = false
@@ -154,8 +152,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           load={standingLoad}
           save={standingSave}
           idleText="Saved — repeats every week"
-          dayDefault={hours?.dayDefault}
-          night={hours?.night}
+          hoursByDay={hoursByDay}
         />
       ) : (
         <AvailabilityEditor
@@ -164,8 +161,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
           load={weekLoad}
           save={weekSave}
           idleText={hasOverride ? 'Saved — this week only' : 'Copy of your standing hours — not saved yet'}
-          dayDefault={hours?.dayDefault}
-          night={hours?.night}
+          hoursByDay={hoursByDay}
         />
       )}
     </div>

@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { ManagersSection } from '../components/ManagersSection'
 import { RequirementsEditor } from '../components/RequirementsEditor'
+import { StoreHoursEditor } from '../components/StoreHoursEditor'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { EmployeeStore, ShiftRequirement, Store } from '../types'
@@ -32,6 +33,7 @@ export function Stores() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<number | null>(null)
   const [showNeeds, setShowNeeds] = useState<number | null>(null)
+  const [showHours, setShowHours] = useState<number | null>(null)
 
   function refresh() {
     return Promise.all([api.getStores(), api.getEmployeeStores(), api.getShiftRequirements()])
@@ -111,7 +113,7 @@ export function Stores() {
                       </>
                     )}
                   </span>
-                  <div className="ml-auto flex gap-2">
+                  <div className="ml-auto flex flex-wrap gap-2">
                     <button
                       onClick={() => setShowNeeds((v) => (v === s.id ? null : s.id))}
                       className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
@@ -119,6 +121,12 @@ export function Stores() {
                       }`}
                     >
                       Shift needs ({reqCount(s.id)})
+                    </button>
+                    <button
+                      onClick={() => setShowHours((v) => (v === s.id ? null : s.id))}
+                      className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                    >
+                      Hours
                     </button>
                     <button
                       onClick={() => setEditing(s.id)}
@@ -141,6 +149,7 @@ export function Stores() {
                 {showNeeds === s.id && (
                   <RequirementsEditor storeId={s.id} onChange={() => void refresh()} />
                 )}
+                {showHours === s.id && <StoreHoursEditor storeId={s.id} />}
               </div>
             ),
           )}

@@ -151,6 +151,25 @@ export async function generateScheduleForStore(
     effectiveAvailability = effectiveAvailability.filter((a) => !offDays.get(a.employeeId)?.has(a.day));
   }
 
+  // Store holidays in this week where the store is marked closed -> no shifts that
+  // day: drop the weekday's availability, requirements and fixed shifts.
+  const closedHolidayDays = new Set<DayOfWeek>();
+  if (weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+    const holidays = await prisma.storeHoliday.findMany({
+      where: { storeId, closed: true, date: { gte: weekStart, lte: weekEnd } },
+      select: { date: true },
+    });
+    for (const h of holidays) {
+      const i = Math.round((h.date.getTime() - weekStart.getTime()) / 86_400_000);
+      if (i >= 0 && i < 7) closedHolidayDays.add(WEEK_DAYS[i]!);
+    }
+    if (closedHolidayDays.size) {
+      effectiveAvailability = effectiveAvailability.filter((a) => !closedHolidayDays.has(a.day));
+    }
+  }
+
   // Cross-store, same day: if someone already has a shift at another store, carve
   // that time (plus a travel buffer) out of their availability here — so the
   // solver can still send them here for a non-overlapping window ("Mango till 4,
@@ -204,13 +223,15 @@ export async function generateScheduleForStore(
     where: { storeId },
     include: { employee: { include: { employeeStores: { where: { storeId } } } } },
   });
-  const fixedRows = fixedShifts.map((f) => ({
-    employeeId: f.employeeId,
-    storeId,
-    day: f.day,
-    start: f.start,
-    end: f.end,
-  }));
+  const fixedRows = fixedShifts
+    .filter((f) => !closedHolidayDays.has(f.day))
+    .map((f) => ({
+      employeeId: f.employeeId,
+      storeId,
+      day: f.day,
+      start: f.start,
+      end: f.end,
+    }));
   const minOf = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
   // A fixed schedule IS the schedule at this store: someone with any fixed shift
   // here works exactly those days, nothing more — even if they're available all
@@ -237,7 +258,9 @@ export async function generateScheduleForStore(
       })),
     })),
     availability: effectiveAvailability,
-    requirements: requirements.map((r) => {
+    requirements: requirements
+      .filter((r) => !closedHolidayDays.has(r.day))
+      .map((r) => {
       // fixed shifts that fully cover this window pre-fill its headcount
       const covering = fixedShifts.filter(
         (f) => f.day === r.day && minOf(f.start) <= minOf(r.start) && minOf(f.end) >= minOf(r.end),

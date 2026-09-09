@@ -41,6 +41,34 @@ export interface Store {
   nightStart: string | null
 }
 
+/** Resolved store hours for one weekday. */
+export interface DayHours {
+  open: string
+  close: string
+  night: { start: string; end: string }
+  closed: boolean
+}
+
+export interface StoreHoursConfig {
+  default: { openTime: string | null; closeTime: string | null; nightStart: string | null }
+  weekday: {
+    day: DayOfWeek
+    closed: boolean
+    openTime: string | null
+    closeTime: string | null
+    nightStart: string | null
+  }[]
+  holidays: {
+    id: number
+    date: string // "YYYY-MM-DD"
+    label: string | null
+    closed: boolean
+    openTime: string | null
+    closeTime: string | null
+    nightStart: string | null
+  }[]
+}
+
 export interface Employee {
   id: number
   name: string

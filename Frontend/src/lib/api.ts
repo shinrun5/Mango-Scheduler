@@ -4,6 +4,7 @@ import type {
   ChangeType,
   ChatMessage,
   DmPeer,
+  DayHours,
   DayOfWeek,
   Employee,
   FixedShift,
@@ -24,6 +25,7 @@ import type {
   TimeOffRequest,
   SnapshotMeta,
   Store,
+  StoreHoursConfig,
   Tier,
 } from '../types'
 import { getSession, setSession } from './session'
@@ -219,6 +221,18 @@ export const api = {
       nightStart?: string | null
     },
   ) => sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
+  /** Weekday-exception hours + holiday dates for a store. */
+  getStoreHours: (storeId: number) =>
+    getJSON<StoreHoursConfig>(`/stores/${storeId}/hours`),
+  /** Replace the whole set of weekday exceptions (send only the days that differ). */
+  putStoreWeekdayHours: (storeId: number, weekday: StoreHoursConfig['weekday']) =>
+    sendJSON<{ ok: true }>(`/stores/${storeId}/hours`, 'PUT', { weekday }),
+  addStoreHoliday: (
+    storeId: number,
+    input: { date: string; label?: string; closed?: boolean; openTime?: string | null; closeTime?: string | null; nightStart?: string | null },
+  ) => sendJSON<{ id: number; date: string; label: string | null; closed: boolean }>(`/stores/${storeId}/holidays`, 'POST', input),
+  deleteStoreHoliday: (storeId: number, hid: number) =>
+    request<{ ok: true }>(`/stores/${storeId}/holidays/${hid}`, { method: 'DELETE' }),
   deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),
@@ -288,11 +302,14 @@ export const api = {
 
   // --- employee self-service ---
   getMyAvailability: () => getJSON<RecurringAvailability[]>('/availability/mine'),
-  /** Opening / closing time + a default night-shift window for the caller's store(s). */
+  /** Opening / closing / night-shift window for the caller's store(s), per weekday. */
   getMyStoreHours: () =>
-    getJSON<{ open: string; close: string; night: { start: string; end: string } }>(
-      '/availability/mine/hours',
-    ),
+    getJSON<{
+      open: string
+      close: string
+      night: { start: string; end: string }
+      byDay: Record<DayOfWeek, DayHours>
+    }>('/availability/mine/hours'),
   /** Replace the signed-in employee's whole week. start/end are "HH:MM". */
   saveMyAvailability: (windows: { day: DayOfWeek; start: string; end: string }[]) =>
     sendJSON<RecurringAvailability[]>('/availability/mine', 'PUT', { windows }),

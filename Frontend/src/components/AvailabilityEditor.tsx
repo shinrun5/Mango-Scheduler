@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from './Button'
 import { DAY_LABEL, DAYS } from '../lib/time'
-import type { DayOfWeek } from '../types'
+import type { DayHours, DayOfWeek } from '../types'
 
 export interface AvailWindow {
   day: DayOfWeek
@@ -28,17 +28,14 @@ export function AvailabilityEditor({
   load,
   save,
   idleText,
-  dayDefault,
-  night,
+  hoursByDay,
 }: {
   barClass: string
   load: () => Promise<AvailWindow[]>
   save: (windows: AvailWindow[]) => Promise<AvailWindow[]>
   idleText: string
-  /** first window added to a day starts here — the store's opening/closing hours */
-  dayDefault?: { start: string; end: string }
-  /** the "+ night" quick-add window — the store's default night shift */
-  night?: { start: string; end: string }
+  /** the store's resolved hours per weekday — drives the quick-add buttons */
+  hoursByDay?: Partial<Record<DayOfWeek, DayHours>>
 }) {
   const [rows, setRows] = useState<Row[]>([])
   const [savedSig, setSavedSig] = useState('[]')
@@ -75,21 +72,24 @@ export function AvailabilityEditor({
     setJustSaved(false)
   }
 
+  const hoursFor = (day: DayOfWeek): DayHours =>
+    hoursByDay?.[day] ?? { open: '09:00', close: '21:00', night: { start: '17:00', end: '21:00' }, closed: false }
+
   function addRow(day: DayOfWeek) {
     const prev = rows.filter((r) => r.day === day).at(-1)
-    const start = prev ? prev.end : dayDefault?.start ?? '17:00'
+    const start = prev ? prev.end : hoursFor(day).open
     const [h] = start.split(':').map(Number)
     const end = `${String(Math.min((h ?? 17) + 4, 23)).padStart(2, '0')}:00`
     pushRow(day, start, end > start ? end : '23:00')
   }
 
   function addAllDay(day: DayOfWeek) {
-    const d = dayDefault ?? { start: '09:00', end: '21:00' }
-    pushRow(day, d.start, d.end)
+    const d = hoursFor(day)
+    pushRow(day, d.open, d.close)
   }
 
   function addNight(day: DayOfWeek) {
-    const n = night ?? { start: '17:00', end: '21:00' }
+    const n = hoursFor(day).night
     pushRow(day, n.start, n.end)
   }
   function patchRow(key: string, patch: Partial<Pick<Row, 'start' | 'end'>>) {
@@ -138,6 +138,7 @@ export function AvailabilityEditor({
       <div className="overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
         {DAYS.map((day) => {
           const dayRows = rows.filter((r) => r.day === day)
+          const storeClosed = hoursByDay?.[day]?.closed
           return (
             <div
               key={day}
@@ -148,7 +149,9 @@ export function AvailabilityEditor({
               </span>
               <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-2 gap-y-1.5">
                 {dayRows.length === 0 && (
-                  <span className="pt-1.5 font-body text-xs text-muted-ink">Not available</span>
+                  <span className="pt-1.5 font-body text-xs text-muted-ink">
+                    {storeClosed ? 'Store closed' : 'Not available'}
+                  </span>
                 )}
                 {dayRows.map((r) => {
                   const bad = invalidKeys.has(r.key)
@@ -179,13 +182,15 @@ export function AvailabilityEditor({
                     </span>
                   )
                 })}
-                <button
-                  onClick={() => addAllDay(day)}
-                  className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
-                >
-                  + all day
-                </button>
-                {night && (
+                {!storeClosed && (
+                  <button
+                    onClick={() => addAllDay(day)}
+                    className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
+                  >
+                    + all day
+                  </button>
+                )}
+                {!storeClosed && (
                   <button
                     onClick={() => addNight(day)}
                     className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape hover:border-ink"

@@ -74,14 +74,24 @@ router.get('/mine/hours', requireAuth, async (req, res) => {
 
   const links = await prisma.employeeStore.findMany({
     where: { employeeId },
-    select: { store: { select: { id: true, openTime: true, closeTime: true, nightStart: true } } },
+    select: {
+      store: {
+        select: {
+          id: true,
+          openTime: true,
+          closeTime: true,
+          nightStart: true,
+          weekdayHours: true,
+        },
+      },
+    },
   });
   const stores = links.map((l) => l.store);
   const storeIds = stores.map((s) => s.id);
   const reqs = storeIds.length
     ? await prisma.shiftRequirement.findMany({
         where: { storeId: { in: storeIds } },
-        select: { storeId: true, start: true, end: true },
+        select: { storeId: true, day: true, start: true, end: true },
       })
     : [];
 
@@ -92,30 +102,45 @@ router.get('/mine/hours', requireAuth, async (req, res) => {
   const fromMin = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-  // Per store: the manager's explicit hours win; else the span of its shift
-  // requirements; else a generic 9–21. Then combine across the caller's stores.
-  const opens: number[] = [];
-  const closes: number[] = [];
-  const nights: number[] = [];
-  for (const s of stores) {
-    const mine = reqs.filter((r) => r.storeId === s.id);
-    const reqOpen = mine.length ? Math.min(...mine.map((r) => toMin(r.start))) : 9 * 60;
-    const reqClose = mine.length ? Math.max(...mine.map((r) => toMin(r.end))) : 21 * 60;
-    const openM = s.openTime ? toMin(s.openTime) : reqOpen;
-    const closeM = s.closeTime ? toMin(s.closeTime) : reqClose;
-    opens.push(openM);
-    closes.push(closeM);
-    nights.push(s.nightStart ? toMin(s.nightStart) : Math.max(openM, closeM - 300));
-  }
-  const openM = opens.length ? Math.min(...opens) : 9 * 60;
-  const closeM = closes.length ? Math.max(...closes) : 21 * 60;
-  const nightM = Math.min(nights.length ? Math.min(...nights) : closeM - 300, closeM - 30);
+  const DOW = Object.values(DayOfWeek) as DayOfWeek[];
+  const byDay: Record<
+    string,
+    { open: string; close: string; night: { start: string; end: string }; closed: boolean }
+  > = {};
 
-  res.json({
-    open: fromMin(openM),
-    close: fromMin(closeM),
-    night: { start: fromMin(Math.max(openM, nightM)), end: fromMin(closeM) },
-  });
+  for (const day of DOW) {
+    const opens: number[] = [];
+    const closes: number[] = [];
+    const nights: number[] = [];
+    let openStores = 0;
+
+    for (const s of stores) {
+      const wh = s.weekdayHours.find((w) => w.day === day);
+      if (wh?.closed) continue; // this store is shut that weekday
+      openStores++;
+      const dReqs = reqs.filter((r) => r.storeId === s.id && r.day === day);
+      const reqOpen = dReqs.length ? Math.min(...dReqs.map((r) => toMin(r.start))) : 9 * 60;
+      const reqClose = dReqs.length ? Math.max(...dReqs.map((r) => toMin(r.end))) : 21 * 60;
+      const openM = toMin(wh?.openTime ?? s.openTime ?? fromMin(reqOpen));
+      const closeM = toMin(wh?.closeTime ?? s.closeTime ?? fromMin(reqClose));
+      opens.push(openM);
+      closes.push(closeM);
+      nights.push(toMin(wh?.nightStart ?? s.nightStart ?? fromMin(Math.max(openM, closeM - 300))));
+    }
+
+    const openM = opens.length ? Math.min(...opens) : 9 * 60;
+    const closeM = closes.length ? Math.max(...closes) : 21 * 60;
+    const nightM = Math.min(nights.length ? Math.min(...nights) : closeM - 300, closeM - 30);
+    byDay[day] = {
+      open: fromMin(openM),
+      close: fromMin(closeM),
+      night: { start: fromMin(Math.max(openM, nightM)), end: fromMin(closeM) },
+      closed: stores.length > 0 && openStores === 0,
+    };
+  }
+
+  // keep the old flat shape too (Mon as the representative day) for any older client
+  res.json({ ...byDay.MONDAY, byDay });
 });
 
 /** Replace the caller's entire weekly availability in one shot.

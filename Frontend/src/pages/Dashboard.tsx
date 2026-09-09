@@ -145,6 +145,20 @@ export function Dashboard() {
     }
   }, [weekStart])
 
+  // holidays configured for the selected store
+  const [holidays, setHolidays] = useState<Awaited<ReturnType<typeof api.getStoreHours>>['holidays']>([])
+  useEffect(() => {
+    if (storeId == null) return
+    let live = true
+    api
+      .getStoreHours(storeId)
+      .then((c) => live && setHolidays(c.holidays))
+      .catch(() => live && setHolidays([]))
+    return () => {
+      live = false
+    }
+  }, [storeId])
+
   const effectiveAvailability = useMemo<RecurringAvailability[]>(() => {
     if (!board) return []
     if (!weekOverrides || weekOverrides.overriddenEmployeeIds.length === 0) return board.availability
@@ -504,6 +518,37 @@ export function Dashboard() {
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
       />
+
+      {weekStart &&
+        (() => {
+          const wk0 = weekStart.slice(0, 10)
+          const wkEnd = new Date(weekStart)
+          wkEnd.setUTCDate(wkEnd.getUTCDate() + 6)
+          const wk6 = wkEnd.toISOString().slice(0, 10)
+          const inWeek = holidays.filter((h) => h.date >= wk0 && h.date <= wk6)
+          if (inWeek.length === 0) return null
+          return (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-ink/10 bg-coral-bg px-4 py-2 sm:px-8">
+              <span className="font-heading text-[11px] font-bold uppercase tracking-wide text-coral-dark">
+                Holiday this week
+              </span>
+              {inWeek.map((h) => (
+                <span key={h.id} className="font-body text-[11px] font-bold text-ink">
+                  {new Date(`${h.date}T00:00:00Z`).toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  })}
+                  {h.label ? ` · ${h.label}` : ''} —{' '}
+                  {h.closed
+                    ? 'closed, no shifts generated that day'
+                    : `${h.openTime ?? '?'}–${h.closeTime ?? '?'} (adjust shifts by hand)`}
+                </span>
+              ))}
+            </div>
+          )
+        })()}
 
       {weekStart &&
         (() => {
