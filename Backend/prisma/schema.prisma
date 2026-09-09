@@ -211,6 +211,10 @@ model ShiftChangeRequest {
   requestedById    Int
   targetEmployee   Employee?     @relation("RequestsTargeted", fields: [targetEmployeeId], references: [id])
   targetEmployeeId Int?
+  // when set, only this slice of the shift is being handed off (1970 wall-clock,
+  // like Shift.start/end). null = the whole shift. On approval the shift is split.
+  handoffStart     DateTime?
+  handoffEnd       DateTime?
   note             String?
   createdAt        DateTime      @default(now())
   resolvedAt       DateTime?
@@ -263,6 +267,8 @@ model User {
   role       Role     @default(EMPLOYEE)
   // manager opt-in: get pinged when a worker changes a future week's availability
   notifyOnAvailabilityUpdate Boolean @default(false)
+  // opt-out: email me when a coworker posts a shift to the marketplace (default on)
+  notifyOnMarketplacePost    Boolean @default(true)
   // opt-in: email me when there are new store-chat messages I haven't seen
   notifyOnChatMessage Boolean  @default(false)
   lastChatEmailAt     DateTime? // rate-limits the chat digest email

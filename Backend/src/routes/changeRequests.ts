@@ -2,9 +2,23 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { canManageStore, requireAuth, requireRole } from '../lib/auth.js';
+import { notifyMany } from '../lib/notify.js';
 
 const router = Router();
 const anyManager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const toClock = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
+const min = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+const to12 = (d: Date) => {
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ap = h < 12 ? 'AM' : 'PM';
+  return `${((h % 12) || 12)}:${String(m).padStart(2, '0')} ${ap}`;
+};
+const DAY_TITLE: Record<string, string> = {
+  MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun',
+};
 
 /** guard for approve/deny — the request's shift must be at a store the caller manages */
 async function requireManagerOfRequest(req: Request, res: Response, next: NextFunction) {
@@ -42,6 +56,9 @@ function shape(r: FullRequest) {
       end: r.shift.end,
       employeeId: r.shift.employeeId,
     },
+    // set when only part of the shift is being handed off (ISO like shift.start/end)
+    handoffStart: r.handoffStart,
+    handoffEnd: r.handoffEnd,
     requestedBy: { id: r.requestedBy.id, name: r.requestedBy.name },
     targetEmployee: r.targetEmployee ? { id: r.targetEmployee.id, name: r.targetEmployee.name } : null,
   };
@@ -135,6 +152,29 @@ router.post('/', requireAuth, async (req, res) => {
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
+  // optional: hand off only part of the shift (DROP/SWAP only)
+  let handoffStart: Date | null = null;
+  let handoffEnd: Date | null = null;
+  const hs = req.body?.handoffStart;
+  const he = req.body?.handoffEnd;
+  if (hs !== undefined || he !== undefined) {
+    if (type === 'PICKUP') return res.status(400).json({ error: "Can't part-pick-up an open shift" });
+    if (typeof hs !== 'string' || typeof he !== 'string' || !HHMM.test(hs) || !HHMM.test(he)) {
+      return res.status(400).json({ error: 'handoffStart/handoffEnd must be "HH:MM"' });
+    }
+    const a = toClock(hs);
+    const b = toClock(he);
+    if (min(a) >= min(b)) return res.status(400).json({ error: 'handoff start must be before end' });
+    if (min(a) < min(shift.start) || min(b) > min(shift.end)) {
+      return res.status(400).json({ error: 'That window is outside your shift' });
+    }
+    // a window covering the whole shift is just a normal (whole-shift) request
+    if (!(min(a) === min(shift.start) && min(b) === min(shift.end))) {
+      handoffStart = a;
+      handoffEnd = b;
+    }
+  }
+
   // no swaps/drops/pickups while the schedule for that store is only a draft
   const sched = await prisma.schedule.findUnique({
     where: { storeId: shift.storeId },
@@ -176,11 +216,70 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   const created = await prisma.shiftChangeRequest.create({
-    data: { type, shiftId, requestedById: me, targetEmployeeId: target, openOffer, note: note ?? null },
+    data: {
+      type,
+      shiftId,
+      requestedById: me,
+      targetEmployeeId: target,
+      openOffer,
+      handoffStart,
+      handoffEnd,
+      note: note ?? null,
+    },
     include: INCLUDE,
   });
+
+  // a marketplace post -> tell the whole store (in-app always, email opt-out)
+  if (openOffer) {
+    void emailMarketplacePost(created).catch((e) =>
+      console.error('[change-requests] marketplace notify failed', e),
+    );
+  }
+
   res.status(201).json(shape(created));
 });
+
+/** In-app + email everyone at the shift's store (bar the poster) that a shift is
+ * up for grabs. Email respects User.notifyOnMarketplacePost (default on). */
+async function emailMarketplacePost(r: FullRequest): Promise<void> {
+  const store = await prisma.store.findUnique({
+    where: { id: r.shift.storeId },
+    select: { name: true, orgId: true },
+  });
+  if (!store) return;
+
+  const recips = await prisma.user.findMany({
+    where: {
+      employeeId: { not: r.requestedById },
+      OR: [
+        { role: 'OWNER', orgId: store.orgId },
+        { managerStores: { some: { storeId: r.shift.storeId } } },
+        { employee: { is: { employeeStores: { some: { storeId: r.shift.storeId } } } } },
+      ],
+    },
+    select: { id: true, notifyOnMarketplacePost: true },
+  });
+  if (recips.length === 0) return;
+
+  const start = r.handoffStart ?? r.shift.start;
+  const end = r.handoffEnd ?? r.shift.end;
+  const window = `${DAY_TITLE[r.shift.day]} ${to12(start)}–${to12(end)}`;
+  const partial = r.handoffStart ? ' (part of a shift)' : '';
+  const title = `${r.requestedBy.name ?? 'A coworker'} put a shift on the marketplace`;
+  const body = `${window}${partial} at ${store.name} is up for grabs.${
+    r.note ? ` "${r.note}"` : ''
+  } Open Market to claim it.`;
+
+  // in-app for everyone; email only for those who haven't opted out
+  await notifyMany(
+    recips.filter((u) => !u.notifyOnMarketplacePost).map((u) => u.id),
+    { kind: 'GENERIC', title, body, link: '/marketplace', email: false },
+  );
+  await notifyMany(
+    recips.filter((u) => u.notifyOnMarketplacePost).map((u) => u.id),
+    { kind: 'GENERIC', title, body, link: '/marketplace', email: true },
+  );
+}
 
 // POST /change-requests/:id/cancel  (the requester, while still pending)
 router.post('/:id/cancel', requireAuth, async (req, res) => {
@@ -219,8 +318,10 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
     return res.status(400).json({ error: "You don't work at this store" });
   }
 
+  const wStart = r.handoffStart ?? r.shift.start;
+  const wEnd = r.handoffEnd ?? r.shift.end;
   const sameDay = await prisma.shift.findMany({ where: { employeeId: me, day: r.shift.day } });
-  if (sameDay.some((s) => s.start < r.shift.end && r.shift.start < s.end)) {
+  if (sameDay.some((s) => s.start < wEnd && wStart < s.end)) {
     return res.status(409).json({ error: "You're already working then" });
   }
 
@@ -287,13 +388,36 @@ router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, re
   const newEmployeeId =
     r.type === 'DROP' ? null : r.type === 'SWAP' ? r.targetEmployeeId : r.requestedById;
 
-  await prisma.$transaction([
-    prisma.shift.update({ where: { id: r.shiftId }, data: { employeeId: newEmployeeId } }),
-    prisma.shiftChangeRequest.update({
-      where: { id },
-      data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id },
-    }),
-  ]);
+  const resolveOp = prisma.shiftChangeRequest.update({
+    where: { id },
+    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id },
+  });
+
+  if (r.handoffStart && r.handoffEnd) {
+    // Partial hand-off: the original row becomes the handed-off slice; the
+    // requester keeps the leftover piece(s) as new rows.
+    const { storeId, day, start: s, end: e } = r.shift;
+    const keep: Prisma.ShiftCreateManyInput[] = [];
+    if (min(s) < min(r.handoffStart)) {
+      keep.push({ employeeId: r.requestedById, storeId, day, start: s, end: r.handoffStart });
+    }
+    if (min(r.handoffEnd) < min(e)) {
+      keep.push({ employeeId: r.requestedById, storeId, day, start: r.handoffEnd, end: e });
+    }
+    await prisma.$transaction([
+      prisma.shift.update({
+        where: { id: r.shiftId },
+        data: { start: r.handoffStart, end: r.handoffEnd, employeeId: newEmployeeId },
+      }),
+      ...(keep.length ? [prisma.shift.createMany({ data: keep })] : []),
+      resolveOp,
+    ]);
+  } else {
+    await prisma.$transaction([
+      prisma.shift.update({ where: { id: r.shiftId }, data: { employeeId: newEmployeeId } }),
+      resolveOp,
+    ]);
+  }
 
   const updated = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
   res.json(shape(updated!));

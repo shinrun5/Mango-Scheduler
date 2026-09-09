@@ -34,7 +34,11 @@ export function Marketplace() {
   const storeName = (id: number) => stores.find((s) => s.id === id)?.name ?? `Store ${id}`
   const when = (r: ChangeRequest) => {
     const d = weekStart ? `${dayDate(weekStart, DAYS.indexOf(r.shift.day))} · ` : ''
-    return `${DAY_LABEL[r.shift.day]} ${d}${timeRange(r.shift.start, r.shift.end)} · ${storeName(r.shift.storeId)}`
+    const hrs =
+      r.handoffStart && r.handoffEnd
+        ? `${timeRange(r.handoffStart, r.handoffEnd)} (part of a shift)`
+        : timeRange(r.shift.start, r.shift.end)
+    return `${DAY_LABEL[r.shift.day]} ${d}${hrs} · ${storeName(r.shift.storeId)}`
   }
 
   async function act(id: number, fn: () => Promise<unknown>) {

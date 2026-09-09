@@ -3,7 +3,16 @@ import { CalendarIcon } from '../components/icons'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
-import { DAY_LABEL, DAYS, dayDate, relativeTime, timeRange, weekRangeLabel } from '../lib/time'
+import {
+  DAY_LABEL,
+  DAYS,
+  dayDate,
+  relativeTime,
+  timeRange,
+  to12Hour,
+  toHHMM24,
+  weekRangeLabel,
+} from '../lib/time'
 import type { ChangeRequest, MyShiftsResponse, Shift, ShiftCoworker, TeamShift, Store } from '../types'
 
 const STATUS_STYLE: Record<ChangeRequest['status'], string> = {
@@ -189,15 +198,9 @@ export function MyShifts() {
                       {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} />}
                       {data.live && expanded === s.id && !pending && (
                         <RequestPanel
-                          shiftId={s.id}
-                          onDrop={(note) => act(() => api.createChangeRequest({ type: 'DROP', shiftId: s.id, note }))}
-                          onOffer={(note) =>
-                            act(() => api.createChangeRequest({ type: 'SWAP', shiftId: s.id, note }))
-                          }
-                          onSwap={(targetEmployeeId, note) =>
-                            act(() =>
-                              api.createChangeRequest({ type: 'SWAP', shiftId: s.id, targetEmployeeId, note }),
-                            )
+                          shift={{ id: s.id, start: s.start, end: s.end }}
+                          onSubmit={(input) =>
+                            act(() => api.createChangeRequest({ shiftId: s.id, ...input }))
                           }
                         />
                       )}
@@ -266,7 +269,11 @@ export function MyShifts() {
                       : `Give to ${r.targetEmployee?.name ?? '—'}`}
                 </span>
                 <span className="text-muted-ink">
-                  {DAY_LABEL[r.shift.day]} {timeRange(r.shift.start, r.shift.end)} at {storeName(r.shift.storeId)}
+                  {DAY_LABEL[r.shift.day]}{' '}
+                  {r.handoffStart && r.handoffEnd
+                    ? `${timeRange(r.handoffStart, r.handoffEnd)} (part)`
+                    : timeRange(r.shift.start, r.shift.end)}{' '}
+                  at {storeName(r.shift.storeId)}
                 </span>
                 <span
                   className={`rounded-full border px-1.5 py-px text-[10px] font-bold ${STATUS_STYLE[r.status]}`}
@@ -398,29 +405,79 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   )
 }
 
+type ReqInput = {
+  type: 'DROP' | 'SWAP'
+  targetEmployeeId?: number
+  note?: string
+  handoffStart?: string
+  handoffEnd?: string
+}
+
 function RequestPanel({
-  shiftId,
-  onDrop,
-  onOffer,
-  onSwap,
+  shift,
+  onSubmit,
 }: {
-  shiftId: number
-  onDrop: (note?: string) => void
-  onOffer: (note?: string) => void
-  onSwap: (targetEmployeeId: number, note?: string) => void
+  shift: { id: number; start: string; end: string }
+  onSubmit: (input: ReqInput) => void
 }) {
+  const shiftStart = toHHMM24(shift.start)
+  const shiftEnd = toHHMM24(shift.end)
   const [targets, setTargets] = useState<{ id: number; name: string }[]>([])
   const [target, setTarget] = useState<number | ''>('')
   const [note, setNote] = useState('')
+  const [part, setPart] = useState(false)
+  const [pStart, setPStart] = useState(shiftStart)
+  const [pEnd, setPEnd] = useState(shiftEnd)
 
   useEffect(() => {
-    api.getSwapTargets(shiftId).then(setTargets).catch(() => setTargets([]))
-  }, [shiftId])
+    api.getSwapTargets(shift.id).then(setTargets).catch(() => setTargets([]))
+  }, [shift.id])
+
+  const inRange = pStart >= shiftStart && pEnd <= shiftEnd && pStart < pEnd
+  const isWhole = pStart === shiftStart && pEnd === shiftEnd
+  const partValid = !part || (inRange && !isWhole)
+  const handoff = part && inRange && !isWhole
+  const base = (type: 'DROP' | 'SWAP', targetEmployeeId?: number): ReqInput => ({
+    type,
+    ...(targetEmployeeId ? { targetEmployeeId } : {}),
+    ...(note.trim() ? { note: note.trim() } : {}),
+    ...(handoff ? { handoffStart: pStart, handoffEnd: pEnd } : {}),
+  })
 
   const pill = 'rounded-full border-2 px-3 py-1.5 font-heading text-[11px] font-bold'
+  const timeInp =
+    'w-[6.5rem] rounded-lg border-2 border-ink/40 bg-paper px-2 py-1 font-body text-xs text-ink outline-none'
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border-2 border-ink/15 bg-cream p-2.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        {(['whole', 'part'] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setPart(m === 'part')}
+            className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
+              (m === 'part') === part ? 'bg-ink text-white' : 'bg-paper text-ink'
+            }`}
+          >
+            {m === 'whole' ? 'Whole shift' : 'Part of it'}
+          </button>
+        ))}
+        {part && (
+          <span className="flex items-center gap-1">
+            <input type="time" step={1800} value={pStart} min={shiftStart} max={shiftEnd} onChange={(e) => setPStart(e.target.value)} className={timeInp} />
+            <span className="text-muted-ink">–</span>
+            <input type="time" step={1800} value={pEnd} min={shiftStart} max={shiftEnd} onChange={(e) => setPEnd(e.target.value)} className={timeInp} />
+          </span>
+        )}
+      </div>
+      {part && !partValid && (
+        <p className="font-body text-[11px] font-bold text-coral-dark">
+          {isWhole
+            ? "That's your whole shift — trim it, or switch to “Whole shift”."
+            : `Pick a window inside ${to12Hour(shiftStart)}–${to12Hour(shiftEnd)}.`}
+        </p>
+      )}
+
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
@@ -429,14 +486,16 @@ function RequestPanel({
       />
       <div className="flex gap-2">
         <button
-          onClick={() => onOffer(note || undefined)}
-          className={`${pill} flex-1 border-ink bg-green text-white`}
+          disabled={!partValid}
+          onClick={() => onSubmit(base('SWAP'))}
+          className={`${pill} flex-1 border-ink bg-green text-white disabled:opacity-40`}
         >
           Post to the crew
         </button>
         <button
-          onClick={() => onDrop(note || undefined)}
-          className={`${pill} flex-1 border-coral text-coral-dark`}
+          disabled={!partValid}
+          onClick={() => onSubmit(base('DROP'))}
+          className={`${pill} flex-1 border-coral text-coral-dark disabled:opacity-40`}
         >
           Drop it
         </button>
@@ -456,8 +515,8 @@ function RequestPanel({
           ))}
         </select>
         <button
-          disabled={target === ''}
-          onClick={() => target !== '' && onSwap(target, note || undefined)}
+          disabled={target === '' || !partValid}
+          onClick={() => target !== '' && onSubmit(base('SWAP', target))}
           className={`${pill} shrink-0 border-ink bg-paper text-ink disabled:opacity-40`}
         >
           Send

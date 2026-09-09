@@ -174,7 +174,16 @@ export function Requests() {
                 </span>
               </div>
               <p className="mt-0.5 font-body text-xs text-muted-ink">
-                {DAY_LABEL[r.shift.day]} · {timeRange(r.shift.start, r.shift.end)} · {storeName(r.shift.storeId)}
+                {DAY_LABEL[r.shift.day]} ·{' '}
+                {r.handoffStart && r.handoffEnd ? (
+                  <>
+                    {timeRange(r.handoffStart, r.handoffEnd)}{' '}
+                    <span className="text-sky-dark">(part of {timeRange(r.shift.start, r.shift.end)})</span>
+                  </>
+                ) : (
+                  timeRange(r.shift.start, r.shift.end)
+                )}{' '}
+                · {storeName(r.shift.storeId)}
               </p>
               {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
 

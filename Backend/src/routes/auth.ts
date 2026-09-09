@@ -223,7 +223,13 @@ router.get('/profile', requireAuth, async (req, res) => {
   const u = req.user!;
   const account = await prisma.user.findUnique({
     where: { id: u.id },
-    select: { name: true, phone: true, notifyOnAvailabilityUpdate: true, notifyOnChatMessage: true },
+    select: {
+      name: true,
+      phone: true,
+      notifyOnAvailabilityUpdate: true,
+      notifyOnChatMessage: true,
+      notifyOnMarketplacePost: true,
+    },
   });
   let employee = null;
   if (u.employeeId) {
@@ -259,15 +265,20 @@ router.get('/profile', requireAuth, async (req, res) => {
     alerts: {
       availabilityUpdates: account?.notifyOnAvailabilityUpdate ?? false,
       chatMessages: account?.notifyOnChatMessage ?? false,
+      marketplacePosts: account?.notifyOnMarketplacePost ?? true,
     },
     employee,
   });
 });
 
-// PUT /auth/alerts  { availabilityUpdates?, chatMessages? } — notification opt-ins
+// PUT /auth/alerts  { availabilityUpdates?, chatMessages?, marketplacePosts? } — opt-ins
 router.put('/alerts', requireAuth, async (req, res) => {
   const u = req.user!;
-  const data: { notifyOnAvailabilityUpdate?: boolean; notifyOnChatMessage?: boolean } = {};
+  const data: {
+    notifyOnAvailabilityUpdate?: boolean;
+    notifyOnChatMessage?: boolean;
+    notifyOnMarketplacePost?: boolean;
+  } = {};
   if (req.body?.availabilityUpdates !== undefined) {
     if (typeof req.body.availabilityUpdates !== 'boolean') {
       return res.status(400).json({ error: 'availabilityUpdates must be true or false' });
@@ -280,6 +291,12 @@ router.put('/alerts', requireAuth, async (req, res) => {
     }
     data.notifyOnChatMessage = req.body.chatMessages;
   }
+  if (req.body?.marketplacePosts !== undefined) {
+    if (typeof req.body.marketplacePosts !== 'boolean') {
+      return res.status(400).json({ error: 'marketplacePosts must be true or false' });
+    }
+    data.notifyOnMarketplacePost = req.body.marketplacePosts;
+  }
   if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
   const updated = await prisma.user.update({ where: { id: u.id }, data });
@@ -287,6 +304,7 @@ router.put('/alerts', requireAuth, async (req, res) => {
     alerts: {
       availabilityUpdates: updated.notifyOnAvailabilityUpdate,
       chatMessages: updated.notifyOnChatMessage,
+      marketplacePosts: updated.notifyOnMarketplacePost,
     },
   });
 });

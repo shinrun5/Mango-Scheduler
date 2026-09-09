@@ -139,8 +139,8 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
   /** Toggle notification opt-ins (availability changes / new chat messages). */
-  setAlerts: (patch: { availabilityUpdates?: boolean; chatMessages?: boolean }) =>
-    sendJSON<{ alerts: { availabilityUpdates: boolean; chatMessages: boolean } }>(
+  setAlerts: (patch: { availabilityUpdates?: boolean; chatMessages?: boolean; marketplacePosts?: boolean }) =>
+    sendJSON<{ alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean } }>(
       '/auth/alerts',
       'PUT',
       patch,
@@ -163,6 +163,9 @@ export const api = {
     shiftId: number
     targetEmployeeId?: number
     note?: string
+    /** hand off only this slice ("HH:MM") of the shift — omit for the whole shift */
+    handoffStart?: string
+    handoffEnd?: string
   }) => sendJSON<ChangeRequest>('/change-requests', 'POST', input),
   cancelChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/cancel`, 'POST', {}),
 

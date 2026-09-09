@@ -444,13 +444,17 @@ function AlertPrefs({
   onError,
 }: {
   isManager: boolean
-  alerts: { availabilityUpdates: boolean; chatMessages: boolean }
+  alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean }
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
   const [busy, setBusy] = useState(false)
 
-  async function save(patch: { availabilityUpdates?: boolean; chatMessages?: boolean }) {
+  async function save(patch: {
+    availabilityUpdates?: boolean
+    chatMessages?: boolean
+    marketplacePosts?: boolean
+  }) {
     onError(null)
     setBusy(true)
     try {
@@ -479,6 +483,16 @@ function AlertPrefs({
           }
         />
       )}
+      <AlertToggle
+        on={alerts.marketplacePosts}
+        busy={busy}
+        onClick={() => void save({ marketplacePosts: !alerts.marketplacePosts })}
+        label={
+          <>
+            <b>Marketplace posts</b> — email me when a coworker puts a shift up for grabs
+          </>
+        }
+      />
       <AlertToggle
         on={alerts.chatMessages}
         busy={busy}

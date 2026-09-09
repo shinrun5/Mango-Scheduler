@@ -166,7 +166,7 @@ export interface Profile {
   phone: string | null
   role: Role
   /** notification opt-ins */
-  alerts: { availabilityUpdates: boolean; chatMessages: boolean }
+  alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean }
   employee: {
     id: number
     name: string
@@ -219,6 +219,9 @@ export interface ChangeRequest {
   }
   requestedBy: { id: number; name: string }
   targetEmployee: { id: number; name: string } | null
+  /** set when only part of the shift is being handed off (ISO like shift.start/end) */
+  handoffStart: string | null
+  handoffEnd: string | null
 }
 
 export interface ShiftCoworker {
