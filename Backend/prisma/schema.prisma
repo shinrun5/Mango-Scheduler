@@ -49,6 +49,7 @@ model Store {
   messageReads MessageRead[]
   weekdayHours StoreHours[]
   holidays    StoreHoliday[]
+  shiftNotes  ShiftNote[]
 }
 
 // A weekday whose hours differ from the store default (e.g. late Fridays, short
@@ -273,6 +274,8 @@ model User {
   notifications Notification[]
   messages      Message[]
   messageReads  MessageRead[]
+  shiftNotesAuthored ShiftNote[] @relation("ShiftNotesAuthored")
+  shiftNotesResolved ShiftNote[] @relation("ShiftNotesResolved")
   dmSent        DirectMessage[] @relation("DmSent")
   dmReceived    DirectMessage[] @relation("DmReceived")
   createdAt  DateTime @default(now())
@@ -320,6 +323,27 @@ model MessageRead {
   lastReadAt DateTime @default(now())
 
   @@id([userId, storeId])
+}
+
+// Shift pass-down log: something the next shift should know (a refund coming
+// back, a complaint, a found item, low stock…). Stays "open" until someone
+// marks it done.
+model ShiftNote {
+  id           Int       @id @default(autoincrement())
+  store        Store     @relation(fields: [storeId], references: [id])
+  storeId      Int
+  user         User?     @relation("ShiftNotesAuthored", fields: [userId], references: [id])
+  userId       Int?      // null once the author's account is removed
+  authorName   String    // denormalised
+  category     String    @default("GENERAL") // GENERAL | REFUND | COMPLAINT | LOST_FOUND | STOCK | MAINTENANCE
+  body         String
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+  resolvedBy   User?     @relation("ShiftNotesResolved", fields: [resolvedById], references: [id])
+  resolvedById Int?
+  resolvedName String?
+
+  @@index([storeId, resolvedAt, id])
 }
 
 enum NotificationKind {

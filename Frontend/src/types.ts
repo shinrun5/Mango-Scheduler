@@ -360,6 +360,28 @@ export interface DmPeer {
   lastMessageAt: string | null
 }
 
+export type ShiftNoteCategory =
+  | 'GENERAL'
+  | 'REFUND'
+  | 'COMPLAINT'
+  | 'LOST_FOUND'
+  | 'STOCK'
+  | 'MAINTENANCE'
+
+export interface ShiftNote {
+  id: number
+  storeId: number
+  category: ShiftNoteCategory
+  body: string
+  createdAt: string
+  authorName: string
+  authorKey: number
+  authorFruit: string | null
+  mine: boolean
+  resolvedAt: string | null
+  resolvedName: string | null
+}
+
 export type Conversation =
   | {
       kind: 'store'

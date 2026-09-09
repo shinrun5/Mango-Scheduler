@@ -6,6 +6,7 @@ import { UserIcon } from './icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useChatUnread } from '../lib/use-chat-unread'
+import { useNotesCount } from '../lib/use-notes-count'
 import { StoreProvider, useStore } from '../lib/store-context'
 
 const tab = ({ isActive }: { isActive: boolean }) =>
@@ -29,6 +30,7 @@ function Chrome({ children }: { children?: ReactNode }) {
   const { stores, storeId, setStoreId } = useStore()
   const [pending, setPending] = useState(0)
   const unread = useChatUnread()
+  const notes = useNotesCount()
 
   useEffect(() => {
     Promise.all([api.getChangeRequests('PENDING'), api.getTimeOff(true)])
@@ -98,6 +100,9 @@ function Chrome({ children }: { children?: ReactNode }) {
           </NavLink>
           <NavLink to="/chat" className={tab}>
             Chat{unread > 0 ? ` (${unread > 9 ? '9+' : unread})` : ''}
+          </NavLink>
+          <NavLink to="/notes" className={tab}>
+            Notes{notes > 0 ? ` (${notes > 9 ? '9+' : notes})` : ''}
           </NavLink>
           <NavLink to="/stores" className={tab}>
             Stores

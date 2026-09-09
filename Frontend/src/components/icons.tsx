@@ -99,3 +99,12 @@ export function ChatIcon({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
+
+export function NoteIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...stroke(size)}>
+      <path d="M6 3h9l5 5v13H6z" />
+      <path d="M14 3v6h6M9 13h7M9 16.5h5" />
+    </svg>
+  )
+}

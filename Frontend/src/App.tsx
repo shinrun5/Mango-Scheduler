@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { EmployeeLayout } from './components/EmployeeLayout'
 import { ManagerLayout } from './components/ManagerLayout'
@@ -6,6 +7,7 @@ import { useAuth } from './lib/auth'
 import { homePathForRole } from './lib/roles'
 import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
+import { Notes } from './pages/Notes'
 import { Dashboard } from './pages/Dashboard'
 import { History } from './pages/History'
 import { Login } from './pages/Login'
@@ -30,15 +32,11 @@ function RootRedirect() {
   return <Navigate to={user ? homePathForRole(user.role) : '/login'} replace />
 }
 
-/** One /chat URL for everyone — wrapped in whichever chrome matches the role. */
-function ChatScreen() {
+/** Pages both roles share, each wrapped in whichever chrome matches the role. */
+function RoleScreen({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const Layout = user?.role === 'EMPLOYEE' ? EmployeeLayout : ManagerLayout
-  return (
-    <Layout>
-      <Chat />
-    </Layout>
-  )
+  return <Layout>{children}</Layout>
 }
 
 export default function App() {
@@ -72,7 +70,8 @@ export default function App() {
         </Route>
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/chat" element={<ChatScreen />} />
+          <Route path="/chat" element={<RoleScreen><Chat /></RoleScreen>} />
+          <Route path="/notes" element={<RoleScreen><Notes /></RoleScreen>} />
         </Route>
 
         <Route path="/" element={<RootRedirect />} />

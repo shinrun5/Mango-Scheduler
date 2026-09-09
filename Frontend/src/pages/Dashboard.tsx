@@ -1,4 +1,5 @@
 import { type MouseEvent, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AssignPopover } from '../components/AssignPopover'
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
 import { SlotEditor } from '../components/SlotEditor'
@@ -154,6 +155,20 @@ export function Dashboard() {
       .getStoreHours(storeId)
       .then((c) => live && setHolidays(c.holidays))
       .catch(() => live && setHolidays([]))
+    return () => {
+      live = false
+    }
+  }, [storeId])
+
+  // open shift notes for the selected store
+  const [openNotes, setOpenNotes] = useState<{ count: number; latest: string | null }>({ count: 0, latest: null })
+  useEffect(() => {
+    if (storeId == null) return
+    let live = true
+    api
+      .getNotes(storeId)
+      .then((r) => live && setOpenNotes({ count: r.open.length, latest: r.open[0]?.body ?? null }))
+      .catch(() => live && setOpenNotes({ count: 0, latest: null }))
     return () => {
       live = false
     }
@@ -518,6 +533,23 @@ export function Dashboard() {
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
       />
+
+      {openNotes.count > 0 && (
+        <Link
+          to="/notes"
+          className="flex items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink hover:bg-orange/20 sm:px-8"
+        >
+          <span className="shrink-0 rounded-full border-2 border-ink bg-paper px-2 py-0.5">
+            {openNotes.count} open note{openNotes.count === 1 ? '' : 's'}
+          </span>
+          {openNotes.latest && (
+            <span className="min-w-0 flex-1 truncate font-normal text-muted-ink">
+              {openNotes.latest}
+            </span>
+          )}
+          <span className="shrink-0 text-sky-dark">see all ›</span>
+        </Link>
+      )}
 
       {weekStart &&
         (() => {
