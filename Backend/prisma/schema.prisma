@@ -177,6 +177,7 @@ model ShiftChangeRequest {
 model Employee {
   id Int @id @default(autoincrement())
   name String
+  phone String?   // contact number; mirrored to/from User.phone when an account is linked
   shift Shift[]
   hourLimit Int
   maxShifts Int @default(6)   // max distinct days worked per week

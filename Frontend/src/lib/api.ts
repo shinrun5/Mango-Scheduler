@@ -237,8 +237,16 @@ export const api = {
     standby?: boolean
     store?: { storeId: number; proficiency: Tier; canOpen?: boolean; primary?: boolean }
   }) => sendJSON<RosterWorker>('/employees', 'POST', input),
-  updateWorker: (id: number, patch: { name: string; hourLimit: number; maxShifts: number; standby?: boolean }) =>
-    sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
+  updateWorker: (
+    id: number,
+    patch: {
+      name: string
+      hourLimit: number
+      maxShifts: number
+      standby?: boolean
+      phone?: string | null
+    },
+  ) => sendJSON<RosterWorker>(`/employees/${id}`, 'PUT', patch),
   deleteWorker: (id: number) =>
     request<{ message: string; accountLeftUnlinked: string | null }>(`/employees/${id}`, { method: 'DELETE' }),
   inviteWorker: (id: number) =>

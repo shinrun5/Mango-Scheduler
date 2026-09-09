@@ -63,6 +63,7 @@ async function freePin(storeId: number): Promise<string> {
 interface RosterRow {
   id: number;
   name: string;
+  phone: string | null;
   hourLimit: number;
   maxShifts: number;
   standby: boolean;
@@ -82,6 +83,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
   return employees.map((e) => ({
     id: e.id,
     name: e.name,
+    phone: e.phone,
     hourLimit: e.hourLimit,
     maxShifts: e.maxShifts,
     standby: e.standby,
@@ -320,20 +322,44 @@ router.get("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
 
 router.put("/:id", requireAuth, requireManagerOfEmployee, async (req, res) => {
   const id = Number(req.params.id);
-  const { name, hourLimit, maxShifts, standby } = req.body ?? {};
+  const { hourLimit, maxShifts, standby, phone } = req.body ?? {};
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (!name || hourLimit === undefined) {
     return res.status(400).json({ error: "name and hourLimit are required" });
   }
+  const h = Math.round(Number(hourLimit));
+  if (!Number.isFinite(h) || h < 1 || h > 80) {
+    return res.status(400).json({ error: "Weekly hours must be between 1 and 80" });
+  }
+  let d: number | undefined;
+  if (maxShifts !== undefined) {
+    d = Math.round(Number(maxShifts));
+    if (!Number.isFinite(d) || d < 1 || d > 7) {
+      return res.status(400).json({ error: "Max days must be between 1 and 7" });
+    }
+  }
+  const phoneVal =
+    phone === undefined ? undefined : typeof phone === "string" && phone.trim() ? phone.trim() : null;
+
   try {
-    await prisma.employee.update({
+    const updated = await prisma.employee.update({
       where: { id },
       data: {
         name,
-        hourLimit,
-        ...(maxShifts !== undefined ? { maxShifts } : {}),
-        ...(standby !== undefined ? { standby } : {}),
+        hourLimit: h,
+        ...(d !== undefined ? { maxShifts: d } : {}),
+        ...(standby !== undefined ? { standby: !!standby } : {}),
+        ...(phoneVal !== undefined ? { phone: phoneVal } : {}),
       },
+      include: { user: { select: { id: true } } },
     });
+    // keep a linked login's name/phone in step with the roster
+    if (updated.user) {
+      await prisma.user.update({
+        where: { id: updated.user.id },
+        data: { name, ...(phoneVal !== undefined ? { phone: phoneVal } : {}) },
+      });
+    }
     const rows = await roster();
     res.json(rows.find((r) => r.id === id));
   } catch {

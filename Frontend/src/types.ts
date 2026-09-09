@@ -117,6 +117,7 @@ export interface RosterStoreLink {
 export interface RosterWorker {
   id: number
   name: string
+  phone: string | null
   hourLimit: number
   maxShifts: number
   standby: boolean

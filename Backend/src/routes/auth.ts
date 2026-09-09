@@ -305,9 +305,15 @@ router.put('/profile', requireAuth, async (req, res) => {
       ...(phone !== undefined ? { phone: phone || null } : {}),
     },
   });
-  // keep the roster name in sync when this account is also a worker
-  if (name && u.employeeId) {
-    await prisma.employee.update({ where: { id: u.employeeId }, data: { name } });
+  // keep the roster row in sync when this account is also a worker
+  if (u.employeeId && (name || phone !== undefined)) {
+    await prisma.employee.update({
+      where: { id: u.employeeId },
+      data: {
+        ...(name ? { name } : {}),
+        ...(phone !== undefined ? { phone: phone || null } : {}),
+      },
+    });
   }
   res.json({ ok: true });
 });

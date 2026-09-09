@@ -16,6 +16,7 @@ export function Workers() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<number | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
   function refresh() {
@@ -145,6 +146,7 @@ export function Workers() {
                   </div>
                   <span className="font-body text-[11px] text-muted-ink">
                     {w.hourLimit}h/wk · up to {w.maxShifts} days
+                    {w.phone && <> · {w.phone}</>}
                   </span>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     {w.stores.length === 0 && (
@@ -188,13 +190,32 @@ export function Workers() {
                     />
                   )}
                 </div>
-                <button
-                  onClick={() => void remove(w)}
-                  className="shrink-0 rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
-                >
-                  Remove
-                </button>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <button
+                    onClick={() => setEditing((id) => (id === w.id ? null : w.id))}
+                    className="rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink"
+                  >
+                    {editing === w.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button
+                    onClick={() => void remove(w)}
+                    className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
+
+              {editing === w.id && (
+                <EditWorkerForm
+                  worker={w}
+                  onDone={() => {
+                    setEditing(null)
+                    void refresh()
+                  }}
+                  onError={setError}
+                />
+              )}
 
               <div className="mt-2 border-t border-ink/10 pt-2 font-body text-[11px]">
                 {w.account ? (
@@ -338,6 +359,96 @@ function AddWorkerForm({
       </label>
       <Button type="submit" disabled={busy || !name.trim()}>
         {busy ? 'Adding…' : 'Add'}
+      </Button>
+    </form>
+  )
+}
+
+function EditWorkerForm({
+  worker,
+  onDone,
+  onError,
+}: {
+  worker: RosterWorker
+  onDone: () => void
+  onError: (msg: string | null) => void
+}) {
+  const [name, setName] = useState(worker.name)
+  const [phone, setPhone] = useState(worker.phone ?? '')
+  const [hourLimit, setHourLimit] = useState(worker.hourLimit)
+  const [maxShifts, setMaxShifts] = useState(worker.maxShifts)
+  const [standby, setStandby] = useState(worker.standby)
+  const [busy, setBusy] = useState(false)
+
+  const field = 'rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    onError(null)
+    if (!name.trim()) return onError('Name cannot be empty')
+    setBusy(true)
+    try {
+      await api.updateWorker(worker.id, {
+        name: name.trim(),
+        phone: phone.trim() || null,
+        hourLimit,
+        maxShifts,
+        standby,
+      })
+      onDone()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not save changes')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="mt-2 flex flex-wrap items-end gap-3 rounded-xl border-2 border-ink/15 bg-cream/60 p-2.5"
+    >
+      <label className="flex flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">Name</span>
+        <input required value={name} onChange={(e) => setName(e.target.value)} className={field} />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">Phone</span>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className={`${field} w-36`}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">Hours/wk</span>
+        <input
+          type="number"
+          min={1}
+          max={80}
+          value={hourLimit}
+          onChange={(e) => setHourLimit(Number(e.target.value))}
+          className={`${field} w-20`}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="font-body text-[10px] font-bold text-muted-ink">Max days</span>
+        <input
+          type="number"
+          min={1}
+          max={7}
+          value={maxShifts}
+          onChange={(e) => setMaxShifts(Number(e.target.value))}
+          className={`${field} w-16`}
+        />
+      </label>
+      <label className="flex items-center gap-1.5 pb-1.5">
+        <input type="checkbox" checked={standby} onChange={(e) => setStandby(e.target.checked)} />
+        <span className="font-body text-[11px] font-bold text-muted-ink">On-call</span>
+      </label>
+      <Button type="submit" disabled={busy || !name.trim()}>
+        {busy ? 'Saving…' : 'Save'}
       </Button>
     </form>
   )
