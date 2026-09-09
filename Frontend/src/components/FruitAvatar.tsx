@@ -37,31 +37,31 @@ function Orange() {
 }
 
 function Banana() {
-  // a chunky smiling crescent: tip top-left, tip bottom-right, fat belly in the middle
+  // a fat, chunky crescent: tip top-left, tip bottom-right, thick belly in the middle
   return (
     <>
       <path
-        d="M15 14 C13 13 10 15 11 19 C15 39 27 52 47 53 C52 53.4 55 49 52 46 C51 45 49 45 47 45 C33 44 24 34 21 20 C20 15.5 18 14 15 14 Z"
+        d="M13 12 C9 11 7 16 9 22 C14 47 30 60 50 57 C57 56 59 48 53 44 C51 42.5 47 44 44 44 C31 43 22 31 21 16 C20 10 16 11 13 12 Z"
         fill="#FFCF4D"
         stroke={INK}
         strokeWidth={2.6}
         strokeLinejoin="round"
       />
-      <ellipse cx={14} cy={15} rx={3} ry={3.6} fill="#7A4A2C" stroke={INK} strokeWidth={1.8} transform="rotate(-30 14 15)" />
-      <ellipse cx={49} cy={50} rx={3.4} ry={3} fill="#7A4A2C" stroke={INK} strokeWidth={1.8} />
+      <ellipse cx={13} cy={12} rx={3.2} ry={3.8} fill="#7A4A2C" stroke={INK} strokeWidth={1.8} transform="rotate(-32 13 12)" />
+      <ellipse cx={51} cy={53} rx={3.8} ry={3.2} fill="#7A4A2C" stroke={INK} strokeWidth={1.8} />
       <path
-        d="M20 21 C23 33 31 42 43 44"
+        d="M18 20 C22 38 34 49 47 49"
         fill="none"
         stroke="#EDB42E"
-        strokeWidth={2.2}
+        strokeWidth={2.4}
         strokeLinecap="round"
-        opacity={0.75}
+        opacity={0.7}
       />
-      <circle cx={26} cy={31} r={2.4} fill={INK} />
-      <circle cx={35} cy={35} r={2.4} fill={INK} />
-      <ellipse cx={22} cy={35} rx={3.4} ry={2} fill="#FFE7A8" opacity={0.85} transform="rotate(35 22 35)" />
-      <ellipse cx={38} cy={40} rx={3.4} ry={2} fill="#FFE7A8" opacity={0.85} transform="rotate(35 38 40)" />
-      <path d="M27 38 Q31 43 36 41" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      <circle cx={27} cy={44} r={2.6} fill={INK} />
+      <circle cx={37} cy={47} r={2.6} fill={INK} />
+      <ellipse cx={23} cy={48} rx={3.6} ry={2.1} fill="#FFE7A8" opacity={0.9} transform="rotate(30 23 48)" />
+      <ellipse cx={41} cy={51} rx={3.6} ry={2.1} fill="#FFE7A8" opacity={0.9} transform="rotate(30 41 51)" />
+      <path d="M28 50 Q33 55 39 52" fill="none" stroke={INK} strokeWidth={2.1} strokeLinecap="round" />
     </>
   )
 }
@@ -105,36 +105,18 @@ function Strawberry() {
 }
 
 function Watermelon() {
-  // an upright triangular slice: green rind arc at the bottom, white pith, pink flesh
+  // a whole round melon: green rind with darker curved stripes
   return (
     <>
-      <path
-        d="M32 7 C20 27 14 41 14 47 A20 13 0 0 0 50 47 C50 41 44 27 32 7 Z"
-        fill="#54B65F"
-        stroke={INK}
-        strokeWidth={2.6}
-        strokeLinejoin="round"
-      />
-      <path
-        d="M32 15 C23 32 18 43 18 47 A14.5 9 0 0 0 46 47 C46 43 41 32 32 15 Z"
-        fill="#FBF3E4"
-        stroke={INK}
-        strokeWidth={1.4}
-      />
-      <path
-        d="M32 21 C25 35 21 44 21 47 A11.5 7 0 0 0 43 47 C43 44 39 35 32 21 Z"
-        fill="#FF6F61"
-        stroke={INK}
-        strokeWidth={1.6}
-      />
-      <ellipse cx={26} cy={45} rx={1.5} ry={2.3} fill={INK} transform="rotate(-14 26 45)" />
-      <ellipse cx={38} cy={46} rx={1.5} ry={2.3} fill={INK} transform="rotate(14 38 46)" />
-      <ellipse cx={32} cy={49} rx={1.5} ry={2.3} fill={INK} />
-      <circle cx={28} cy={38} r={2.2} fill={INK} />
-      <circle cx={36} cy={38} r={2.2} fill={INK} />
-      <ellipse cx={24} cy={42} rx={3} ry={1.9} fill="#FF9E90" opacity={0.6} />
-      <ellipse cx={40} cy={42} rx={3} ry={1.9} fill="#FF9E90" opacity={0.6} />
-      <path d="M28 43 Q32 47 36 43" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      <path d="M31 13 L33 7" stroke="#8B5E3C" strokeWidth={2.4} strokeLinecap="round" />
+      <circle cx={32} cy={36} r={22} fill="#57B75F" stroke={INK} strokeWidth={2.6} />
+      <path d="M22 16 Q17 36 22 56" fill="none" stroke="#2E7D3C" strokeWidth={3.4} strokeLinecap="round" opacity={0.75} />
+      <path d="M27 14 Q24 36 27 58" fill="none" stroke="#2E7D3C" strokeWidth={3.4} strokeLinecap="round" opacity={0.75} />
+      <path d="M32 13 Q32 36 32 59" fill="none" stroke="#2E7D3C" strokeWidth={3.4} strokeLinecap="round" opacity={0.75} />
+      <path d="M37 14 Q40 36 37 58" fill="none" stroke="#2E7D3C" strokeWidth={3.4} strokeLinecap="round" opacity={0.75} />
+      <path d="M42 16 Q47 36 42 56" fill="none" stroke="#2E7D3C" strokeWidth={3.4} strokeLinecap="round" opacity={0.75} />
+      <path d="M14 30 Q32 22 50 30" fill="none" stroke="#7CCB80" strokeWidth={2.6} strokeLinecap="round" opacity={0.6} />
+      <Face cy={38} blush="#8FCF95" />
     </>
   )
 }
@@ -259,17 +241,25 @@ function Pear() {
 }
 
 function Cherry() {
+  // the grumpy one: furrowed brows, round glasses, a scowl
   return (
     <>
       <path d="M24 40 Q30 16 34 10 M44 42 Q42 18 34 10" fill="none" stroke="#5FBE6B" strokeWidth={2.6} strokeLinecap="round" />
       <path d="M34 10 Q44 4 50 12 Q42 16 34 10 Z" fill="#5FBE6B" stroke={INK} strokeWidth={2} strokeLinejoin="round" />
       <circle cx={22} cy={44} r={12} fill="#E14F3D" stroke={INK} strokeWidth={2.6} />
       <circle cx={44} cy={46} r={13} fill="#FF6F61" stroke={INK} strokeWidth={2.6} />
-      <circle cx={40} cy={45} r={2.4} fill={INK} />
-      <circle cx={49} cy={45} r={2.4} fill={INK} />
-      <ellipse cx={37} cy={51} rx={3.4} ry={2.1} fill="#FF9E90" opacity={0.6} />
-      <ellipse cx={52} cy={51} rx={3.4} ry={2.1} fill="#FF9E90" opacity={0.6} />
-      <path d="M40 52 Q44.5 56 49 52" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      {/* glasses */}
+      <circle cx={40} cy={45} r={4.6} fill="#FFF3EE" stroke={INK} strokeWidth={2} />
+      <circle cx={50} cy={45} r={4.6} fill="#FFF3EE" stroke={INK} strokeWidth={2} />
+      <path d="M44.4 44.5 Q45 43.4 45.6 44.5" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      <path d="M54.4 43.5 L57 42.5" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      <circle cx={40} cy={45.5} r={2} fill={INK} />
+      <circle cx={50} cy={45.5} r={2} fill={INK} />
+      {/* angry brows, inner ends dipped toward the nose */}
+      <path d="M35 39 L44 42.5" fill="none" stroke={INK} strokeWidth={2.6} strokeLinecap="round" />
+      <path d="M55 39 L46 42.5" fill="none" stroke={INK} strokeWidth={2.6} strokeLinecap="round" />
+      {/* scowl */}
+      <path d="M40 54 Q45 49 50 54" fill="none" stroke={INK} strokeWidth={2.2} strokeLinecap="round" />
     </>
   )
 }

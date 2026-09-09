@@ -103,6 +103,14 @@ export function Profile() {
         onError={setError}
       />
 
+      {profile.role !== 'EMPLOYEE' && (
+        <ManagerAlerts
+          availabilityUpdates={profile.alerts.availabilityUpdates}
+          onSaved={load}
+          onError={setError}
+        />
+      )}
+
       {e && (
         <>
           <MyLimits
@@ -396,6 +404,54 @@ function DayPrefs({
           {busy ? 'Saving…' : 'Add group'}
         </Button>
       </div>
+    </div>
+  )
+}
+
+function ManagerAlerts({
+  availabilityUpdates,
+  onSaved,
+  onError,
+}: {
+  availabilityUpdates: boolean
+  onSaved: () => void | Promise<void>
+  onError: (m: string | null) => void
+}) {
+  const [busy, setBusy] = useState(false)
+
+  async function toggle() {
+    onError(null)
+    setBusy(true)
+    try {
+      await api.setAvailabilityAlerts(!availabilityUpdates)
+      await onSaved()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not save your alert settings')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className={card}>
+      <h2 className="font-heading text-sm font-bold text-ink">Alerts</h2>
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        disabled={busy}
+        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border-2 border-ink bg-cream px-3 py-2 text-left disabled:opacity-60"
+      >
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink font-heading text-xs font-bold ${
+            availabilityUpdates ? 'bg-ink text-paper' : 'bg-paper text-transparent'
+          }`}
+        >
+          ✓
+        </span>
+        <span className="font-body text-xs text-ink">
+          <b>Availability updates</b> — email + notify me when a worker changes a future week's hours
+        </span>
+      </button>
     </div>
   )
 }

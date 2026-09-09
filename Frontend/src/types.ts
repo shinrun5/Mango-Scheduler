@@ -132,6 +132,8 @@ export interface Profile {
   name: string | null
   phone: string | null
   role: Role
+  /** manager notification opt-ins */
+  alerts: { availabilityUpdates: boolean }
   employee: {
     id: number
     name: string

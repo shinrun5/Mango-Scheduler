@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { DayOfWeek, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
+import { notifyMany } from '../lib/notify.js';
+import { mondayUTC } from '../lib/scheduleGen.js';
 
 const router = Router();
 const manager = [requireAuth, requireRole('MANAGER', 'OWNER')] as const;
@@ -176,8 +178,60 @@ router.put('/mine/week', requireAuth, async (req, res) => {
     create: { employeeId, weekStart, windows: windows as unknown as Prisma.InputJsonValue },
     update: { windows: windows as unknown as Prisma.InputJsonValue },
   });
+
+  // a change to a future week -> ping any manager who opted in (fire-and-forget)
+  if (weekStart.getTime() > mondayUTC().getTime()) {
+    void notifyManagersOfAvailabilityChange(employeeId, weekStart).catch((e) =>
+      console.error('[availability] manager notify failed', e),
+    );
+  }
+
   res.json({ weekStart: weekStart.toISOString().slice(0, 10), hasOverride: true, windows });
 });
+
+/** Notify managers/owners who set notifyOnAvailabilityUpdate that this worker just
+ * changed a future week's hours. */
+async function notifyManagersOfAvailabilityChange(employeeId: number, weekStart: Date): Promise<void> {
+  const emp = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      name: true,
+      employeeStores: { select: { store: { select: { id: true, orgId: true } } } },
+    },
+  });
+  if (!emp || emp.employeeStores.length === 0) return;
+
+  const storeIds = emp.employeeStores.map((es) => es.store.id);
+  const orgIds = [...new Set(emp.employeeStores.map((es) => es.store.orgId))];
+
+  const managers = await prisma.user.findMany({
+    where: {
+      notifyOnAvailabilityUpdate: true,
+      OR: [
+        { role: 'OWNER', orgId: { in: orgIds } },
+        { managerStores: { some: { storeId: { in: storeIds } } } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (managers.length === 0) return;
+
+  const sun = new Date(weekStart);
+  sun.setUTCDate(sun.getUTCDate() + 6);
+  const f = (x: Date) => x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const range = `${f(weekStart)} – ${f(sun)}`;
+
+  await notifyMany(
+    managers.map((m) => m.id),
+    {
+      kind: 'GENERIC',
+      title: `${emp.name} updated their availability for ${range}`,
+      body: `${emp.name} changed their hours for the week of ${range}. Check it before you build that week's schedule.`,
+      link: '/schedule',
+      email: true,
+    },
+  );
+}
 
 // DELETE /availability/mine/week?weekStart=YYYY-MM-DD  — revert that week to standing
 router.delete('/mine/week', requireAuth, async (req, res) => {

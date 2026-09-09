@@ -210,6 +210,8 @@ model User {
   name       String?  // display name; mirrored to Employee.name when linked
   phone      String?  // contact number, free-form
   role       Role     @default(EMPLOYEE)
+  // manager opt-in: get pinged when a worker changes a future week's availability
+  notifyOnAvailabilityUpdate Boolean @default(false)
   org        Org?     @relation(fields: [orgId], references: [id])
   orgId      Int?
   employee   Employee? @relation(fields: [employeeId], references: [id])

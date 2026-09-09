@@ -131,6 +131,11 @@ export const api = {
     sendJSON<{ ok: true }>('/auth/profile', 'PUT', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
+  /** Manager opt-in: get notified when a worker updates a future week's availability. */
+  setAvailabilityAlerts: (on: boolean) =>
+    sendJSON<{ alerts: { availabilityUpdates: boolean } }>('/auth/alerts', 'PUT', {
+      availabilityUpdates: on,
+    }),
 
   // --- notifications ---
   getNotifications: () =>
