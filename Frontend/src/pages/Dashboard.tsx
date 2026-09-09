@@ -18,6 +18,7 @@ import {
   to12Hour,
   toHHMM24,
   toMinutes,
+  weekRangeLabel,
   windowsOverlap,
   withTime,
 } from '../lib/time'
@@ -120,6 +121,25 @@ export function Dashboard() {
       .getWeekAvailability(weekStart.slice(0, 10))
       .then((r) => live && setWeekOverrides(r))
       .catch(() => live && setWeekOverrides(null))
+    return () => {
+      live = false
+    }
+  }, [weekStart])
+
+  // who has checked their availability for the week on the board
+  const [avConfirm, setAvConfirm] = useState<
+    { employeeId: number; name: string; storeIds: number[]; state: 'changed' | 'confirmed' | 'pending' }[]
+  >([])
+  useEffect(() => {
+    if (!weekStart) {
+      setAvConfirm([])
+      return
+    }
+    let live = true
+    api
+      .getAvailabilityConfirmations(weekStart.slice(0, 10))
+      .then((r) => live && setAvConfirm(r.workers))
+      .catch(() => live && setAvConfirm([]))
     return () => {
       live = false
     }
@@ -484,6 +504,42 @@ export function Dashboard() {
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
       />
+
+      {weekStart &&
+        (() => {
+          const rows = avConfirm.filter((w) => w.storeIds.includes(storeId ?? -1))
+          if (rows.length === 0) return null
+          const ready = rows.filter((w) => w.state !== 'pending').length
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
+              <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+                Availability {weekRangeLabel(weekStart)} · {ready}/{rows.length} in
+              </span>
+              {rows.map((w) => (
+                <span
+                  key={w.employeeId}
+                  title={
+                    w.state === 'changed'
+                      ? 'set their own hours for this week'
+                      : w.state === 'confirmed'
+                        ? 'confirmed their usual hours'
+                        : "hasn't checked yet"
+                  }
+                  className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                    w.state === 'changed'
+                      ? 'border-sky-dark bg-sky/10 text-sky-dark'
+                      : w.state === 'confirmed'
+                        ? 'border-green bg-green/10 text-green-dark'
+                        : 'border-ink/20 text-muted-ink'
+                  }`}
+                >
+                  {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
+                  {w.name}
+                </span>
+              ))}
+            </div>
+          )
+        })()}
 
       {solved && weekLoad.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">

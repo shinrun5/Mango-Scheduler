@@ -191,6 +191,7 @@ model Employee {
   employeeStores EmployeeStore[]
   recurringAvailability RecurringAvailability[]
   weekAvailability     WeekAvailability[]
+  availabilityConfirmations AvailabilityConfirmation[]
   timeOff              TimeOffRequest[]
   fixedShifts          FixedShift[]
   changeRequestsMade     ShiftChangeRequest[] @relation("RequestsMade")
@@ -348,6 +349,18 @@ model WeekAvailability {
   weekStart  DateTime // Monday, UTC midnight (matches Schedule.weekStart)
   windows    Json
   updatedAt  DateTime @updatedAt
+
+  @@id([employeeId, weekStart])
+}
+
+// "I've checked my availability for this week" — set when an employee confirms
+// their hours are right (or saves a one-week override). Lets a manager see who
+// has responded to the weekly reminder before building that week's schedule.
+model AvailabilityConfirmation {
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  employeeId  Int
+  weekStart   DateTime // Monday, UTC midnight
+  confirmedAt DateTime @default(now())
 
   @@id([employeeId, weekStart])
 }

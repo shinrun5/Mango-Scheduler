@@ -19,6 +19,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
   const [mode, setMode] = useState<'standing' | 'week' | 'timeoff'>('standing')
   const [week, setWeek] = useState(WEEKS[0].ymd)
   const [hasOverride, setHasOverride] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
   // store opening/closing + default night shift — drives the editor's quick-add buttons
@@ -45,6 +46,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     () =>
       api.getMyWeekAvailability(week).then((r) => {
         setHasOverride(r.hasOverride)
+        setConfirmed(r.confirmed)
         return r.windows
       }),
     [week],
@@ -53,10 +55,21 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     (w: AvailWindow[]) =>
       api.saveMyWeekAvailability(week, w).then((r) => {
         setHasOverride(true)
+        setConfirmed(true)
         return r.windows
       }),
     [week],
   )
+
+  async function confirmWeek() {
+    setBusy(true)
+    try {
+      await api.confirmMyWeekAvailability(week)
+      setConfirmed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function clearOverride() {
     setBusy(true)
@@ -115,6 +128,20 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
               Remove this week's override
             </button>
           )}
+          {!hasOverride &&
+            (confirmed ? (
+              <p className="font-body text-xs font-bold text-green-dark">
+                ✓ You've confirmed your usual hours for this week — your manager can see it.
+              </p>
+            ) : (
+              <button
+                onClick={() => void confirmWeek()}
+                disabled={busy}
+                className="self-start rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-xs font-bold text-white disabled:opacity-50"
+              >
+                My usual hours are right for this week
+              </button>
+            ))}
         </div>
       )}
 

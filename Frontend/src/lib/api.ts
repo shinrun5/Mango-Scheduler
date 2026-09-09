@@ -290,9 +290,12 @@ export const api = {
   /** One-week override of the caller's standing availability. `weekStart` is "YYYY-MM-DD".
    * When no override exists yet, `windows` echoes the standing set (hasOverride:false). */
   getMyWeekAvailability: (weekStart: string) =>
-    getJSON<{ weekStart: string; hasOverride: boolean; windows: { day: DayOfWeek; start: string; end: string }[] }>(
-      `/availability/mine/week?weekStart=${weekStart}`,
-    ),
+    getJSON<{
+      weekStart: string
+      hasOverride: boolean
+      confirmed: boolean
+      windows: { day: DayOfWeek; start: string; end: string }[]
+    }>(`/availability/mine/week?weekStart=${weekStart}`),
   saveMyWeekAvailability: (weekStart: string, windows: { day: DayOfWeek; start: string; end: string }[]) =>
     sendJSON<{ weekStart: string; hasOverride: boolean; windows: { day: DayOfWeek; start: string; end: string }[] }>(
       '/availability/mine/week',
@@ -301,12 +304,27 @@ export const api = {
     ),
   clearMyWeekAvailability: (weekStart: string) =>
     request<{ ok: true }>(`/availability/mine/week?weekStart=${weekStart}`, { method: 'DELETE' }),
+  /** "My hours are right for this week" — no override needed. */
+  confirmMyWeekAvailability: (weekStart: string) =>
+    sendJSON<{ weekStart: string; confirmed: true }>('/availability/mine/confirm', 'POST', { weekStart }),
   /** Manager: every one-week override for `weekStart`, for employees at their stores. */
   getWeekAvailability: (weekStart: string) =>
     getJSON<{
       overriddenEmployeeIds: number[]
       windows: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
     }>(`/availability/week?weekStart=${weekStart}`),
+  /** Manager: who has checked their availability for `weekStart`. */
+  getAvailabilityConfirmations: (weekStart: string) =>
+    getJSON<{
+      weekStart: string
+      workers: {
+        employeeId: number
+        name: string
+        storeIds: number[]
+        state: 'changed' | 'confirmed' | 'pending'
+        at: string | null
+      }[]
+    }>(`/availability/confirmations?weekStart=${weekStart}`),
 
   generateSchedule: (storeId: number, opts?: { saveFirst?: boolean; saveLabel?: string }) =>
     sendJSON<GenerateScheduleResult>('/schedule/generate', 'POST', { storeId, solveSeconds: 5, ...opts }),

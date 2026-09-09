@@ -147,11 +147,22 @@ router.get('/mine/week', requireAuth, async (req, res) => {
   const weekStart = parseWeekStart(req.query.weekStart);
   if (!weekStart) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
 
-  const row = await prisma.weekAvailability.findUnique({
-    where: { employeeId_weekStart: { employeeId, weekStart } },
-  });
+  const [row, confirm] = await Promise.all([
+    prisma.weekAvailability.findUnique({
+      where: { employeeId_weekStart: { employeeId, weekStart } },
+    }),
+    prisma.availabilityConfirmation.findUnique({
+      where: { employeeId_weekStart: { employeeId, weekStart } },
+    }),
+  ]);
+  const confirmed = !!confirm || !!row;
   if (row) {
-    return res.json({ weekStart: weekStart.toISOString().slice(0, 10), hasOverride: true, windows: row.windows as unknown as Window[] });
+    return res.json({
+      weekStart: weekStart.toISOString().slice(0, 10),
+      hasOverride: true,
+      confirmed,
+      windows: row.windows as unknown as Window[],
+    });
   }
   const standing = await prisma.recurringAvailability.findMany({
     where: { employeeId },
@@ -160,8 +171,24 @@ router.get('/mine/week', requireAuth, async (req, res) => {
   res.json({
     weekStart: weekStart.toISOString().slice(0, 10),
     hasOverride: false,
+    confirmed,
     windows: standing.map((w) => ({ day: w.day, start: toHHMM(w.start), end: toHHMM(w.end) })),
   });
+});
+
+// POST /availability/mine/confirm  { weekStart } — "my hours are right for this week"
+router.post('/mine/confirm', requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.status(400).json({ error: "Your account isn't linked to an employee" });
+  const weekStart = parseWeekStart(req.body?.weekStart);
+  if (!weekStart) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
+
+  await prisma.availabilityConfirmation.upsert({
+    where: { employeeId_weekStart: { employeeId, weekStart } },
+    create: { employeeId, weekStart },
+    update: { confirmedAt: new Date() },
+  });
+  res.json({ weekStart: weekStart.toISOString().slice(0, 10), confirmed: true });
 });
 
 // PUT /availability/mine/week  { weekStart, windows: [{day,start,end}] }
@@ -177,6 +204,12 @@ router.put('/mine/week', requireAuth, async (req, res) => {
     where: { employeeId_weekStart: { employeeId, weekStart } },
     create: { employeeId, weekStart, windows: windows as unknown as Prisma.InputJsonValue },
     update: { windows: windows as unknown as Prisma.InputJsonValue },
+  });
+  // saving a one-week override counts as "I've checked this week"
+  await prisma.availabilityConfirmation.upsert({
+    where: { employeeId_weekStart: { employeeId, weekStart } },
+    create: { employeeId, weekStart },
+    update: { confirmedAt: new Date() },
   });
 
   // a change to a future week -> ping any manager who opted in (fire-and-forget)
@@ -261,6 +294,49 @@ router.get('/week', ...manager, async (req, res) => {
     }
   }
   res.json({ overriddenEmployeeIds: rows.map((r) => r.employeeId), windows: flat });
+});
+
+// GET /availability/confirmations?weekStart=YYYY-MM-DD  (manager)
+// Per worker at the caller's stores: have they dealt with that week's availability?
+//   'changed'   = saved a one-week override
+//   'confirmed' = pressed "my hours are right"
+//   'pending'   = neither
+router.get('/confirmations', ...manager, async (req, res) => {
+  const weekStart = parseWeekStart(req.query.weekStart);
+  if (!weekStart) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
+
+  const [employees, overrides, confirms] = await Promise.all([
+    prisma.employee.findMany({
+      where: { standby: false, employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
+      select: { id: true, name: true, employeeStores: { select: { storeId: true } } },
+    }),
+    prisma.weekAvailability.findMany({
+      where: { weekStart, employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } },
+      select: { employeeId: true, updatedAt: true },
+    }),
+    prisma.availabilityConfirmation.findMany({
+      where: { weekStart, employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } },
+      select: { employeeId: true, confirmedAt: true },
+    }),
+  ]);
+
+  const changedAt = new Map(overrides.map((o) => [o.employeeId, o.updatedAt]));
+  const confirmedAt = new Map(confirms.map((c) => [c.employeeId, c.confirmedAt]));
+
+  res.json({
+    weekStart: weekStart.toISOString().slice(0, 10),
+    workers: employees.map((e) => {
+      const changed = changedAt.get(e.id);
+      const confirmed = confirmedAt.get(e.id);
+      return {
+        employeeId: e.id,
+        name: e.name,
+        storeIds: e.employeeStores.map((s) => s.storeId),
+        state: changed ? 'changed' : confirmed ? 'confirmed' : 'pending',
+        at: (changed ?? confirmed ?? null)?.toISOString() ?? null,
+      };
+    }),
+  });
 });
 
 router.post('/', ...manager, async (req, res) => {
