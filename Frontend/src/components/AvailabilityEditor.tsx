@@ -21,8 +21,9 @@ function signature(rows: Row[]): string {
 }
 
 /** Weekly-availability editor. `load`/`save` decide whether it edits the standing
- * set (/availability/mine) or a one-week override. `barClass` positions the sticky
- * save bar: employees sit above the bottom tab bar, managers at the edge. */
+ * set (/availability/mine) or a one-week override. `barClass` is the sticky save
+ * bar's bottom offset — clear the bottom tab bar on phones. The page wrapping
+ * this must leave matching bottom padding so the last row isn't covered. */
 export function AvailabilityEditor({
   barClass,
   load,
@@ -129,7 +130,7 @@ export function AvailabilityEditor({
   const showSave = dirty || saving || invalidKeys.size > 0
 
   const timeInput =
-    'w-[7.5rem] shrink-0 rounded-lg border-2 bg-cream px-2 py-1 font-body text-sm text-ink outline-none'
+    'w-[6.75rem] shrink-0 rounded-lg border-2 bg-cream px-1.5 py-1 font-body text-[13px] text-ink outline-none sm:w-[7rem] sm:px-2 sm:text-sm'
 
   if (loading) return <p className="font-body text-sm text-muted-ink">Loading…</p>
 
@@ -142,21 +143,21 @@ export function AvailabilityEditor({
           return (
             <div
               key={day}
-              className="flex gap-3 border-b-2 border-ink/10 px-3 py-2.5 last:border-b-0"
+              className="flex gap-2.5 border-b-2 border-ink/10 px-2.5 py-2.5 last:border-b-0 sm:gap-3 sm:px-3"
             >
-              <span className="w-9 shrink-0 pt-1.5 font-heading text-sm font-bold text-ink">
+              <span className="w-8 shrink-0 pt-1.5 font-heading text-sm font-bold text-ink">
                 {DAY_LABEL[day]}
               </span>
-              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-2 gap-y-1.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 {dayRows.length === 0 && (
-                  <span className="pt-1.5 font-body text-xs text-muted-ink">
+                  <span className="font-body text-xs text-muted-ink">
                     {storeClosed ? 'Store closed' : 'Not available'}
                   </span>
                 )}
                 {dayRows.map((r) => {
                   const bad = invalidKeys.has(r.key)
                   return (
-                    <span key={r.key} className="flex items-center gap-1">
+                    <span key={r.key} className="flex flex-wrap items-center gap-x-1 gap-y-1">
                       <input
                         type="time"
                         value={r.start}
@@ -175,35 +176,37 @@ export function AvailabilityEditor({
                       <button
                         onClick={() => removeRow(r.key)}
                         aria-label="Remove"
-                        className="ml-0.5 rounded-full px-1.5 font-heading text-base font-bold leading-none text-muted-ink hover:text-coral-dark"
+                        className="rounded-full px-1 font-heading text-base font-bold leading-none text-muted-ink hover:text-coral-dark"
                       >
                         ×
                       </button>
                     </span>
                   )
                 })}
-                {!storeClosed && (
+                <div className="flex flex-wrap gap-1.5">
+                  {!storeClosed && (
+                    <button
+                      onClick={() => addAllDay(day)}
+                      className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
+                    >
+                      + all day
+                    </button>
+                  )}
+                  {!storeClosed && (
+                    <button
+                      onClick={() => addNight(day)}
+                      className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape hover:border-ink"
+                    >
+                      + night
+                    </button>
+                  )}
                   <button
-                    onClick={() => addAllDay(day)}
-                    className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
+                    onClick={() => addRow(day)}
+                    className="rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
                   >
-                    + all day
+                    + hours
                   </button>
-                )}
-                {!storeClosed && (
-                  <button
-                    onClick={() => addNight(day)}
-                    className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-grape hover:border-ink"
-                  >
-                    + night
-                  </button>
-                )}
-                <button
-                  onClick={() => addRow(day)}
-                  className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
-                >
-                  + hours
-                </button>
+                </div>
               </div>
             </div>
           )
@@ -211,11 +214,13 @@ export function AvailabilityEditor({
       </div>
 
       <div
-        className={`fixed inset-x-0 z-20 flex items-center gap-3 border-t-[3px] border-ink px-4 py-2.5 transition-colors sm:px-6 ${barClass} ${
+        className={`sticky z-20 flex items-center gap-2 rounded-2xl border-[2.5px] border-ink px-3 py-2 shadow-[3px_3px_0_var(--color-ink)] transition-colors sm:px-4 sm:py-2.5 ${barClass} ${
           dirty || invalidKeys.size > 0 || error ? 'bg-coral-bg' : 'bg-paper'
         } ${showSave ? 'justify-between' : 'justify-center'}`}
       >
-        <span className={`font-body text-xs font-bold ${status.tone}`}>{status.text}</span>
+        <span className={`min-w-0 flex-1 truncate font-body text-xs font-bold ${status.tone}`}>
+          {status.text}
+        </span>
         {showSave && (
           <Button onClick={() => void persist()} disabled={!canSave} className="shrink-0">
             {saving ? 'Saving…' : 'Save'}

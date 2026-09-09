@@ -13,7 +13,8 @@ const blankRow = (day: DayOfWeek): WeekdayRow => ({
 })
 const isNoop = (r: WeekdayRow) => !r.closed && !r.openTime && !r.closeTime && !r.nightStart
 
-const timeInput = 'w-[6.5rem] rounded-lg border-2 border-ink bg-cream px-1.5 py-1 font-body text-[11px] text-ink outline-none disabled:opacity-40'
+const timeInput =
+  'w-[6.75rem] rounded-lg border-2 border-ink bg-cream px-1.5 py-1 font-body text-[12px] text-ink outline-none'
 
 /** Manager editor for a store's per-weekday hours and holiday dates. */
 export function StoreHoursEditor({ storeId }: { storeId: number }) {
@@ -86,42 +87,61 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
       {error && <p className="mb-1 font-body text-xs font-bold text-coral-dark">{error}</p>}
 
       <p className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
-        Hours by day <span className="font-normal normal-case">— blank = the store default ({dfltLabel})</span>
+        Hours by day{' '}
+        <span className="font-normal normal-case">— blank = the store default ({dfltLabel})</span>
       </p>
-      <div className="mt-1 overflow-x-auto">
-        <table className="min-w-[520px] border-collapse font-body text-[11px]">
-          <tbody>
-            {DAYS.map((d) => {
-              const r = rows[d]
-              return (
-                <tr key={d} className="border-t border-ink/10">
-                  <td className="py-1 pr-2 font-bold text-ink">{DAY_LABEL[d]}</td>
-                  <td className="py-1 pr-2">
-                    <label className="flex items-center gap-1 font-bold text-muted-ink">
-                      <input
-                        type="checkbox"
-                        checked={r.closed}
-                        onChange={(e) => patch(d, { closed: e.target.checked })}
-                      />
-                      Closed
-                    </label>
-                  </td>
-                  <td className="py-1 pr-1.5">
-                    <input type="time" step={1800} disabled={r.closed} value={r.openTime ?? ''} onChange={(e) => patch(d, { openTime: e.target.value || null })} className={timeInput} />
-                  </td>
-                  <td className="py-1 pr-1.5 text-muted-ink">–</td>
-                  <td className="py-1 pr-1.5">
-                    <input type="time" step={1800} disabled={r.closed} value={r.closeTime ?? ''} onChange={(e) => patch(d, { closeTime: e.target.value || null })} className={timeInput} />
-                  </td>
-                  <td className="py-1 pl-1 text-muted-ink">night</td>
-                  <td className="py-1 pl-1">
-                    <input type="time" step={1800} disabled={r.closed} value={r.nightStart ?? ''} onChange={(e) => patch(d, { nightStart: e.target.value || null })} className={timeInput} />
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="mt-1 flex flex-col divide-y divide-ink/10">
+        {DAYS.map((d) => {
+          const r = rows[d]
+          return (
+            <div key={d} className="py-1.5">
+              <div className="flex items-center gap-2">
+                <span className="w-9 shrink-0 font-body text-[12px] font-bold text-ink">
+                  {DAY_LABEL[d]}
+                </span>
+                <label className="flex items-center gap-1 font-body text-[11px] font-bold text-muted-ink">
+                  <input
+                    type="checkbox"
+                    checked={r.closed}
+                    onChange={(e) => patch(d, { closed: e.target.checked })}
+                  />
+                  Closed
+                </label>
+              </div>
+              {!r.closed && (
+                <div className="mt-1 flex flex-col gap-1 pl-11">
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="time"
+                      step={1800}
+                      value={r.openTime ?? ''}
+                      onChange={(e) => patch(d, { openTime: e.target.value || null })}
+                      className={timeInput}
+                    />
+                    <span className="text-muted-ink">–</span>
+                    <input
+                      type="time"
+                      step={1800}
+                      value={r.closeTime ?? ''}
+                      onChange={(e) => patch(d, { closeTime: e.target.value || null })}
+                      className={timeInput}
+                    />
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-10 font-body text-[10px] font-bold text-muted-ink">night</span>
+                    <input
+                      type="time"
+                      step={1800}
+                      value={r.nightStart ?? ''}
+                      onChange={(e) => patch(d, { nightStart: e.target.value || null })}
+                      className={timeInput}
+                    />
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
       {dirty && (
         <button
@@ -139,7 +159,7 @@ export function StoreHoursEditor({ storeId }: { storeId: number }) {
       {cfg.holidays.length > 0 && (
         <ul className="mt-1 flex flex-col gap-1">
           {cfg.holidays.map((h) => (
-            <li key={h.id} className="flex items-center gap-2 font-body text-[11px]">
+            <li key={h.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-body text-[11px]">
               <span className="font-bold text-ink">{h.date}</span>
               {h.label && <span className="text-muted-ink">{h.label}</span>}
               <span className={h.closed ? 'font-bold text-coral-dark' : 'text-ink'}>
@@ -205,32 +225,36 @@ function AddHoliday({
 
   const inp = 'rounded-lg border-2 border-ink bg-cream px-1.5 py-1 font-body text-[11px] text-ink outline-none'
   return (
-    <form onSubmit={submit} className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} required />
-      <input
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder="label (optional)"
-        className={`${inp} w-32`}
-      />
-      <label className="flex items-center gap-1 font-body text-[11px] font-bold text-muted-ink">
-        <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
-        Closed
-      </label>
-      {!closed && (
-        <>
-          <input type="time" step={1800} value={openTime} onChange={(e) => setOpenTime(e.target.value)} className={inp} />
-          <span className="text-muted-ink">–</span>
-          <input type="time" step={1800} value={closeTime} onChange={(e) => setCloseTime(e.target.value)} className={inp} />
-        </>
-      )}
-      <button
-        type="submit"
-        disabled={busy || !date}
-        className="rounded-full border-2 border-ink bg-cream px-2.5 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
-      >
-        Add
-      </button>
+    <form onSubmit={submit} className="mt-2 flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} required />
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="label (optional)"
+          className={`${inp} min-w-[7rem] flex-1`}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <label className="flex items-center gap-1 font-body text-[11px] font-bold text-muted-ink">
+          <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
+          Closed
+        </label>
+        {!closed && (
+          <>
+            <input type="time" step={1800} value={openTime} onChange={(e) => setOpenTime(e.target.value)} className={inp} />
+            <span className="text-muted-ink">–</span>
+            <input type="time" step={1800} value={closeTime} onChange={(e) => setCloseTime(e.target.value)} className={inp} />
+          </>
+        )}
+        <button
+          type="submit"
+          disabled={busy || !date}
+          className="ml-auto rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+        >
+          Add holiday
+        </button>
+      </div>
     </form>
   )
 }

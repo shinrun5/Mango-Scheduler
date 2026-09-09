@@ -29,7 +29,7 @@ export function MyAvailability() {
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-24 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">My Availability</h1>
-      <p className="mt-0.5 mb-4 font-body text-sm text-muted-ink">
+      <p className="mt-0.5 mb-4 font-body text-xs text-muted-ink sm:text-sm">
         Your standing weekly hours — set once, repeats every week. Use “Just one week” for a
         temporary change that only applies to that week.
       </p>
@@ -39,7 +39,7 @@ export function MyAvailability() {
           <div className="mb-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
             <FruitPicker />
           </div>
-          <AvailabilityPanel barClass="bottom-0" />
+          <AvailabilityPanel barClass="bottom-4" />
         </>
       ) : (
         <div className="rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">

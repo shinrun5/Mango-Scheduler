@@ -64,7 +64,7 @@ export function Stores() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-2xl flex-1 p-4 pb-16 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">Stores</h1>
       <p className="mt-1 font-body text-xs text-muted-ink">
         New stores won't be scheduled until they have shift requirements.
@@ -99,21 +99,23 @@ export function Stores() {
                 key={s.id}
                 className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
               >
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
-                  <span className="font-body text-[11px] text-muted-ink">
-                    {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
-                    {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
-                    {s.pairNewWorkers && ' · new workers paired'}
-                    {s.openTime && s.closeTime && (
-                      <>
-                        {' · '}
-                        {to12(s.openTime)}–{to12(s.closeTime)}
-                        {s.nightStart && `, night from ${to12(s.nightStart)}`}
-                      </>
-                    )}
-                  </span>
-                  <div className="ml-auto flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-heading text-sm font-bold text-ink">{s.name}</span>
+                    <span className="mt-0.5 block font-body text-[11px] text-muted-ink">
+                      {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
+                      {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
+                      {s.pairNewWorkers && ' · new workers paired'}
+                      {s.openTime && s.closeTime && (
+                        <>
+                          {' · '}
+                          {to12(s.openTime)}–{to12(s.closeTime)}
+                          {s.nightStart && `, night from ${to12(s.nightStart)}`}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-1.5">
                     <button
                       onClick={() => setShowNeeds((v) => (v === s.id ? null : s.id))}
                       className={`rounded-full border-2 border-ink px-2.5 py-0.5 font-heading text-[11px] font-bold ${
