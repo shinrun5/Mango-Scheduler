@@ -208,8 +208,17 @@ export const api = {
   removePerson: (id: number) => request<{ message: string }>(`/managers/${id}`, { method: 'DELETE' }),
   createStore: (input: { name: string; requiresOpenerSkill?: boolean; pairNewWorkers?: boolean }) =>
     sendJSON<Store>('/stores', 'POST', input),
-  updateStore: (id: number, patch: { name: string; requiresOpenerSkill?: boolean; pairNewWorkers?: boolean }) =>
-    sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
+  updateStore: (
+    id: number,
+    patch: {
+      name: string
+      requiresOpenerSkill?: boolean
+      pairNewWorkers?: boolean
+      openTime?: string | null
+      closeTime?: string | null
+      nightStart?: string | null
+    },
+  ) => sendJSON<Store>(`/stores/${id}`, 'PUT', patch),
   deleteStore: (id: number) => request<{ message: string }>(`/stores/${id}`, { method: 'DELETE' }),
   getEmployees: () => getJSON<Employee[]>('/employees'),
   getEmployeeStores: () => getJSON<EmployeeStore[]>('/employeeStores'),

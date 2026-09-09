@@ -35,6 +35,10 @@ export interface Store {
   name: string
   requiresOpenerSkill: boolean
   pairNewWorkers: boolean
+  /** "HH:MM" 24h — the availability editor's quick-add defaults; null = derive from shift needs */
+  openTime: string | null
+  closeTime: string | null
+  nightStart: string | null
 }
 
 export interface Employee {

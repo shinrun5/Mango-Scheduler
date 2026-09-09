@@ -77,12 +77,15 @@ export function AvailabilityEditor({
 
   function addRow(day: DayOfWeek) {
     const prev = rows.filter((r) => r.day === day).at(-1)
-    // first window of the day: default to the store's opening→closing hours
-    if (!prev && dayDefault) return pushRow(day, dayDefault.start, dayDefault.end)
     const start = prev ? prev.end : dayDefault?.start ?? '17:00'
     const [h] = start.split(':').map(Number)
     const end = `${String(Math.min((h ?? 17) + 4, 23)).padStart(2, '0')}:00`
     pushRow(day, start, end > start ? end : '23:00')
+  }
+
+  function addAllDay(day: DayOfWeek) {
+    const d = dayDefault ?? { start: '09:00', end: '21:00' }
+    pushRow(day, d.start, d.end)
   }
 
   function addNight(day: DayOfWeek) {
@@ -177,10 +180,10 @@ export function AvailabilityEditor({
                   )
                 })}
                 <button
-                  onClick={() => addRow(day)}
-                  className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
+                  onClick={() => addAllDay(day)}
+                  className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-green-dark hover:border-ink"
                 >
-                  + hours
+                  + all day
                 </button>
                 {night && (
                   <button
@@ -190,6 +193,12 @@ export function AvailabilityEditor({
                     + night
                   </button>
                 )}
+                <button
+                  onClick={() => addRow(day)}
+                  className="mt-0.5 rounded-full border-2 border-ink/30 px-2.5 py-1 font-heading text-[11px] font-bold text-sky-dark hover:border-ink"
+                >
+                  + hours
+                </button>
               </div>
             </div>
           )

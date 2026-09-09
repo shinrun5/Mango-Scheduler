@@ -4,6 +4,14 @@ import { canManageStore, requireAuth, requireOwner } from '../lib/auth.js';
 
 const router = Router();
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** undefined = leave alone, null = clear, string = validated "HH:MM" (or an error). */
+function hhmmPatch(v: unknown): undefined | null | string {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  return typeof v === 'string' && HHMM.test(v) ? v : 'ERR';
+}
+
 // POST /stores  (owner)  { name, requiresOpenerSkill? } — created in the owner's org,
 // with an empty Schedule row and the owner as a manager
 router.post('/', ...requireOwner, async (req, res) => {
@@ -45,13 +53,21 @@ router.get('/:id', requireAuth, async (req, res) => {
   res.json(store);
 });
 
-// PUT /stores/:id  (owner or a manager of it)  { name, requiresOpenerSkill? }
+// PUT /stores/:id  (owner or a manager of it)
+// { name, requiresOpenerSkill?, pairNewWorkers?, openTime?, closeTime?, nightStart? }
 router.put('/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { name, requiresOpenerSkill, pairNewWorkers } = req.body ?? {};
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
   if (!canManageStore(req.user, id)) return res.status(403).json({ error: 'You do not manage that store' });
   if (!name) return res.status(400).json({ error: 'name is required' });
+
+  const openTime = hhmmPatch(req.body?.openTime);
+  const closeTime = hhmmPatch(req.body?.closeTime);
+  const nightStart = hhmmPatch(req.body?.nightStart);
+  if ([openTime, closeTime, nightStart].includes('ERR')) {
+    return res.status(400).json({ error: 'Times must be "HH:MM" (24-hour)' });
+  }
 
   try {
     const store = await prisma.store.update({
@@ -60,6 +76,9 @@ router.put('/:id', requireAuth, async (req, res) => {
         name,
         ...(requiresOpenerSkill !== undefined ? { requiresOpenerSkill } : {}),
         ...(pairNewWorkers !== undefined ? { pairNewWorkers } : {}),
+        ...(openTime !== undefined ? { openTime: openTime as string | null } : {}),
+        ...(closeTime !== undefined ? { closeTime: closeTime as string | null } : {}),
+        ...(nightStart !== undefined ? { nightStart: nightStart as string | null } : {}),
       },
     });
     res.json(store);

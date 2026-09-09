@@ -6,7 +6,21 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { EmployeeStore, ShiftRequirement, Store } from '../types'
 
-type StorePatch = { name: string; requiresOpenerSkill: boolean; pairNewWorkers: boolean }
+type StorePatch = {
+  name: string
+  requiresOpenerSkill: boolean
+  pairNewWorkers: boolean
+  openTime?: string | null
+  closeTime?: string | null
+  nightStart?: string | null
+}
+
+const to12 = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  const ap = h < 12 ? 'AM' : 'PM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ap}`
+}
 
 export function Stores() {
   const { user } = useAuth()
@@ -89,6 +103,13 @@ export function Stores() {
                     {workerCount(s.id)} worker{workerCount(s.id) === 1 ? '' : 's'} ·{' '}
                     {s.requiresOpenerSkill ? 'opener skill required' : 'anyone can open'}
                     {s.pairNewWorkers && ' · new workers paired'}
+                    {s.openTime && s.closeTime && (
+                      <>
+                        {' · '}
+                        {to12(s.openTime)}–{to12(s.closeTime)}
+                        {s.nightStart && `, night from ${to12(s.nightStart)}`}
+                      </>
+                    )}
                   </span>
                   <div className="ml-auto flex gap-2">
                     <button
@@ -192,6 +213,12 @@ function EditStore({
   const [name, setName] = useState(store.name)
   const [requiresOpenerSkill, setRequiresOpenerSkill] = useState(store.requiresOpenerSkill)
   const [pairNewWorkers, setPairNewWorkers] = useState(store.pairNewWorkers)
+  const [openTime, setOpenTime] = useState(store.openTime ?? '')
+  const [closeTime, setCloseTime] = useState(store.closeTime ?? '')
+  const [nightStart, setNightStart] = useState(store.nightStart ?? '')
+
+  const timeInput =
+    'w-[7rem] rounded-lg border-2 border-ink bg-cream px-2 py-1 font-body text-xs text-ink outline-none'
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]">
@@ -216,10 +243,36 @@ function EditStore({
         />
         New workers can't work solo
       </label>
+      <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span className="font-body text-[10px] font-bold uppercase tracking-wide text-muted-ink">
+          Store hours
+        </span>
+        <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
+          Open
+          <input type="time" step={1800} value={openTime} onChange={(e) => setOpenTime(e.target.value)} className={timeInput} />
+        </label>
+        <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
+          Close
+          <input type="time" step={1800} value={closeTime} onChange={(e) => setCloseTime(e.target.value)} className={timeInput} />
+        </label>
+        <label className="flex items-center gap-1 font-body text-[10px] font-bold text-muted-ink">
+          Night from
+          <input type="time" step={1800} value={nightStart} onChange={(e) => setNightStart(e.target.value)} className={timeInput} />
+        </label>
+        <span className="font-body text-[10px] text-muted-ink">— blank = guess from shift needs</span>
+      </div>
       <div className="ml-auto flex gap-2">
         <button
           onClick={() =>
-            name.trim() && onSave({ name: name.trim(), requiresOpenerSkill, pairNewWorkers })
+            name.trim() &&
+            onSave({
+              name: name.trim(),
+              requiresOpenerSkill,
+              pairNewWorkers,
+              openTime: openTime || null,
+              closeTime: closeTime || null,
+              nightStart: nightStart || null,
+            })
           }
           className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white"
         >

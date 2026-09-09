@@ -74,33 +74,47 @@ router.get('/mine/hours', requireAuth, async (req, res) => {
 
   const links = await prisma.employeeStore.findMany({
     where: { employeeId },
-    select: { storeId: true },
+    select: { store: { select: { id: true, openTime: true, closeTime: true, nightStart: true } } },
   });
-  const storeIds = links.map((l) => l.storeId);
+  const stores = links.map((l) => l.store);
+  const storeIds = stores.map((s) => s.id);
   const reqs = storeIds.length
     ? await prisma.shiftRequirement.findMany({
         where: { storeId: { in: storeIds } },
-        select: { start: true, end: true },
+        select: { storeId: true, start: true, end: true },
       })
     : [];
 
-  const toMin = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+  const toMin = (hOrD: Date | string) =>
+    typeof hOrD === 'string'
+      ? Number(hOrD.slice(0, 2)) * 60 + Number(hOrD.slice(3, 5))
+      : hOrD.getUTCHours() * 60 + hOrD.getUTCMinutes();
   const fromMin = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-  // no requirements yet -> a sane generic day
-  let openM = 9 * 60;
-  let closeM = 21 * 60;
-  if (reqs.length > 0) {
-    openM = Math.min(...reqs.map((r) => toMin(r.start)));
-    closeM = Math.max(...reqs.map((r) => toMin(r.end)));
+  // Per store: the manager's explicit hours win; else the span of its shift
+  // requirements; else a generic 9–21. Then combine across the caller's stores.
+  const opens: number[] = [];
+  const closes: number[] = [];
+  const nights: number[] = [];
+  for (const s of stores) {
+    const mine = reqs.filter((r) => r.storeId === s.id);
+    const reqOpen = mine.length ? Math.min(...mine.map((r) => toMin(r.start))) : 9 * 60;
+    const reqClose = mine.length ? Math.max(...mine.map((r) => toMin(r.end))) : 21 * 60;
+    const openM = s.openTime ? toMin(s.openTime) : reqOpen;
+    const closeM = s.closeTime ? toMin(s.closeTime) : reqClose;
+    opens.push(openM);
+    closes.push(closeM);
+    nights.push(s.nightStart ? toMin(s.nightStart) : Math.max(openM, closeM - 300));
   }
-  const nightM = Math.max(openM, closeM - 300); // last ~5h before close
+  const openM = opens.length ? Math.min(...opens) : 9 * 60;
+  const closeM = closes.length ? Math.max(...closes) : 21 * 60;
+  const nightM = Math.min(nights.length ? Math.min(...nights) : closeM - 300, closeM - 30);
 
   res.json({
     open: fromMin(openM),
     close: fromMin(closeM),
-    night: { start: fromMin(nightM), end: fromMin(closeM) },
+    night: { start: fromMin(Math.max(openM, nightM)), end: fromMin(closeM) },
   });
 });
 
