@@ -126,10 +126,10 @@ export function Dashboard() {
     }
   }, [weekStart])
 
-  // who has checked their availability for the week on the board
-  const [avConfirm, setAvConfirm] = useState<
-    { employeeId: number; name: string; storeIds: number[]; state: 'changed' | 'confirmed' | 'pending' }[]
-  >([])
+  // each worker's availability for the week on the board + whether they've checked it
+  type AvRow = Awaited<ReturnType<typeof api.getAvailabilityConfirmations>>['workers'][number]
+  const [avConfirm, setAvConfirm] = useState<AvRow[]>([])
+  const [showHours, setShowHours] = useState(false)
   useEffect(() => {
     if (!weekStart) {
       setAvConfirm([])
@@ -507,36 +507,94 @@ export function Dashboard() {
 
       {weekStart &&
         (() => {
-          const rows = avConfirm.filter((w) => w.storeIds.includes(storeId ?? -1))
+          const rows = avConfirm
+            .filter((w) => w.storeIds.includes(storeId ?? -1))
+            .sort((a, b) => a.name.localeCompare(b.name))
           if (rows.length === 0) return null
           const ready = rows.filter((w) => w.state !== 'pending').length
           return (
-            <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
-              <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
-                Availability {weekRangeLabel(weekStart)} · {ready}/{rows.length} in
-              </span>
-              {rows.map((w) => (
-                <span
-                  key={w.employeeId}
-                  title={
-                    w.state === 'changed'
-                      ? 'set their own hours for this week'
-                      : w.state === 'confirmed'
-                        ? 'confirmed their usual hours'
-                        : "hasn't checked yet"
-                  }
-                  className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
-                    w.state === 'changed'
-                      ? 'border-sky-dark bg-sky/10 text-sky-dark'
-                      : w.state === 'confirmed'
-                        ? 'border-green bg-green/10 text-green-dark'
-                        : 'border-ink/20 text-muted-ink'
-                  }`}
-                >
-                  {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
-                  {w.name}
+            <div className="border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 font-heading text-[11px] font-bold uppercase tracking-wide text-muted-ink">
+                  Availability {weekRangeLabel(weekStart)} · {ready}/{rows.length} in
                 </span>
-              ))}
+                {rows.map((w) => (
+                  <span
+                    key={w.employeeId}
+                    title={
+                      w.state === 'changed'
+                        ? 'set their own hours for this week'
+                        : w.state === 'confirmed'
+                          ? 'confirmed their usual hours'
+                          : "hasn't checked yet"
+                    }
+                    className={`rounded-full border-2 px-2 py-0.5 font-body text-[11px] font-bold ${
+                      w.state === 'changed'
+                        ? 'border-sky-dark bg-sky/10 text-sky-dark'
+                        : w.state === 'confirmed'
+                          ? 'border-green bg-green/10 text-green-dark'
+                          : 'border-ink/20 text-muted-ink'
+                    }`}
+                  >
+                    {w.state === 'changed' ? '✎ ' : w.state === 'confirmed' ? '✓ ' : ''}
+                    {w.name}
+                  </span>
+                ))}
+                <button
+                  onClick={() => setShowHours((v) => !v)}
+                  className="ml-auto font-body text-[11px] font-bold text-sky-dark"
+                >
+                  {showHours ? 'Hide hours ▴' : "Everyone's hours ▾"}
+                </button>
+              </div>
+
+              {showHours && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse font-body text-[11px]">
+                    <thead>
+                      <tr className="text-muted-ink">
+                        <th className="p-1 text-left font-bold">Worker</th>
+                        {DAYS.map((d) => (
+                          <th key={d} className="p-1 text-left font-bold">
+                            {DAY_LABEL[d]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((w) => (
+                        <tr key={w.employeeId} className="border-t border-ink/10 align-top">
+                          <td className="whitespace-nowrap p-1 font-bold text-ink">
+                            {w.name}
+                            {w.source === 'override' && (
+                              <span className="ml-1 font-normal text-sky-dark">· wk</span>
+                            )}
+                          </td>
+                          {DAYS.map((d) => {
+                            const off = w.timeOff.includes(d)
+                            const wins = w.days[d] ?? []
+                            return (
+                              <td key={d} className="p-1">
+                                {off ? (
+                                  <span className="text-coral-dark">leave</span>
+                                ) : wins.length === 0 ? (
+                                  <span className="text-ink/25">—</span>
+                                ) : (
+                                  wins.map((win, i) => (
+                                    <div key={i} className="whitespace-nowrap text-ink">
+                                      {to12Hour(win.start)}–{to12Hour(win.end)}
+                                    </div>
+                                  ))
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )
         })()}

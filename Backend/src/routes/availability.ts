@@ -297,43 +297,88 @@ router.get('/week', ...manager, async (req, res) => {
 });
 
 // GET /availability/confirmations?weekStart=YYYY-MM-DD  (manager)
-// Per worker at the caller's stores: have they dealt with that week's availability?
+// Per worker at the caller's stores: their effective availability for that week
+// (a one-week override if they set one, else their standing hours), the days
+// they're on leave, and whether they've dealt with the weekly check:
 //   'changed'   = saved a one-week override
 //   'confirmed' = pressed "my hours are right"
 //   'pending'   = neither
 router.get('/confirmations', ...manager, async (req, res) => {
   const weekStart = parseWeekStart(req.query.weekStart);
   if (!weekStart) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
+  const scope = { employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } };
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
 
-  const [employees, overrides, confirms] = await Promise.all([
+  const [employees, overrides, confirms, standing, vacations] = await Promise.all([
     prisma.employee.findMany({
       where: { standby: false, employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
       select: { id: true, name: true, employeeStores: { select: { storeId: true } } },
     }),
     prisma.weekAvailability.findMany({
-      where: { weekStart, employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } },
-      select: { employeeId: true, updatedAt: true },
+      where: { weekStart, ...scope },
+      select: { employeeId: true, updatedAt: true, windows: true },
     }),
     prisma.availabilityConfirmation.findMany({
-      where: { weekStart, employee: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } } },
+      where: { weekStart, ...scope },
       select: { employeeId: true, confirmedAt: true },
+    }),
+    prisma.recurringAvailability.findMany({
+      where: scope,
+      orderBy: [{ day: 'asc' }, { start: 'asc' }],
+    }),
+    prisma.timeOffRequest.findMany({
+      where: { cancelledAt: null, startDate: { lte: weekEnd }, endDate: { gte: weekStart }, ...scope },
+      select: { employeeId: true, startDate: true, endDate: true },
     }),
   ]);
 
   const changedAt = new Map(overrides.map((o) => [o.employeeId, o.updatedAt]));
   const confirmedAt = new Map(confirms.map((c) => [c.employeeId, c.confirmedAt]));
+  const overrideWins = new Map(
+    overrides.map((o) => [o.employeeId, o.windows as unknown as Window[]]),
+  );
+
+  const DOW = Object.values(DayOfWeek) as DayOfWeek[];
+  const standingByEmp = new Map<number, Record<string, { start: string; end: string }[]>>();
+  for (const r of standing) {
+    const days = standingByEmp.get(r.employeeId) ?? {};
+    (days[r.day] ??= []).push({ start: toHHMM(r.start), end: toHHMM(r.end) });
+    standingByEmp.set(r.employeeId, days);
+  }
+
+  const offByEmp = new Map<number, Set<string>>();
+  for (const v of vacations) {
+    const set = offByEmp.get(v.employeeId) ?? new Set<string>();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setUTCDate(d.getUTCDate() + i);
+      if (d >= v.startDate && d <= v.endDate) set.add(DOW[i]!);
+    }
+    offByEmp.set(v.employeeId, set);
+  }
 
   res.json({
     weekStart: weekStart.toISOString().slice(0, 10),
     workers: employees.map((e) => {
       const changed = changedAt.get(e.id);
       const confirmed = confirmedAt.get(e.id);
+      const ov = overrideWins.get(e.id);
+      const days: Record<string, { start: string; end: string }[]> = {};
+      if (ov) {
+        for (const w of ov) (days[w.day] ??= []).push({ start: w.start, end: w.end });
+      } else {
+        Object.assign(days, standingByEmp.get(e.id) ?? {});
+      }
       return {
         employeeId: e.id,
         name: e.name,
         storeIds: e.employeeStores.map((s) => s.storeId),
         state: changed ? 'changed' : confirmed ? 'confirmed' : 'pending',
         at: (changed ?? confirmed ?? null)?.toISOString() ?? null,
+        source: ov ? 'override' : 'standing',
+        days,
+        timeOff: [...(offByEmp.get(e.id) ?? [])],
       };
     }),
   });

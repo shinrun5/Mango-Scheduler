@@ -313,7 +313,8 @@ export const api = {
       overriddenEmployeeIds: number[]
       windows: { employeeId: number; day: DayOfWeek; start: string; end: string }[]
     }>(`/availability/week?weekStart=${weekStart}`),
-  /** Manager: who has checked their availability for `weekStart`. */
+  /** Manager: each worker's effective availability for `weekStart` + whether
+   * they've checked it. `days` is keyed by DayOfWeek → windows ("HH:MM"). */
   getAvailabilityConfirmations: (weekStart: string) =>
     getJSON<{
       weekStart: string
@@ -323,6 +324,9 @@ export const api = {
         storeIds: number[]
         state: 'changed' | 'confirmed' | 'pending'
         at: string | null
+        source: 'override' | 'standing'
+        days: Partial<Record<DayOfWeek, { start: string; end: string }[]>>
+        timeOff: DayOfWeek[]
       }[]
     }>(`/availability/confirmations?weekStart=${weekStart}`),
 
