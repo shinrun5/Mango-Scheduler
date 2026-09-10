@@ -77,7 +77,7 @@ export function Overview() {
               ) : null}
               {s.openShifts > 0 && <Stat label="open" value={`${s.openShifts}`} tone="warn" />}
               {s.pendingRequests > 0 && (
-                <Stat label="requests" value={`${s.pendingRequests} pending`} tone="warn" />
+                <Stat label="marketplace" value={`${s.pendingRequests} pending`} tone="warn" />
               )}
             </div>
           </button>

@@ -100,7 +100,7 @@ function Chrome({ children }: { children?: ReactNode }) {
             Workers
           </NavLink>
           <NavLink to="/requests" className={tab}>
-            Requests{pending > 0 ? ` (${pending})` : ''}
+            Marketplace{pending > 0 ? ` (${pending})` : ''}
           </NavLink>
           <NavLink to="/chat" className={tab}>
             Chat{unread > 0 ? ` (${unread > 9 ? '9+' : unread})` : ''}
