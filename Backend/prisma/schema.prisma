@@ -314,6 +314,7 @@ model Message {
   userId     Int?      // null once the author's account is removed
   authorName String    // denormalised so old messages still render
   body       String
+  mentions   Int[]     @default([]) // userIds @-mentioned in the body
   createdAt  DateTime  @default(now())
   deletedAt  DateTime?
 

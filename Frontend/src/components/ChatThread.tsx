@@ -1,14 +1,17 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from './Button'
+import { FruitAvatar } from './FruitAvatar'
 import { MessageList } from './MessageList'
+import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
-import type { ChatMessage } from '../types'
+import { deriveMentions } from '../lib/mentions'
+import type { ChatMember, ChatMessage } from '../types'
 
 const POLL_MS = 3000
 
 export interface ThreadIO {
   fetchPage: (opts?: { after?: number; before?: number }) => Promise<{ messages: ChatMessage[]; hasMore: boolean }>
-  send: (body: string) => Promise<{ message: ChatMessage }>
+  send: (body: string, mentions: number[]) => Promise<{ message: ChatMessage }>
   markRead: () => Promise<unknown>
 }
 
@@ -22,6 +25,7 @@ export function ChatThread({
   placeholder,
   onBack,
   onActivity,
+  members = [],
 }: {
   convKey: string
   io: ThreadIO
@@ -30,6 +34,8 @@ export function ChatThread({
   placeholder: string
   onBack: () => void
   onActivity?: () => void
+  /** channel members — enables @-mentions (store threads only) */
+  members?: ChatMember[]
 }) {
   const t = useT()
   const ioRef = useRef(io)
@@ -45,6 +51,42 @@ export function ChatThread({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // @-mention autocomplete
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const [menu, setMenu] = useState<{ q: string; at: number } | null>(null)
+  const [menuIdx, setMenuIdx] = useState(0)
+  const matches =
+    menu && members.length > 0
+      ? members.filter((m) => m.name.toLowerCase().includes(menu.q.toLowerCase())).slice(0, 6)
+      : []
+
+  function syncMenu(el: HTMLTextAreaElement) {
+    if (members.length === 0) return
+    const caret = el.selectionStart ?? el.value.length
+    const m = /(?:^|\s)@(\S*)$/.exec(el.value.slice(0, caret))
+    if (m) {
+      setMenu({ q: m[1], at: caret - m[1].length - 1 })
+      setMenuIdx(0)
+    } else {
+      setMenu(null)
+    }
+  }
+
+  function pickMention(mem: ChatMember) {
+    const el = taRef.current
+    const caret = el?.selectionStart ?? draft.length
+    const at = menu?.at ?? caret
+    const insert = `@${mem.name} `
+    const next = draft.slice(0, at) + insert + draft.slice(caret)
+    setDraft(next)
+    setMenu(null)
+    requestAnimationFrame(() => {
+      const pos = at + insert.length
+      el?.focus()
+      el?.setSelectionRange(pos, pos)
+    })
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
@@ -123,8 +165,9 @@ export function ChatThread({
     setSending(true)
     setError(null)
     try {
-      const { message } = await ioRef.current.send(body)
+      const { message } = await ioRef.current.send(body, deriveMentions(body, members))
       setDraft('')
+      setMenu(null)
       stick.current = true
       setMessages((cur) => (cur.some((m) => m.id === message.id) ? cur : [...cur, message]))
       actRef.current?.()
@@ -168,24 +211,86 @@ export function ChatThread({
                 </button>
               </div>
             )}
-            <MessageList messages={messages} peerName={peerName} />
+            <MessageList
+              messages={messages}
+              peerName={peerName}
+              memberNames={members.map((m) => m.name)}
+            />
           </>
         )}
       </div>
       <div className="flex items-end gap-2 border-t-2 border-ink/10 p-2.5">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              void send()
-            }
-          }}
-          rows={1}
-          placeholder={placeholder}
-          className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
-        />
+        <div className="relative flex-1">
+          {matches.length > 0 && (
+            <ul className="absolute bottom-full left-0 z-10 mb-1 max-h-52 w-56 overflow-y-auto rounded-xl border-2 border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
+              {matches.map((m, i) => (
+                <li key={m.userId}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      pickMention(m)
+                    }}
+                    className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-body text-sm ${
+                      i === menuIdx ? 'bg-cream' : ''
+                    }`}
+                  >
+                    <FruitAvatar
+                      kind={fruitForPerson({ employeeId: m.avatarKey, avatarFruit: m.avatarFruit })}
+                      size={20}
+                    />
+                    <span className="truncate text-ink">{m.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <textarea
+            ref={taRef}
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              syncMenu(e.currentTarget)
+            }}
+            onClick={(e) => syncMenu(e.currentTarget)}
+            onKeyUp={(e) => {
+              if (!['Enter', 'ArrowUp', 'ArrowDown', 'Escape', 'Tab'].includes(e.key)) {
+                syncMenu(e.currentTarget)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (matches.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setMenuIdx((i) => (i + 1) % matches.length)
+                  return
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setMenuIdx((i) => (i - 1 + matches.length) % matches.length)
+                  return
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault()
+                  pickMention(matches[menuIdx])
+                  return
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setMenu(null)
+                  return
+                }
+              }
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void send()
+              }
+            }}
+            rows={1}
+            placeholder={placeholder}
+            className="max-h-32 min-h-[2.5rem] w-full resize-none rounded-xl border-2 border-ink bg-cream px-3 py-2 font-body text-sm text-ink outline-none focus:bg-paper"
+          />
+        </div>
         <Button onClick={() => void send()} disabled={sending || !draft.trim()} className="shrink-0">
           {sending ? '…' : t('common.send')}
         </Button>

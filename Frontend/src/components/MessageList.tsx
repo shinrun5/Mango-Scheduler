@@ -1,5 +1,6 @@
 import { FruitAvatar } from './FruitAvatar'
 import { fruitForPerson } from '../lib/fruit'
+import { segmentMentions } from '../lib/mentions'
 import type { ChatMessage } from '../types'
 
 const clock = (iso: string) =>
@@ -23,9 +24,12 @@ function dayLabel(iso: string) {
 export function MessageList({
   messages,
   peerName,
+  memberNames = [],
 }: {
   messages: ChatMessage[]
   peerName?: string
+  /** channel member names, for highlighting @-mentions in the transcript */
+  memberNames?: string[]
 }) {
   return (
     <>
@@ -66,11 +70,26 @@ export function MessageList({
                   </span>
                 )}
                 <span
-                  className={`whitespace-pre-wrap break-words rounded-2xl border-2 border-ink px-3 py-1.5 font-body text-sm ${
-                    m.mine ? 'bg-sky text-ink' : 'bg-cream text-ink'
+                  className={`whitespace-pre-wrap break-words rounded-2xl border-2 px-3 py-1.5 font-body text-sm ${
+                    m.mentionsMe
+                      ? 'border-sky-dark bg-sky/25 text-ink'
+                      : m.mine
+                        ? 'border-ink bg-sky text-ink'
+                        : 'border-ink bg-cream text-ink'
                   }`}
                 >
-                  {m.body}
+                  {segmentMentions(m.body, memberNames).map((seg, si) =>
+                    seg.mention ? (
+                      <span
+                        key={si}
+                        className={`font-bold ${m.mine ? 'underline decoration-2' : 'text-sky-dark'}`}
+                      >
+                        {seg.text}
+                      </span>
+                    ) : (
+                      <span key={si}>{seg.text}</span>
+                    ),
+                  )}
                 </span>
               </div>
             </div>

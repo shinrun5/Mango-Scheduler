@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
-import type { Conversation, DmPeer } from '../types'
+import type { ChatMember, Conversation, DmPeer } from '../types'
 
 type Open =
   | { kind: 'store'; storeId: number; name: string }
@@ -19,6 +19,24 @@ export function Chat() {
   const [convos, setConvos] = useState<Conversation[] | null>(null)
   const [open, setOpen] = useState<Open | null>(null)
   const [picking, setPicking] = useState(false)
+  const [members, setMembers] = useState<ChatMember[]>([])
+
+  // channel roster for @-mentions — only while a store thread is open
+  const storeId = open?.kind === 'store' ? open.storeId : null
+  useEffect(() => {
+    if (storeId == null) {
+      setMembers([])
+      return
+    }
+    let live = true
+    api
+      .getChatMembers(storeId)
+      .then((r) => live && setMembers(r.members))
+      .catch(() => live && setMembers([]))
+    return () => {
+      live = false
+    }
+  }, [storeId])
 
   const load = useCallback(
     () => api.getChatConversations().then((r) => setConvos(r.conversations)).catch(() => setConvos([])),
@@ -65,6 +83,7 @@ export function Chat() {
               convKey={`s${open.storeId}`}
               onBack={back}
               onActivity={load}
+              members={members}
               placeholder={t('chat.messagePlaceholder')}
               header={
                 <span className="flex min-w-0 items-center gap-2">
@@ -79,7 +98,7 @@ export function Chat() {
               io={
                 {
                   fetchPage: (o) => api.getChatMessages(open.storeId, o),
-                  send: (b) => api.sendChatMessage(open.storeId, b),
+                  send: (b, mentions) => api.sendChatMessage(open.storeId, b, mentions),
                   markRead: () => api.markChatRead(open.storeId),
                 } satisfies ThreadIO
               }

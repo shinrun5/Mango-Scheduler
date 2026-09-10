@@ -2,6 +2,7 @@ import type {
   AuthUser,
   ChangeRequest,
   ChangeType,
+  ChatMember,
   ChatMessage,
   Conversation,
   DmPeer,
@@ -421,8 +422,10 @@ export const api = {
     const q = opts?.after != null ? `?after=${opts.after}` : opts?.before != null ? `?before=${opts.before}` : ''
     return getJSON<{ messages: ChatMessage[]; hasMore: boolean }>(`/chat/${storeId}/messages${q}`)
   },
-  sendChatMessage: (storeId: number, body: string) =>
-    sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body }),
+  sendChatMessage: (storeId: number, body: string, mentions: number[] = []) =>
+    sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body, mentions }),
+  getChatMembers: (storeId: number) =>
+    getJSON<{ members: ChatMember[] }>(`/chat/${storeId}/members`),
   markChatRead: (storeId: number) =>
     sendJSON<{ ok: true }>(`/chat/${storeId}/read`, 'POST', {}),
   getChatUnread: () =>

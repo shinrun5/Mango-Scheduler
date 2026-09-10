@@ -350,6 +350,15 @@ export interface ChatMessage {
   authorKey: number
   authorFruit: string | null
   mine: boolean
+  /** true when you're one of this message's @-mentions */
+  mentionsMe: boolean
+}
+
+export interface ChatMember {
+  userId: number
+  name: string
+  avatarKey: number
+  avatarFruit: string | null
 }
 
 export interface DmPeer {

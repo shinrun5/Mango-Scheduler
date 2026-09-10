@@ -20,10 +20,20 @@ interface WireMessage {
   authorKey: number;
   authorFruit: string | null;
   mine: boolean;
+  /** true when the viewer is one of the message's @-mentions */
+  mentionsMe: boolean;
 }
 
 function toWire(
-  m: { id: number; storeId: number; body: string; createdAt: Date; authorName: string; userId: number | null },
+  m: {
+    id: number;
+    storeId: number;
+    body: string;
+    createdAt: Date;
+    authorName: string;
+    userId: number | null;
+    mentions?: number[];
+  },
   meUserId: number,
   keyFruit: Map<number, { key: number; fruit: string | null }>,
 ): WireMessage {
@@ -37,6 +47,7 @@ function toWire(
     authorKey: kf?.key ?? m.userId ?? 0,
     authorFruit: kf?.fruit ?? null,
     mine: m.userId === meUserId,
+    mentionsMe: (m.mentions ?? []).includes(meUserId),
   };
 }
 
@@ -89,7 +100,37 @@ router.get('/:storeId/messages', requireAuth, async (req, res) => {
   });
 });
 
-// POST /chat/:storeId/messages  { body }
+// GET /chat/:storeId/members — everyone in this store's channel (for the @-picker
+// and for highlighting @-names in the transcript)
+router.get('/:storeId/members', requireAuth, async (req, res) => {
+  const storeId = Number(req.params.storeId);
+  if (!canSee(req, storeId)) return res.status(403).json({ error: 'Not your store' });
+
+  const ids = await storeMemberUserIds(storeId);
+  if (ids.length === 0) return res.json({ members: [] });
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      employeeId: true,
+      employee: { select: { name: true, avatarFruit: true } },
+    },
+  });
+  res.json({
+    members: users
+      .map((u) => ({
+        userId: u.id,
+        name: u.employee?.name ?? u.name ?? u.email,
+        avatarKey: u.employeeId ?? u.id,
+        avatarFruit: u.employee?.avatarFruit ?? null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  });
+});
+
+// POST /chat/:storeId/messages  { body, mentions?: number[] }
 router.post('/:storeId/messages', requireAuth, async (req, res) => {
   const storeId = Number(req.params.storeId);
   if (!canSee(req, storeId)) return res.status(403).json({ error: 'Not your store' });
@@ -100,8 +141,19 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
 
   const me = req.user!;
   const authorName = me.name ?? me.email;
+
+  // keep only real channel members, drop the sender and dups
+  const claimed: number[] = Array.isArray(req.body?.mentions)
+    ? req.body.mentions.filter((n: unknown): n is number => Number.isInteger(n))
+    : [];
+  let mentions: number[] = [];
+  if (claimed.length > 0) {
+    const memberIds = new Set(await storeMemberUserIds(storeId));
+    mentions = [...new Set(claimed)].filter((id) => id !== me.id && memberIds.has(id));
+  }
+
   const msg = await prisma.message.create({
-    data: { storeId, userId: me.id, authorName, body },
+    data: { storeId, userId: me.id, authorName, body, mentions },
   });
   // the sender has now "seen" everything up to their own message
   await prisma.messageRead.upsert({
@@ -110,7 +162,13 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
     update: { lastReadAt: new Date() },
   });
 
-  void emailChatRecipients(storeId, me.id, authorName, body).catch((e) =>
+  if (mentions.length > 0) {
+    void notifyMentions(storeId, authorName, body, mentions).catch((e) =>
+      console.error('[chat] mention notify failed', e),
+    );
+  }
+  // the plain "new messages" nudge — skip anyone we just @-pinged
+  void emailChatRecipients(storeId, me.id, authorName, body, mentions).catch((e) =>
     console.error('[chat] recipient email failed', e),
   );
 
@@ -278,15 +336,46 @@ async function storeMemberUserIds(storeId: number): Promise<number[]> {
   return users.map((u) => u.id);
 }
 
-/** Email opted-in members (except the sender) that the chat has new activity, at
- * most once per EMAIL_COOLDOWN_MS each. Coarse on purpose — a nudge, not a relay. */
+/** In-app + email each @-mentioned member. Higher-signal than the nudge, so it
+ * ignores the cooldown; still respects the chat-email opt-out for the email. */
+async function notifyMentions(
+  storeId: number,
+  senderName: string,
+  body: string,
+  mentionedUserIds: number[],
+): Promise<void> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
+  const optedIn = new Set(
+    (
+      await prisma.user.findMany({
+        where: { id: { in: mentionedUserIds }, notifyOnChatMessage: true },
+        select: { id: true },
+      })
+    ).map((u) => u.id),
+  );
+  const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  for (const id of mentionedUserIds) {
+    await notify(id, {
+      kind: 'GENERIC',
+      title: `${senderName} mentioned you in ${store?.name ?? 'store'} chat`,
+      body: preview,
+      link: '/chat',
+      email: optedIn.has(id),
+    });
+  }
+}
+
+/** Email opted-in members (except the sender + anyone `skip`ped) that the chat has
+ * new activity, at most once per EMAIL_COOLDOWN_MS each. A nudge, not a relay. */
 async function emailChatRecipients(
   storeId: number,
   senderUserId: number,
   senderName: string,
   body: string,
+  skip: number[] = [],
 ): Promise<void> {
-  const memberIds = (await storeMemberUserIds(storeId)).filter((id) => id !== senderUserId);
+  const drop = new Set([senderUserId, ...skip]);
+  const memberIds = (await storeMemberUserIds(storeId)).filter((id) => !drop.has(id));
   if (memberIds.length === 0) return;
 
   const cutoff = new Date(Date.now() - EMAIL_COOLDOWN_MS);
@@ -354,6 +443,7 @@ function dmWire(
     authorKey: kf?.key ?? r.senderId,
     authorFruit: kf?.fruit ?? null,
     mine: r.senderId === meUserId,
+    mentionsMe: false,
   };
 }
 
