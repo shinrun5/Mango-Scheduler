@@ -16,6 +16,7 @@ export function Header({
   onPublish,
   onUnpublish,
   publishBusy,
+  readOnly,
 }: {
   weekStart?: string
   onWeekChange?: (deltaWeeks: number) => void
@@ -30,6 +31,8 @@ export function Header({
   onPublish?: () => void
   onUnpublish?: () => void
   publishBusy?: boolean
+  /** viewing a locked past week — hide all the editing actions */
+  readOnly?: boolean
 }) {
   return (
     <div className="flex flex-shrink-0 flex-wrap items-center gap-3 border-b-2 border-ink/10 bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
@@ -53,7 +56,13 @@ export function Header({
         </div>
       )}
 
-      {gapCount !== null && gapCount > 0 && (
+      {readOnly && (
+        <span className="rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-[11px] font-bold text-ink">
+          🔒 Locked — you&rsquo;ve moved past this week
+        </span>
+      )}
+
+      {!readOnly && gapCount !== null && gapCount > 0 && (
         <div className="flex items-center gap-1.5 rounded-full border-2 border-coral bg-coral-bg px-3.5 py-1.5">
           <WarningIcon size={16} />
           <span className="font-body text-xs font-extrabold text-coral-dark">
@@ -62,14 +71,14 @@ export function Header({
         </div>
       )}
 
-      {workersSeeWeek && (
+      {!readOnly && workersSeeWeek && (
         <span className="rounded-full border-2 border-ink/20 px-2.5 py-1 font-body text-[11px] font-bold text-muted-ink">
           Workers still see week of {weekRangeLabel(workersSeeWeek)}
         </span>
       )}
 
       <div className="ml-auto flex flex-wrap items-center gap-3">
-        {onSave && (
+        {!readOnly && onSave && (
           <button
             onClick={onSave}
             disabled={saving}
@@ -79,7 +88,7 @@ export function Header({
           </button>
         )}
 
-        {onPublish &&
+        {!readOnly && onPublish &&
           (publishedAt ? (
             <div className="flex items-center gap-2 rounded-full border-2 border-green bg-paper px-3 py-1.5">
               <div className="h-2 w-2 rounded-full bg-green" />
@@ -100,10 +109,12 @@ export function Header({
             </Button>
           ))}
 
-        <Button onClick={onGenerate} disabled={generating}>
-          <SparkleIcon size={16} />
-          {generating ? 'Generating…' : 'Generate Schedule'}
-        </Button>
+        {!readOnly && (
+          <Button onClick={onGenerate} disabled={generating}>
+            <SparkleIcon size={16} />
+            {generating ? 'Generating…' : 'Generate Schedule'}
+          </Button>
+        )}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AssignPopover } from '../components/AssignPopover'
 import { DayCard, type DayPerson } from '../components/ScheduleCards'
@@ -31,6 +31,7 @@ import type {
   RecurringAvailability,
   Shift,
   ShiftRequirement,
+  SnapshotDetail,
   Store,
 } from '../types'
 
@@ -87,6 +88,12 @@ export function Dashboard() {
   const [postedWeekStart, setPostedWeekStart] = useState<string | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
   const [weekStart, setWeekStart] = useState<string | null>(null)
+  // which week the manager is looking at — equals weekStart for the live editor,
+  // an earlier value while browsing locked past weeks (read-only)
+  const [viewWeek, setViewWeek] = useState<string | null>(null)
+  const [pastWeeks, setPastWeeks] = useState<string[]>([])
+  const [pastView, setPastView] = useState<SnapshotDetail | null>(null)
+  const [pastLoading, setPastLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const { storeId, stores } = useStore()
 
@@ -94,17 +101,43 @@ export function Dashboard() {
     loadBoard().then(setBoard).catch((e) => setError(String(e)))
   }, [])
 
-  useEffect(() => {
-    if (storeId == null) return
-    api
+  const loadStatus = useCallback((storeId: number, resetView = false) => {
+    return api
       .getScheduleStatus(storeId)
       .then((s) => {
         setPublishedAt(s.publishedAt)
         setWeekStart(s.weekStart)
         setPostedWeekStart(s.postedWeekStart)
+        setPastWeeks(s.pastWeeks)
+        setViewWeek((v) => (resetView || v == null ? s.weekStart : v))
       })
       .catch(() => {})
-  }, [storeId])
+  }, [])
+
+  useEffect(() => {
+    if (storeId == null) return
+    void loadStatus(storeId, true)
+  }, [storeId, loadStatus])
+
+  // viewing a locked past week -> pull its frozen roster
+  const isPast =
+    !!viewWeek && !!weekStart && viewWeek.slice(0, 10) < weekStart.slice(0, 10)
+  useEffect(() => {
+    if (storeId == null || !isPast || !viewWeek) {
+      setPastView(null)
+      return
+    }
+    let live = true
+    setPastLoading(true)
+    api
+      .getScheduleWeekView(storeId, viewWeek.slice(0, 10))
+      .then((s) => live && setPastView(s))
+      .catch(() => live && setPastView(null))
+      .finally(() => live && setPastLoading(false))
+    return () => {
+      live = false
+    }
+  }, [storeId, isPast, viewWeek])
 
   // one-week availability overrides for the week on the board (candidate picker
   // should honour "just this week I can only work Monday", same as the solver)
@@ -194,8 +227,7 @@ export function Dashboard() {
     try {
       const s = next ? await api.publishSchedule(storeId) : await api.unpublishSchedule(storeId)
       setPublishedAt(s.publishedAt)
-      const st = await api.getScheduleStatus(storeId)
-      setPostedWeekStart(st.postedWeekStart)
+      await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -203,11 +235,35 @@ export function Dashboard() {
     }
   }
 
-  async function changeWeek(deltaWeeks: number) {
-    if (!weekStart || storeId == null) return
+  // ‹ › on the toolbar: step through past (locked) weeks and back to the live
+  // one. Going forward from the live week starts the next week — which freezes
+  // the current one.
+  async function navWeek(delta: number) {
+    if (!weekStart || !viewWeek || storeId == null) return
+    const weeks = [...new Set([...pastWeeks, weekStart].map((w) => w.slice(0, 10)))].sort()
+    const here = weeks.indexOf(viewWeek.slice(0, 10))
+    if (delta < 0) {
+      if (here > 0) setViewWeek(weeks[here - 1])
+      return
+    }
+    // delta > 0
+    if (viewWeek.slice(0, 10) < weekStart.slice(0, 10)) {
+      if (here >= 0 && here < weeks.length - 1) setViewWeek(weeks[here + 1])
+      return
+    }
+    // on the live week -> advance to next week
+    if (
+      !window.confirm(
+        'Start next week? This week’s schedule gets locked — you won’t be able to edit or restore it after.',
+      )
+    )
+      return
     try {
-      const { weekStart: next } = await api.setScheduleWeek(storeId, shiftWeekYMD(weekStart, deltaWeeks))
+      const { weekStart: next } = await api.setScheduleWeek(storeId, shiftWeekYMD(weekStart, 1))
       setWeekStart(next)
+      setViewWeek(next)
+      await loadStatus(storeId, true)
+      setBoard(await loadBoard())
     } catch (e) {
       setError(String(e))
     }
@@ -237,9 +293,7 @@ export function Dashboard() {
       const result = await api.generateSchedule(storeId, { saveFirst: hadShifts })
       setLastResult(result)
       setBoard(await loadBoard())
-      const s = await api.getScheduleStatus(storeId)
-      setPublishedAt(s.publishedAt)
-      setPostedWeekStart(s.postedWeekStart)
+      await loadStatus(storeId)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -492,6 +546,23 @@ export function Dashboard() {
     )
   }
 
+  // browsing a locked past week — read-only roster, no editing tools
+  if (isPast) {
+    return (
+      <>
+        <Header
+          weekStart={viewWeek ?? undefined}
+          onWeekChange={(d) => void navWeek(d)}
+          gapCount={null}
+          generating={false}
+          onGenerate={() => {}}
+          readOnly
+        />
+        <PastWeekBody snap={pastView} loading={pastLoading} storeId={storeId} />
+      </>
+    )
+  }
+
   // just the selected store
   const storeShifts = board.shifts.filter((s) => s.storeId === storeId)
   const full = buildView(board)
@@ -520,8 +591,8 @@ export function Dashboard() {
   return (
     <>
       <Header
-        weekStart={weekStart ?? undefined}
-        onWeekChange={(d) => void changeWeek(d)}
+        weekStart={viewWeek ?? weekStart ?? undefined}
+        onWeekChange={(d) => void navWeek(d)}
         gapCount={solved ? totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
@@ -879,6 +950,72 @@ export function Dashboard() {
         />
       )}
     </>
+  )
+}
+
+/** Read-only roster for a locked past week — a frozen snapshot, current store only. */
+function PastWeekBody({
+  snap,
+  loading,
+  storeId,
+}: {
+  snap: SnapshotDetail | null
+  loading: boolean
+  storeId: number
+}) {
+  if (loading) {
+    return <p className="p-4 font-body text-sm text-muted-ink sm:p-8">Loading…</p>
+  }
+  if (!snap) {
+    return (
+      <p className="p-4 font-body text-sm text-muted-ink sm:p-8">
+        No saved schedule for that week.
+      </p>
+    )
+  }
+  const rows = snap.shifts.filter((s) => s.storeId === storeId)
+  return (
+    <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
+      <p className="mb-3 font-body text-xs text-muted-ink">
+        This week is locked. It&rsquo;s here for reference only — go forward with › to get back to
+        the live schedule.
+      </p>
+      {rows.length === 0 ? (
+        <p className="font-body text-sm text-muted-ink">No shifts were scheduled that week.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {DAYS.map((day, i) => {
+            const dayRows = rows
+              .filter((s) => s.day === day)
+              .sort((a, b) => a.start.localeCompare(b.start))
+            if (dayRows.length === 0) return null
+            return (
+              <div
+                key={day}
+                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+              >
+                <p className="font-heading text-xs font-bold text-ink">
+                  {DAY_LABEL[day]}{' '}
+                  <span className="font-body font-semibold text-muted-ink">
+                    {dayDate(snap.weekStart, i)}
+                  </span>
+                </p>
+                <div className="mt-1.5 flex flex-col gap-1">
+                  {dayRows.map((r, j) => (
+                    <p key={j} className="font-body text-[13px] text-ink">
+                      {r.employeeName ?? '(open)'}{' '}
+                      <span className="text-muted-ink">
+                        {to12Hour(r.start)}–{to12Hour(r.end)}
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -7,6 +7,7 @@ import type { SnapshotDetail, SnapshotMeta } from '../types'
 export function History() {
   const { storeId } = useStore()
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
+  const [workingWeek, setWorkingWeek] = useState<string | null>(null)
   const [selected, setSelected] = useState<SnapshotDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -14,9 +15,11 @@ export function History() {
 
   function refresh() {
     if (storeId == null) return Promise.resolve()
-    return api
-      .getSnapshots(storeId)
-      .then(setSnapshots)
+    return Promise.all([api.getSnapshots(storeId), api.getScheduleStatus(storeId)])
+      .then(([snaps, status]) => {
+        setSnapshots(snaps)
+        setWorkingWeek(status.weekStart)
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load history'))
   }
 
@@ -25,6 +28,10 @@ export function History() {
     refresh().finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId])
+
+  // a week the manager has moved past is frozen — no restoring it over the live one
+  const isLocked = (weekStart: string) =>
+    workingWeek != null && weekStart.slice(0, 10) < workingWeek.slice(0, 10)
 
   async function open(id: number) {
     setError(null)
@@ -88,6 +95,11 @@ export function History() {
                     {s.label}
                   </span>
                 )}
+                {isLocked(s.weekStart) && (
+                  <span className="rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-body text-[10px] font-bold text-ink">
+                    🔒 locked
+                  </span>
+                )}
                 <span className="ml-auto font-body text-[10px] text-muted-ink">
                   saved {relativeTime(s.savedAt)}
                 </span>
@@ -99,13 +111,15 @@ export function History() {
                 >
                   {selected?.id === s.id ? 'Hide' : 'View'}
                 </button>
-                <button
-                  disabled={busy}
-                  onClick={() => void restore(s.id)}
-                  className="rounded-full border-2 border-ink bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
-                >
-                  Restore
-                </button>
+                {!isLocked(s.weekStart) && (
+                  <button
+                    disabled={busy}
+                    onClick={() => void restore(s.id)}
+                    className="rounded-full border-2 border-ink bg-green px-2.5 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Restore
+                  </button>
+                )}
                 <button
                   onClick={() => void del(s.id)}
                   className="rounded-full border-2 border-coral px-2.5 py-0.5 font-heading text-[11px] font-bold text-coral-dark"

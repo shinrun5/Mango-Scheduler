@@ -26,18 +26,42 @@ router.get('/status', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'No access to that store' });
   }
   const schedule = await prisma.schedule.findUnique({ where: { storeId } });
+  const curWeek = schedule?.weekStart ?? mondayUTC();
   const postedSnap = schedule?.postedSnapshotId
     ? await prisma.scheduleSnapshot.findUnique({
         where: { id: schedule.postedSnapshotId },
         select: { weekStart: true },
       })
     : null;
+  // earlier weeks that have a frozen roster to look back at (locked — read-only)
+  const pastRows = await prisma.scheduleSnapshot.findMany({
+    where: { storeId, weekStart: { lt: curWeek } },
+    orderBy: { weekStart: 'desc' },
+    distinct: ['weekStart'],
+    select: { weekStart: true },
+  });
   res.json({
     publishedAt: schedule?.publishedAt ?? null,
-    weekStart: schedule?.weekStart ?? mondayUTC(),
+    weekStart: curWeek,
     // the week workers currently see (may lag the working week while a draft is in progress)
     postedWeekStart: postedSnap?.weekStart ?? null,
+    pastWeeks: pastRows.map((r) => r.weekStart),
   });
+});
+
+// GET /schedule/week-view?storeId=&weekStart=YYYY-MM-DD
+// The frozen roster for a past week (posted or archived) — read-only display only.
+router.get('/week-view', ...manageStore, async (req, res) => {
+  const storeId = storeIdFrom(req);
+  const parsed = parseYMD(req.query.weekStart);
+  if (!parsed) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
+  const weekStart = mondayUTC(parsed);
+  const snap = await prisma.scheduleSnapshot.findFirst({
+    where: { storeId, weekStart },
+    orderBy: { savedAt: 'desc' },
+  });
+  if (!snap) return res.status(404).json({ error: 'No saved schedule for that week' });
+  res.json(snap);
 });
 
 router.post('/publish', ...manageStore, async (req, res) => {
@@ -50,11 +74,18 @@ router.post('/publish', ...manageStore, async (req, res) => {
   const shifts = await freezeShifts(storeId);
   let postedSnapshotId = existing?.postedSnapshotId ?? null;
   if (postedSnapshotId) {
-    const still = await prisma.scheduleSnapshot.findUnique({
+    const prev = await prisma.scheduleSnapshot.findUnique({
       where: { id: postedSnapshotId },
-      select: { id: true },
+      select: { id: true, weekStart: true },
     });
-    if (!still) postedSnapshotId = null;
+    if (!prev) {
+      postedSnapshotId = null;
+    } else if (prev.weekStart.getTime() !== weekStart.getTime()) {
+      // last posted week is a different week — keep it in history (drop the
+      // 'posted' label) and start a fresh 'posted' snapshot for this week
+      await prisma.scheduleSnapshot.update({ where: { id: prev.id }, data: { label: null } });
+      postedSnapshotId = null;
+    }
   }
   if (postedSnapshotId) {
     await prisma.scheduleSnapshot.update({
@@ -97,10 +128,33 @@ router.put('/week', ...manageStore, async (req, res) => {
   const parsed = parseYMD(req.body?.weekStart);
   if (!parsed) return res.status(400).json({ error: 'weekStart must be "YYYY-MM-DD"' });
   const weekStart = mondayUTC(parsed);
+
+  const cur = await prisma.schedule.findUnique({ where: { storeId } });
+  const prevWeek = cur?.weekStart ?? null;
+  const changed = !prevWeek || prevWeek.getTime() !== weekStart.getTime();
+
+  // Moving to a different week freezes the outgoing one: archive its roster (once)
+  // so it stays viewable and locked in history, and clear the 'posted' flag so
+  // workers keep seeing the last posted week until the new one is posted.
+  if (changed && prevWeek) {
+    const already = await prisma.scheduleSnapshot.findFirst({
+      where: { storeId, weekStart: prevWeek },
+      select: { id: true },
+    });
+    if (!already) {
+      const shifts = await freezeShifts(storeId);
+      if (shifts.length > 0) {
+        await prisma.scheduleSnapshot.create({
+          data: { storeId, weekStart: prevWeek, label: null, savedById: req.user!.id, shifts },
+        });
+      }
+    }
+  }
+
   const schedule = await prisma.schedule.upsert({
     where: { storeId },
     create: { storeId, weekStart },
-    update: { weekStart },
+    update: { weekStart, ...(changed ? { publishedAt: null } : {}) },
   });
   res.json({ weekStart: schedule.weekStart });
 });
@@ -163,6 +217,12 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   if (!snap) return res.status(404).json({ error: 'Not found' });
   if (snap.storeId !== storeId) {
     return res.status(400).json({ error: 'That snapshot belongs to a different store' });
+  }
+  const cur = await prisma.schedule.findUnique({ where: { storeId }, select: { weekStart: true } });
+  if (cur?.weekStart && snap.weekStart.getTime() < cur.weekStart.getTime()) {
+    return res.status(409).json({
+      error: "That week is locked — you've moved on to a later week. Use Generate for the current week instead.",
+    });
   }
 
   const frozen = snap.shifts as {

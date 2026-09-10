@@ -74,7 +74,19 @@ router.get('/mine', requireAuth, async (req, res) => {
     const sched = l.store.schedule;
     if (!sched) continue;
 
-    if (sched.publishedAt) {
+    const postedSnap = sched.postedSnapshotId
+      ? await prisma.scheduleSnapshot.findUnique({ where: { id: sched.postedSnapshotId } })
+      : null;
+    // "live" only when the posted week IS the working week. If the manager has
+    // advanced to build a later week but not posted it, workers keep seeing the
+    // last posted week (read-only) — never a half-built, unposted future week.
+    const postedIsOlderWeek =
+      !!postedSnap &&
+      !!sched.weekStart &&
+      postedSnap.weekStart.getTime() !== sched.weekStart.getTime();
+    const liveNow = !!sched.publishedAt && !postedIsOlderWeek;
+
+    if (liveNow) {
       const all = await prisma.shift.findMany({
         where: { storeId: l.storeId },
         select: {
@@ -132,9 +144,8 @@ router.get('/mine', requireAuth, async (req, res) => {
         weekStart: sched.weekStart,
         live: true,
       });
-    } else if (sched.postedSnapshotId) {
-      const snap = await prisma.scheduleSnapshot.findUnique({ where: { id: sched.postedSnapshotId } });
-      if (!snap) continue;
+    } else if (postedSnap) {
+      const snap = postedSnap;
       const frozen = snap.shifts as {
         employeeId: number | null;
         employeeName: string | null;

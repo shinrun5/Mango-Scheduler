@@ -367,9 +367,16 @@ export const api = {
 
   // --- publish state + calendar week (per store) ---
   getScheduleStatus: (storeId: number) =>
-    getJSON<{ publishedAt: string | null; weekStart: string; postedWeekStart: string | null }>(
-      `/schedule/status?storeId=${storeId}`,
-    ),
+    getJSON<{
+      publishedAt: string | null
+      weekStart: string
+      postedWeekStart: string | null
+      /** earlier weeks with a frozen roster to look back at (locked, read-only) */
+      pastWeeks: string[]
+    }>(`/schedule/status?storeId=${storeId}`),
+  /** frozen roster for a past week (posted or archived) — read-only */
+  getScheduleWeekView: (storeId: number, weekStart: string) =>
+    getJSON<SnapshotDetail>(`/schedule/week-view?storeId=${storeId}&weekStart=${weekStart}`),
   publishSchedule: (storeId: number) =>
     sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', { storeId }),
   unpublishSchedule: (storeId: number) =>
