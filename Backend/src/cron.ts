@@ -3,7 +3,7 @@ import prisma from './lib/prisma.js';
 import { generateScheduleForStore, mondayUTC } from './lib/scheduleGen.js';
 import { notifyMany } from './lib/notify.js';
 
-const TZ = process.env.CRON_TZ || 'America/Toronto';
+const TZ = process.env.CRON_TZ || 'America/New_York';
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 /** Midnight UTC of next week's Monday. */
