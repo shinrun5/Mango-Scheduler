@@ -1,0 +1,12 @@
+{
+  "name": "Fruit Crew",
+  "short_name": "Fruit Crew",
+  "icons": [
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "theme_color": "#fff8ec",
+  "background_color": "#fff8ec",
+  "display": "standalone",
+  "start_url": "/"
+}
