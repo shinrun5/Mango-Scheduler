@@ -435,7 +435,7 @@ router.post('/', ...manager, async (req, res) => {
       data: { employeeId, day, start, end },
     });
     res.json(newAvailability);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to create availability' });
   }
 });
@@ -475,7 +475,7 @@ router.delete('/:id', ...manager, async (req, res) => {
       where: { id },
     });
     res.json({ message: `Availability ${availability.id} deleted successfully` });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete availability' });
   }
 });
@@ -494,7 +494,7 @@ router.put('/:id', ...manager, async (req, res) => {
       data: { employeeId, day, start, end },
     });
     res.json(updatedAvailability);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to update availability' });
   }
 });

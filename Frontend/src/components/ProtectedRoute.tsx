@@ -11,7 +11,7 @@ export function ProtectedRoute({ role }: { role?: Role | Role[] }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center font-body text-muted-ink">Loading…</div>
+      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">Loading…</div>
     )
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />

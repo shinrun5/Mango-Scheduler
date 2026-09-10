@@ -24,11 +24,24 @@
 
 /* In @layer base so Tailwind text-* utilities (e.g. on <NavLink>) still win. */
 @layer base {
+  html {
+    /* don't let mobile browsers rescale our type on rotate */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     margin: 0;
     background: var(--color-cream);
     font-family: var(--font-body);
     color: var(--color-ink);
+    /* the page never scrolls sideways — wide content scrolls inside its own box.
+       On body only, so it doesn't turn <html> into a scroll container (which
+       would break the sticky top bars). */
+    overflow-x: hidden;
+    /* stop the whole page rubber-banding / scroll-chaining on touch drags */
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   a {

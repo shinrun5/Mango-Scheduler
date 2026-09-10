@@ -14,7 +14,7 @@ export function AuthLayout({
   footer?: ReactNode
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cream p-6">
+    <div className="flex min-h-dvh items-center justify-center bg-cream p-6">
       <div className="w-full max-w-sm rounded-2xl border-[3px] border-ink bg-paper p-7 shadow-[6px_6px_0_var(--color-ink)]">
         <div className="mb-5 flex flex-col items-center gap-2">
           <FruitAvatar kind="apple" size={40} />

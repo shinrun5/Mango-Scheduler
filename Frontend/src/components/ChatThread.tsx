@@ -150,7 +150,7 @@ export function ChatThread({
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="max-h-[calc(100vh-15rem)] min-h-[14rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
+        className="max-h-[calc(100dvh-15rem)] min-h-[14rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
       >
         {loading ? (
           <p className="py-8 text-center font-body text-sm text-muted-ink">{t('common.loading')}</p>

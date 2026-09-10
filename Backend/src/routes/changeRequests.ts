@@ -157,7 +157,7 @@ router.post('/', requireAuth, async (req, res) => {
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
-  // optional: hand off only part of the shift (DROP/SWAP only)
+  // optional: hand off only part of the shift (SWAP only)
   let handoffStart: Date | null = null;
   let handoffEnd: Date | null = null;
   const hs = req.body?.handoffStart;
@@ -197,10 +197,8 @@ router.post('/', requireAuth, async (req, res) => {
   let target: number | null = null;
   let openOffer = false;
 
-  if (type === 'DROP' || type === 'SWAP') {
-    if (shift.employeeId !== me) return res.status(403).json({ error: 'That is not your shift' });
-  }
   if (type === 'SWAP') {
+    if (shift.employeeId !== me) return res.status(403).json({ error: 'That is not your shift' });
     if (targetEmployeeId === undefined || targetEmployeeId === null) {
       openOffer = true; // posted to the marketplace — no target until a coworker claims it
     } else {

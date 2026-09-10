@@ -509,7 +509,7 @@ export function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center font-body text-coral-dark">
+      <div className="flex h-dvh items-center justify-center font-body text-coral-dark">
         Couldn't load the schedule: {error}
       </div>
     )
@@ -517,7 +517,7 @@ export function Dashboard() {
 
   if (!board) {
     return (
-      <div className="flex h-screen items-center justify-center font-body text-muted-ink">
+      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
         Loading…
       </div>
     )
@@ -525,7 +525,7 @@ export function Dashboard() {
 
   if (storeId == null) {
     return (
-      <div className="flex h-screen items-center justify-center font-body text-muted-ink">
+      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">
         {stores.length === 0 ? 'No stores yet.' : 'Pick a store above.'}
       </div>
     )

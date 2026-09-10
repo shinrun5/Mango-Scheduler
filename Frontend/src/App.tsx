@@ -25,7 +25,7 @@ function RootRedirect() {
   const { user, loading } = useAuth()
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center font-body text-muted-ink">Loading…</div>
+      <div className="flex h-dvh items-center justify-center font-body text-muted-ink">Loading…</div>
     )
   }
   return <Navigate to={user ? homePathForRole(user.role) : '/login'} replace />
