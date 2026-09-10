@@ -48,16 +48,18 @@ function Chrome({ children }: { children?: ReactNode }) {
       <div className="flex flex-col gap-2 border-b-[3px] border-ink bg-paper px-4 py-2.5 sm:px-8 sm:py-3">
         {/* identity row */}
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             <FruitAvatar kind="apple" size={28} />
-            <span className="font-heading text-lg font-extrabold text-ink sm:text-xl">Fruit Crew</span>
+            <span className="truncate font-heading text-lg font-extrabold text-ink sm:text-xl">
+              Fruit Crew
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {stores.length > 0 && (
               <select
                 value={storeId ?? ''}
                 onChange={(e) => setStoreId(Number(e.target.value))}
-                className="max-w-[9rem] rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-xs font-bold text-ink outline-none"
+                className="max-w-[7.5rem] shrink-0 rounded-full border-2 border-ink bg-cream px-3 py-1 font-heading text-xs font-bold text-ink outline-none sm:max-w-[9rem]"
               >
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -79,7 +81,7 @@ function Chrome({ children }: { children?: ReactNode }) {
             </NavLink>
             <button
               onClick={() => void logout()}
-              className="shrink-0 rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+              className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
             >
               {t('nav.logout')}
             </button>

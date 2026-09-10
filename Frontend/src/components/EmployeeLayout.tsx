@@ -46,9 +46,11 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b-[3px] border-ink bg-paper px-4 py-2.5 sm:px-8 sm:py-3.5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <FruitAvatar kind="apple" size={28} />
-          <span className="font-heading text-lg font-extrabold text-ink sm:text-xl">Fruit Crew</span>
+          <span className="truncate font-heading text-lg font-extrabold text-ink sm:text-xl">
+            Fruit Crew
+          </span>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
           {NAV.map(({ to, label }) => (
@@ -58,7 +60,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
             </NavLink>
           ))}
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           <LangToggle />
           <NavLink
             to="/profile"
@@ -69,7 +71,7 @@ export function EmployeeLayout({ children }: { children?: ReactNode }): ReactNod
           <NotificationBell />
           <button
             onClick={() => void logout()}
-            className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
+            className="shrink-0 whitespace-nowrap rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-xs font-bold text-ink"
           >
             {t('nav.logout')}
           </button>
