@@ -48,3 +48,14 @@
     color: var(--color-sky-dark);
   }
 }
+
+/* Hide the scrollbar on horizontal tab strips (content still scrolls). */
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* legacy Edge */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari */
+  }
+}

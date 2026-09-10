@@ -92,7 +92,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
         <button className={`shrink-0 ${tab(mode === 'standing')}`} onClick={() => setMode('standing')}>
           {t('avail.tab.every')}
         </button>

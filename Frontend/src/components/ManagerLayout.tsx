@@ -89,7 +89,7 @@ function Chrome({ children }: { children?: ReactNode }) {
         </div>
 
         {/* nav strip — scrolls sideways when it doesn't fit */}
-        <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-0.5">
+        <div className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-0.5">
           {user?.role === 'OWNER' && (
             <NavLink to="/overview" className={tab}>
               Overview
