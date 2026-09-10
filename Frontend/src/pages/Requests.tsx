@@ -26,6 +26,8 @@ export function Requests() {
   const [busy, setBusy] = useState<number | null>(null)
   const [toBusy, setToBusy] = useState<number | null>(null)
   const [showPast, setShowPast] = useState(false)
+  const [notifyBusy, setNotifyBusy] = useState<number | null>(null)
+  const [notified, setNotified] = useState<Set<number>>(new Set())
 
   function refresh() {
     return Promise.all([api.getChangeRequests(), api.getStores(), api.getTimeOff()])
@@ -66,6 +68,19 @@ export function Requests() {
       setError(e instanceof Error ? e.message : 'Could not resolve that')
     } finally {
       setBusy(null)
+    }
+  }
+
+  async function renotify(id: number) {
+    setNotifyBusy(id)
+    setError(null)
+    try {
+      await api.renotifyOffer(id)
+      setNotified((s) => new Set(s).add(id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not resend the alert')
+    } finally {
+      setNotifyBusy(null)
     }
   }
 
@@ -145,7 +160,7 @@ export function Requests() {
               </div>
               <p className="mt-1 font-heading text-xs font-bold text-ink">{shiftWhen(r)}</p>
               {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   disabled={busy === r.id}
                   onClick={() => void resolve(r.id, false)}
@@ -153,9 +168,17 @@ export function Requests() {
                 >
                   Take it down
                 </button>
-                <span className="font-body text-[10px] text-muted-ink">
-                  or leave it for someone to claim
-                </span>
+                <button
+                  disabled={notifyBusy === r.id || notified.has(r.id)}
+                  onClick={() => void renotify(r.id)}
+                  className="rounded-full border-2 border-ink bg-paper px-3 py-0.5 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
+                >
+                  {notified.has(r.id)
+                    ? 'Alert sent ✓'
+                    : notifyBusy === r.id
+                      ? 'Sending…'
+                      : 'Resend alert'}
+                </button>
               </div>
             </div>
           ))}

@@ -181,6 +181,8 @@ export const api = {
     getJSON<ChangeRequest[]>(`/change-requests${status ? `?status=${status}` : ''}`),
   approveChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/approve`, 'POST', {}),
   denyChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/deny`, 'POST', {}),
+  renotifyOffer: (id: number) =>
+    sendJSON<{ ok: true }>(`/change-requests/${id}/renotify`, 'POST', {}),
 
   // --- time off / vacation (a notice, not an approval) ---
   getMyTimeOff: () => getJSON<TimeOffRequest[]>('/time-off/mine'),

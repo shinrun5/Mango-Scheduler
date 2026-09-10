@@ -286,6 +286,23 @@ async function emailMarketplacePost(r: FullRequest): Promise<void> {
   );
 }
 
+// POST /change-requests/:id/renotify  -- re-send the marketplace alert for a still-open post
+// (manager/owner of that store). Handy when the first send failed, e.g. email wasn't set up yet.
+router.post('/:id/renotify', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (!canManageStore(req.user, r.shift.storeId)) {
+    return res.status(403).json({ error: 'You do not manage that store' });
+  }
+  if (!(r.type === 'SWAP' && r.openOffer && r.status === 'PENDING' && !r.targetEmployeeId)) {
+    return res.status(409).json({ error: 'That post is not open on the marketplace' });
+  }
+  await emailMarketplacePost(r);
+  res.json({ ok: true });
+});
+
 // POST /change-requests/:id/cancel  (the requester, while still pending)
 router.post('/:id/cancel', requireAuth, async (req, res) => {
   const me = req.user?.employeeId;
