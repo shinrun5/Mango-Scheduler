@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 import changeRequestRoutes from './routes/changeRequests.js';
 import timeOffRoutes from './routes/timeOff.js';
@@ -22,13 +24,38 @@ import { startCron } from './cron.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-app.use(express.json());
+
+// Railway (and any PaaS) sits behind one reverse proxy — trust exactly that hop
+// so req.ip / rate-limiting see the real client, not the proxy.
+app.set('trust proxy', 1);
+
+// security headers. CSP is left off for now: the SPA pulls Google Fonts and the
+// landing page uses an inline <style>, so a default policy would break them —
+// worth adding a tailored policy later.
+app.use(helmet({ contentSecurityPolicy: false }));
+
+app.use(express.json({ limit: '100kb' }));
 
 // everything the frontend calls lives under /api so it never collides with a
 // client-side route (the Vite dev proxy forwards /api and nothing else)
 const api = Router();
+
+// blanket ceiling so a runaway client (or crude abuse) can't hammer the API
+api.use(
+  rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }),
+);
+// brute-force guard for auth: only FAILED attempts count, so a normal user who
+// logs in fine is never throttled
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 50,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
 api.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok' }));
-api.use('/auth', authRoutes);
+api.use('/auth', authLimiter, authRoutes);
 api.use('/employees', employeeRoutes);
 api.use('/stores', storeRoutes);
 api.use('/shifts', shiftRoutes);

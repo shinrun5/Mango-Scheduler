@@ -423,22 +423,11 @@ router.get('/confirmations', ...manager, async (req, res) => {
   });
 });
 
-router.post('/', ...manager, async (req, res) => {
-  const { employeeId, day, start, end } = req.body;
-
-  if (!employeeId || !day || !start || !end) {
-    return res.status(400).json({ error: 'employeeId, day, start, and end are required' });
-  }
-
-  try {
-    const newAvailability = await prisma.recurringAvailability.create({
-      data: { employeeId, day, start, end },
-    });
-    res.json(newAvailability);
-  } catch {
-    res.status(500).json({ error: 'Failed to create availability' });
-  }
-});
+// NOTE: raw create/update/delete of a single RecurringAvailability row by id used
+// to live here (POST /, PUT /:id, DELETE /:id). They were unused by the app and
+// only role-gated — a manager could edit/delete ANY employee's row by guessing an
+// id, across stores and orgs. Removed. Workers manage their own hours through
+// /availability/mine*; managers read them via GET / and GET /:id (both store-scoped).
 
 // GET /availability — windows for employees at stores the caller manages (used by
 // the manager board's candidate picker). Managers/owners only.
@@ -461,42 +450,6 @@ router.get('/:id', ...manager, async (req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
   res.json(row);
-});
-
-router.delete('/:id', ...manager, async (req, res) => {
-  const id = Number(req.params.id);
-
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: 'A valid numeric id is required' });
-  }
-
-  try {
-    const availability = await prisma.recurringAvailability.delete({
-      where: { id },
-    });
-    res.json({ message: `Availability ${availability.id} deleted successfully` });
-  } catch {
-    res.status(500).json({ error: 'Failed to delete availability' });
-  }
-});
-
-router.put('/:id', ...manager, async (req, res) => {
-  const id = Number(req.params.id);
-  const { employeeId, day, start, end } = req.body;
-
-  if (!Number.isInteger(id)) {
-    return res.status(400).json({ error: 'A valid numeric id is required' });
-  }
-
-  try {
-    const updatedAvailability = await prisma.recurringAvailability.update({
-      where: { id },
-      data: { employeeId, day, start, end },
-    });
-    res.json(updatedAvailability);
-  } catch {
-    res.status(500).json({ error: 'Failed to update availability' });
-  }
 });
 
 export default router;

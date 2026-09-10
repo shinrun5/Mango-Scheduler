@@ -287,11 +287,13 @@ router.delete('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireManagerOfShift, async (req, res) => {
-  const { employeeId, storeId, day, start, end } = req.body;
+  // no storeId here on purpose — a shift can't be moved to another store (the
+  // guard only checked the CURRENT store), only its people/time can change
+  const { employeeId, day, start, end } = req.body;
   try {
     const updatedShift = await prisma.shift.update({
       where: { id: Number(req.params.id) },
-      data: { employeeId, storeId, day, start, end },
+      data: { employeeId, day, start, end },
     });
     res.json(updatedShift);
   } catch {

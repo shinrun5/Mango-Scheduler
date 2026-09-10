@@ -8,10 +8,10 @@ import { firstFreeFruit, fruitFor, isFruit } from "../lib/fruits.js";
 const router = Router();
 const anyManager = [requireAuth, requireRole("MANAGER", "OWNER")] as const;
 
-/** Can this user manage this employee? OWNER: any in the org. MANAGER: any employee
- * linked to a store they run. */
+/** Can this user manage this employee? The employee must be linked to a store the
+ * caller can act on — for an OWNER that's every store in their org, for a MANAGER
+ * their assigned stores (both already resolved into req.user.storeIds). */
 async function canManageEmployee(req: Request, employeeId: number): Promise<boolean> {
-  if (req.user?.role === "OWNER") return true;
   const link = await prisma.employeeStore.findFirst({
     where: { employeeId, storeId: { in: req.user?.storeIds ?? [] } },
     select: { employeeId: true },
@@ -117,7 +117,7 @@ async function roster(storeIds?: number[]): Promise<RosterRow[]> {
 
 // GET /employees/roster — workers at the caller's stores (all, for an OWNER)
 router.get("/roster", ...anyManager, async (req, res) => {
-  res.json(await roster(req.user!.role === "OWNER" ? undefined : req.user!.storeIds));
+  res.json(await roster(req.user!.storeIds));
 });
 
 // POST /employees/me — the calling manager/owner adds themselves as a schedulable
@@ -325,12 +325,11 @@ router.post("/", ...anyManager, async (req, res) => {
 });
 
 router.get("/", requireAuth, async (req, res) => {
-  const employees =
-    req.user!.role === "OWNER"
-      ? await prisma.employee.findMany()
-      : await prisma.employee.findMany({
-          where: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
-        });
+  // scoped to the caller's stores — for an OWNER that's their whole org, for a
+  // MANAGER their assigned stores (both resolved into req.user.storeIds)
+  const employees = await prisma.employee.findMany({
+    where: { employeeStores: { some: { storeId: { in: req.user!.storeIds } } } },
+  });
   res.json(employees);
 });
 

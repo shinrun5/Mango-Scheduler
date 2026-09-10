@@ -54,7 +54,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   let authId: string;
   try {
-    const { payload } = await jwtVerify(token, getJwks());
+    const { payload } = await jwtVerify(token, getJwks(), {
+      // Supabase access tokens: iss = <project>/auth/v1, aud = "authenticated".
+      issuer: `${process.env.SUPABASE_URL}/auth/v1`,
+      audience: 'authenticated',
+    });
     if (!payload.sub) throw new Error('no sub claim');
     authId = payload.sub;
   } catch {
