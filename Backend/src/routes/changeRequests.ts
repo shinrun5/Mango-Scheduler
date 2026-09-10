@@ -391,28 +391,17 @@ router.get('/', ...anyManager, async (req, res) => {
   res.json(rows.map(shape));
 });
 
-// POST /change-requests/:id/approve  (manager) — re-validates, then mutates the Shift
-router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+type RequestWithShift = Prisma.ShiftChangeRequestGetPayload<{ include: { shift: true } }>;
 
-  const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
-  if (!r) return res.status(404).json({ error: 'Not found' });
-  if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
-
-  if ((r.type === 'DROP' || r.type === 'SWAP') && r.shift.employeeId !== r.requestedById) {
-    return res.status(409).json({ error: 'The requester no longer holds this shift' });
-  }
-  if (r.type === 'PICKUP' && r.shift.employeeId !== null) {
-    return res.status(409).json({ error: 'That shift is no longer open' });
-  }
-
+/** Mark a request APPROVED and push the change onto the Shift rows. Splits the
+ * shift when a partial hand-off window is set. Shared by /approve and /assign. */
+async function applyApproval(r: RequestWithShift, managerId: number): Promise<void> {
   const newEmployeeId =
     r.type === 'DROP' ? null : r.type === 'SWAP' ? r.targetEmployeeId : r.requestedById;
 
   const resolveOp = prisma.shiftChangeRequest.update({
-    where: { id },
-    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: req.user!.id },
+    where: { id: r.id },
+    data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: managerId },
   });
 
   if (r.handoffStart && r.handoffEnd) {
@@ -440,6 +429,75 @@ router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, re
       resolveOp,
     ]);
   }
+}
+
+// GET /change-requests/:id/assignable  (manager) — everyone at that shift's store
+router.get('/:id/assignable', requireAuth, requireManagerOfRequest, async (req, res) => {
+  const id = Number(req.params.id);
+  const r = await prisma.shiftChangeRequest.findUnique({
+    where: { id },
+    select: { shift: { select: { storeId: true } } },
+  });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  const links = await prisma.employeeStore.findMany({
+    where: { storeId: r.shift.storeId },
+    include: { employee: { select: { id: true, name: true } } },
+    orderBy: { employee: { name: 'asc' } },
+  });
+  res.json(links.map((l) => ({ id: l.employee.id, name: l.employee.name })));
+});
+
+// POST /change-requests/:id/assign  { employeeId }  (manager) — hand an open
+// marketplace post straight to someone (incl. the manager) and apply it in one step.
+router.post('/:id/assign', requireAuth, requireManagerOfRequest, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+  const employeeId = Number(req.body?.employeeId);
+  if (!Number.isInteger(employeeId)) return res.status(400).json({ error: 'employeeId is required' });
+
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (!(r.type === 'SWAP' && r.openOffer && r.status === 'PENDING' && !r.targetEmployeeId)) {
+    return res.status(409).json({ error: 'That is not an open marketplace post' });
+  }
+  if (r.shift.employeeId !== r.requestedById) {
+    return res.status(409).json({ error: 'The poster no longer holds this shift' });
+  }
+  if (employeeId === r.requestedById) {
+    return res.status(400).json({ error: "That's the person who posted it" });
+  }
+  if (!(await linkExists(employeeId, r.shift.storeId))) {
+    return res.status(400).json({ error: "That person doesn't work at this store" });
+  }
+
+  await prisma.shiftChangeRequest.update({ where: { id }, data: { targetEmployeeId: employeeId } });
+  const withTarget = await prisma.shiftChangeRequest.findUnique({
+    where: { id },
+    include: { shift: true },
+  });
+  await applyApproval(withTarget!, req.user!.id);
+
+  const updated = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
+  res.json(shape(updated!));
+});
+
+// POST /change-requests/:id/approve  (manager) — re-validates, then mutates the Shift
+router.post('/:id/approve', requireAuth, requireManagerOfRequest, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid numeric id is required' });
+
+  const r = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: { shift: true } });
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  if (r.status !== 'PENDING') return res.status(409).json({ error: 'That request is already resolved' });
+
+  if ((r.type === 'DROP' || r.type === 'SWAP') && r.shift.employeeId !== r.requestedById) {
+    return res.status(409).json({ error: 'The requester no longer holds this shift' });
+  }
+  if (r.type === 'PICKUP' && r.shift.employeeId !== null) {
+    return res.status(409).json({ error: 'That shift is no longer open' });
+  }
+
+  await applyApproval(r, req.user!.id);
 
   const updated = await prisma.shiftChangeRequest.findUnique({ where: { id }, include: INCLUDE });
   res.json(shape(updated!));

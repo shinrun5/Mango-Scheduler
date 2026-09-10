@@ -180,6 +180,11 @@ export function Requests() {
                       : 'Resend alert'}
                 </button>
               </div>
+              <AssignRow
+                id={r.id}
+                excludeId={r.requestedBy.id}
+                onDone={() => void refresh()}
+              />
             </div>
           ))}
         </Section>
@@ -326,6 +331,87 @@ export function Requests() {
             </div>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+/** Manager override: hand an unclaimed marketplace post straight to someone (incl. themselves). */
+function AssignRow({
+  id,
+  excludeId,
+  onDone,
+}: {
+  id: number
+  excludeId: number
+  onDone: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [people, setPeople] = useState<{ id: number; name: string }[]>([])
+  const [pick, setPick] = useState<number | ''>('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open || people.length) return
+    api
+      .getAssignable(id)
+      .then((list) => setPeople(list.filter((p) => p.id !== excludeId)))
+      .catch(() => setErr('Could not load the crew'))
+  }, [open, id, excludeId, people.length])
+
+  async function go() {
+    if (pick === '') return
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.assignOffer(id, pick)
+      onDone()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not assign')
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-2 font-body text-[11px] font-bold text-sky-dark"
+      >
+        Assign to someone
+      </button>
+    )
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <select
+        value={pick}
+        onChange={(e) => setPick(e.target.value === '' ? '' : Number(e.target.value))}
+        className="min-w-0 flex-1 rounded-lg border-2 border-ink bg-paper px-2 py-1 font-body text-xs text-ink outline-none"
+      >
+        <option value="">choose someone…</option>
+        {people.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <button
+        disabled={pick === '' || busy}
+        onClick={() => void go()}
+        className="rounded-full border-2 border-ink bg-green px-3 py-0.5 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+      >
+        {busy ? '…' : 'Give it to them'}
+      </button>
+      <button
+        onClick={() => setOpen(false)}
+        className="font-body text-[11px] font-bold text-muted-ink underline"
+      >
+        cancel
+      </button>
+      {err && (
+        <span className="w-full font-body text-[11px] font-bold text-coral-dark">{err}</span>
       )}
     </div>
   )

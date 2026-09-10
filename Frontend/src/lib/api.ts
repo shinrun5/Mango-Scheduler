@@ -183,6 +183,10 @@ export const api = {
   denyChangeRequest: (id: number) => sendJSON<ChangeRequest>(`/change-requests/${id}/deny`, 'POST', {}),
   renotifyOffer: (id: number) =>
     sendJSON<{ ok: true }>(`/change-requests/${id}/renotify`, 'POST', {}),
+  getAssignable: (id: number) =>
+    getJSON<{ id: number; name: string }[]>(`/change-requests/${id}/assignable`),
+  assignOffer: (id: number, employeeId: number) =>
+    sendJSON<ChangeRequest>(`/change-requests/${id}/assign`, 'POST', { employeeId }),
 
   // --- time off / vacation (a notice, not an approval) ---
   getMyTimeOff: () => getJSON<TimeOffRequest[]>('/time-off/mine'),
