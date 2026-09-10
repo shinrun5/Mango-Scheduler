@@ -13,6 +13,7 @@ const WEEKS = [0, 1, 2, 3, 4].map((n) => ({
   n,
   ymd: shiftWeekYMD(`${thisMondayYMD()}T00:00:00.000Z`, n),
 }))
+const NEXT_WEEK = WEEKS[1].ymd
 
 /** The availability screen: your standing weekly hours, or a one-week override.
  * `barClass` is passed straight through to the editor's sticky save bar. */
@@ -28,6 +29,31 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
   const [confirmed, setConfirmed] = useState(false)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
+  // the always-visible "next week is finalized" confirmation, independent of the tab
+  const [nextConfirmed, setNextConfirmed] = useState<boolean | null>(null)
+  const nextRange = weekRangeLabel(`${NEXT_WEEK}T00:00:00.000Z`)
+
+  useEffect(() => {
+    let live = true
+    api
+      .getMyWeekAvailability(NEXT_WEEK)
+      .then((r) => live && setNextConfirmed(r.confirmed))
+      .catch(() => live && setNextConfirmed(false))
+    return () => {
+      live = false
+    }
+  }, [])
+
+  async function confirmNextWeek() {
+    setBusy(true)
+    try {
+      await api.confirmMyWeekAvailability(NEXT_WEEK)
+      setNextConfirmed(true)
+      if (week === NEXT_WEEK) setConfirmed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
   // store hours per weekday — drives the editor's quick-add buttons
   const [hoursByDay, setHoursByDay] = useState<Record<DayOfWeek, DayHours>>()
 
@@ -59,6 +85,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
       api.saveMyWeekAvailability(week, w).then((r) => {
         setHasOverride(true)
         setConfirmed(true)
+        if (week === NEXT_WEEK) setNextConfirmed(true)
         return r.windows
       }),
     [week],
@@ -69,6 +96,7 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
     try {
       await api.confirmMyWeekAvailability(week)
       setConfirmed(true)
+      if (week === NEXT_WEEK) setNextConfirmed(true)
     } finally {
       setBusy(false)
     }
@@ -92,6 +120,33 @@ export function AvailabilityPanel({ barClass }: { barClass: string }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {nextConfirmed !== null && (
+        <div
+          className={`rounded-xl border-2 px-3 py-2.5 ${
+            nextConfirmed ? 'border-green bg-green/10' : 'border-ink bg-paper'
+          }`}
+        >
+          {nextConfirmed ? (
+            <p className="font-body text-xs font-bold text-green-dark">
+              {t('avail.next.confirmed', { range: nextRange })}
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-body text-xs text-ink">
+                {t('avail.next.prompt', { range: nextRange })}
+              </span>
+              <button
+                onClick={() => void confirmNextWeek()}
+                disabled={busy}
+                className="shrink-0 rounded-full border-2 border-ink bg-green px-3.5 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+              >
+                {t('avail.next.confirmBtn')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
         <button className={`shrink-0 ${tab(mode === 'standing')}`} onClick={() => setMode('standing')}>
           {t('avail.tab.every')}
