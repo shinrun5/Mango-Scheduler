@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BellIcon } from './icons'
 import { api } from '../lib/api'
+import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
 import type { NotificationItem } from '../types'
 
 export function NotificationBell() {
+  const t = useT()
   const navigate = useNavigate()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
@@ -57,7 +59,7 @@ export function NotificationBell() {
     <div ref={wrap} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        aria-label="Notifications"
+        aria-label={t('notif.title')}
         className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink bg-paper text-ink"
       >
         <BellIcon size={16} />
@@ -71,16 +73,16 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 z-40 mt-2 w-[19rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border-[2.5px] border-ink bg-paper shadow-[4px_4px_0_var(--color-ink)]">
           <div className="flex items-center justify-between border-b-2 border-ink/10 px-3 py-2">
-            <span className="font-heading text-sm font-bold text-ink">Notifications</span>
+            <span className="font-heading text-sm font-bold text-ink">{t('notif.title')}</span>
             {unread > 0 && (
               <button onClick={() => void markAll()} className="font-body text-[11px] font-bold text-sky-dark">
-                Mark all read
+                {t('notif.markAll')}
               </button>
             )}
           </div>
           <div className="max-h-[70vh] overflow-y-auto">
             {items.length === 0 ? (
-              <p className="px-3 py-6 text-center font-body text-xs text-muted-ink">Nothing yet.</p>
+              <p className="px-3 py-6 text-center font-body text-xs text-muted-ink">{t('notif.empty')}</p>
             ) : (
               items.map((n) => (
                 <button

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { setTimeLang } from './time'
 
 export type Lang = 'en' | 'zh'
 const KEY = 'fruitcrew.lang'
@@ -139,6 +140,31 @@ const en = {
   'notes.hideDone': 'Hide recently done',
   'notes.doneBy': 'done by {name} {ago}',
 
+  // Notifications
+  'notif.title': 'Notifications',
+  'notif.markAll': 'Mark all read',
+  'notif.empty': 'Nothing yet.',
+
+  // Time off
+  'timeoff.intro':
+    "Heads-up for a vacation or long break — a week or more, at least a week's notice. This takes you off the schedule for those days automatically and lets your manager know.",
+  'timeoff.none': 'Nothing booked.',
+  'timeoff.days': '{n} days',
+  'timeoff.state.upcoming': 'upcoming',
+  'timeoff.state.active': 'away now',
+  'timeoff.state.past': 'past',
+  'timeoff.state.cancelled': 'withdrawn',
+  'timeoff.withdraw': 'withdraw',
+  'timeoff.add': '+ Add time off',
+  'timeoff.firstDay': 'First day off',
+  'timeoff.lastDay': 'Last day off',
+  'timeoff.reason': 'Reason (optional)',
+  'timeoff.post': 'Post it',
+  'timeoff.errBothDates': 'Pick both dates',
+  'timeoff.errEndBeforeStart': 'End date is before the start',
+  'timeoff.errTooShort': 'Has to be at least a week',
+  'timeoff.errTooSoon': 'Start at least a week from now',
+
   // Chat
   'chat.title': 'Chat',
   'chat.new': '＋ New',
@@ -186,6 +212,9 @@ const en = {
   'profile.alert.chat': 'Chat messages',
   'profile.alert.chatHint':
     "email me when there are new chat messages I haven't seen (at most once every 15 min)",
+  'profile.testEmail': 'Send me a test email',
+  'profile.testEmail.sending': 'Sending…',
+  'profile.testEmail.sent': 'Sent to {to} — check your inbox (and spam).',
   'profile.changePassword': 'Change password',
   'profile.currentPassword': 'Current password',
   'profile.newPassword': 'New password',
@@ -343,6 +372,29 @@ const zh: Partial<Record<Key, string>> = {
   'notes.hideDone': '隐藏最近完成',
   'notes.doneBy': '由 {name} 于{ago}处理',
 
+  'notif.title': '通知',
+  'notif.markAll': '全部标为已读',
+  'notif.empty': '暂无通知。',
+
+  'timeoff.intro':
+    '休长假或长时间不上班的提前告知 — 一周或以上，至少提前一周。系统会自动把你从这几天的排班中移除，并通知你的经理。',
+  'timeoff.none': '暂无安排。',
+  'timeoff.days': '{n} 天',
+  'timeoff.state.upcoming': '即将开始',
+  'timeoff.state.active': '休假中',
+  'timeoff.state.past': '已过去',
+  'timeoff.state.cancelled': '已撤回',
+  'timeoff.withdraw': '撤回',
+  'timeoff.add': '+ 添加请假',
+  'timeoff.firstDay': '第一天',
+  'timeoff.lastDay': '最后一天',
+  'timeoff.reason': '原因（可选）',
+  'timeoff.post': '提交',
+  'timeoff.errBothDates': '请选择两个日期',
+  'timeoff.errEndBeforeStart': '结束日期早于开始日期',
+  'timeoff.errTooShort': '至少要一周',
+  'timeoff.errTooSoon': '开始日期至少要在一周之后',
+
   'chat.title': '聊天',
   'chat.new': '＋ 新建',
   'chat.empty': '还没有聊天。你的门店群会显示在这里，点「＋ 新建」开始私聊。',
@@ -386,6 +438,9 @@ const zh: Partial<Record<Key, string>> = {
   'profile.alert.marketplaceHint': '有同事把班放到换班区时邮件提醒我',
   'profile.alert.chat': '聊天消息',
   'profile.alert.chatHint': '有我没看过的新聊天消息时邮件提醒我（最多每 15 分钟一次）',
+  'profile.testEmail': '给我发一封测试邮件',
+  'profile.testEmail.sending': '发送中…',
+  'profile.testEmail.sent': '已发送至 {to} — 请查看收件箱（和垃圾邮件）。',
   'profile.changePassword': '修改密码',
   'profile.currentPassword': '当前密码',
   'profile.newPassword': '新密码',
@@ -433,6 +488,9 @@ function readLang(): Lang {
   return 'en'
 }
 
+// so date/day labels are right on the very first paint, before <I18nProvider> renders
+setTimeLang(readLang())
+
 interface Ctx {
   lang: Lang
   setLang: (l: Lang) => void
@@ -442,8 +500,11 @@ const I18nCtx = createContext<Ctx | null>(null)
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(readLang)
+  // keep the date/day helpers in lib/time in step with the toggle, before children render
+  setTimeLang(lang)
   const setLang = useCallback((l: Lang) => {
     setLangState(l)
+    setTimeLang(l)
     try {
       localStorage.setItem(KEY, l)
     } catch {

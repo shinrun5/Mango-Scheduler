@@ -478,7 +478,7 @@ function AlertPrefs({
       const r = await api.sendTestEmail()
       if (r.ok) {
         setTestState('sent')
-        setTestMsg(`Sent to ${r.sentTo} — check your inbox (and spam).`)
+        setTestMsg(t('profile.testEmail.sent', { to: r.sentTo }))
       } else {
         setTestState('failed')
         setTestMsg(r.error ?? 'Resend rejected it — check RESEND_API_KEY and EMAIL_FROM.')
@@ -531,7 +531,7 @@ function AlertPrefs({
           onClick={() => void sendTest()}
           className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
         >
-          {testState === 'sending' ? 'Sending…' : 'Send me a test email'}
+          {testState === 'sending' ? t('profile.testEmail.sending') : t('profile.testEmail')}
         </button>
         {testMsg && (
           <span

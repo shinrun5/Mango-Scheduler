@@ -8,7 +8,16 @@ export const DAYS = [
   'SUNDAY',
 ] as const
 
-export const DAY_LABEL: Record<(typeof DAYS)[number], string> = {
+type Day = (typeof DAYS)[number]
+
+// current UI language — kept in sync by <I18nProvider>. Lets the day / month /
+// "x ago" labels below follow the toggle without every call site passing it.
+let _lang: 'en' | 'zh' = 'en'
+export function setTimeLang(l: 'en' | 'zh') {
+  _lang = l
+}
+
+const DAY_LABEL_EN: Record<Day, string> = {
   MONDAY: 'MON',
   TUESDAY: 'TUE',
   WEDNESDAY: 'WED',
@@ -17,6 +26,21 @@ export const DAY_LABEL: Record<(typeof DAYS)[number], string> = {
   SATURDAY: 'SAT',
   SUNDAY: 'SUN',
 }
+const DAY_LABEL_ZH: Record<Day, string> = {
+  MONDAY: '周一',
+  TUESDAY: '周二',
+  WEDNESDAY: '周三',
+  THURSDAY: '周四',
+  FRIDAY: '周五',
+  SATURDAY: '周六',
+  SUNDAY: '周日',
+}
+
+/** Weekday label in the current UI language. Reads like a const map, e.g.
+ * `DAY_LABEL[shift.day]`, but follows the EN | 中文 toggle. */
+export const DAY_LABEL: Record<Day, string> = new Proxy(DAY_LABEL_EN, {
+  get: (_t, k: string) => (_lang === 'zh' ? DAY_LABEL_ZH : DAY_LABEL_EN)[k as Day] ?? k,
+})
 
 // DateTime columns hold a wall-clock time; read the clock face in UTC
 // (matches Backend/src/routes/schedule.ts's toHHMM). Raw 24h "HH:MM" -- this is the
@@ -87,11 +111,14 @@ export function timeRangeCompact(startIso: string, endIso: string): string {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-/** The date of day `dayIndex` (0 = Mon) within the week starting at `weekStartIso`, as "Sep 8". */
+/** The date of day `dayIndex` (0 = Mon) within the week starting at `weekStartIso`,
+ * as "Sep 8" (or "9月8日" in Chinese). */
 export function dayDate(weekStartIso: string, dayIndex: number): string {
   const d = new Date(weekStartIso)
   d.setUTCDate(d.getUTCDate() + dayIndex)
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
+  return _lang === 'zh'
+    ? `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`
+    : `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
 }
 
 /** "Sep 8 – Sep 14" for a week starting at `weekStartIso`. */
@@ -117,9 +144,15 @@ export function shiftWeekYMD(weekStartIso: string, deltaWeeks: number): string {
  * "3h ago", then a short date. */
 export function relativeTime(iso: string): string {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  const hr = Math.round(min / 60)
+  if (_lang === 'zh') {
+    if (min < 1) return '刚刚'
+    if (min < 60) return `${min} 分钟前`
+    if (hr < 24) return `${hr} 小时前`
+    return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  }
   if (min < 1) return 'just now'
   if (min < 60) return `${min}m ago`
-  const hr = Math.round(min / 60)
   if (hr < 24) return `${hr}h ago`
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
