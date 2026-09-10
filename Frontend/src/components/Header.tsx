@@ -2,15 +2,13 @@ import { Button } from './Button'
 import { SparkleIcon, WarningIcon } from './icons'
 import { relativeTime, weekRangeLabel } from '../lib/time'
 
-/** The schedule toolbar (sits under ManagerLayout's bar): week, gap count, save, post, generate. */
+/** The schedule toolbar (sits under ManagerLayout's bar): week, gap count, post, generate. */
 export function Header({
   weekStart,
   onWeekChange,
   gapCount,
   generating,
   onGenerate,
-  onSave,
-  saving,
   publishedAt,
   workersSeeWeek,
   onPublish,
@@ -23,8 +21,6 @@ export function Header({
   gapCount: number | null
   generating: boolean
   onGenerate: () => void
-  onSave?: () => void
-  saving?: boolean
   publishedAt?: string | null
   /** set while a draft is in progress: the earlier week workers are still seeing */
   workersSeeWeek?: string | null
@@ -78,16 +74,6 @@ export function Header({
       )}
 
       <div className="ml-auto flex flex-wrap items-center gap-3">
-        {!readOnly && onSave && (
-          <button
-            onClick={onSave}
-            disabled={saving}
-            className="rounded-full border-2 border-ink bg-paper px-3 py-1.5 font-heading text-xs font-bold text-ink disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save to history'}
-          </button>
-        )}
-
         {!readOnly && onPublish &&
           (publishedAt ? (
             <div className="flex items-center gap-2 rounded-full border-2 border-green bg-paper px-3 py-1.5">

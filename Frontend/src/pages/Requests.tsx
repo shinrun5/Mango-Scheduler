@@ -68,14 +68,22 @@ export function Requests() {
     }
   }
 
-  // an unclaimed marketplace post has nothing for the manager to act on yet
-  const unclaimedOffers = requests.filter(
+  // marketplace posts nobody has claimed yet — shown in their own section
+  const marketplace = requests.filter(
     (r) => r.openOffer && r.status === 'PENDING' && !r.targetEmployee,
-  ).length
+  )
 
   const sorted = [...requests]
     .filter((r) => !(r.openOffer && r.status === 'PENDING' && !r.targetEmployee))
     .sort((a, b) => (a.status === 'PENDING' ? 0 : 1) - (b.status === 'PENDING' ? 0 : 1) || b.id - a.id)
+
+  const shiftWhen = (r: ChangeRequest) => {
+    const hrs =
+      r.handoffStart && r.handoffEnd
+        ? `${timeRange(r.handoffStart, r.handoffEnd)} (part of a shift)`
+        : timeRange(r.shift.start, r.shift.end)
+    return `${DAY_LABEL[r.shift.day]} · ${hrs} · ${storeName(r.shift.storeId)}`
+  }
 
   const timeOffSorted = [...timeOff].sort(
     (a, b) =>
@@ -93,12 +101,46 @@ export function Requests() {
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
       <h1 className="font-heading text-lg font-bold text-ink">Requests</h1>
-      {unclaimedOffers > 0 && (
-        <p className="mt-1 font-body text-xs text-muted-ink">
-          {unclaimedOffers} shift{unclaimedOffers === 1 ? '' : 's'} on the marketplace, unclaimed
-        </p>
-      )}
       {error && <p className="mt-2 font-body text-xs font-bold text-coral-dark">{error}</p>}
+
+      {!loading && marketplace.length > 0 && (
+        <>
+          <h2 className="mt-4 font-heading text-sm font-bold text-ink">
+            On the marketplace{' '}
+            <span className="font-body text-xs font-semibold text-muted-ink">
+              — waiting for a coworker to claim
+            </span>
+          </h2>
+          <div className="mt-2 flex flex-col gap-2.5">
+            {marketplace.map((r) => (
+              <div
+                key={r.id}
+                className="rounded-2xl border-[2.5px] border-ink bg-paper p-3 shadow-[3px_3px_0_var(--color-ink)]"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-body text-sm font-bold text-ink">
+                    {r.requestedBy.name} put a shift up for grabs
+                  </span>
+                  <span className="ml-auto font-body text-[10px] text-muted-ink">
+                    {relativeTime(r.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-0.5 font-body text-xs text-muted-ink">{shiftWhen(r)}</p>
+                {r.note && <p className="mt-1 font-body text-xs italic text-ink">“{r.note}”</p>}
+                <div className="mt-2">
+                  <button
+                    disabled={busy === r.id}
+                    onClick={() => void resolve(r.id, false)}
+                    className="rounded-full border-2 border-coral px-3 py-0.5 font-heading text-[11px] font-bold text-coral-dark disabled:opacity-50"
+                  >
+                    Take it down
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {!loading && timeOffSorted.length > 0 && (
         <>

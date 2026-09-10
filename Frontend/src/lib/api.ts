@@ -24,7 +24,6 @@ import type {
   ShiftRequirement,
   SnapshotDetail,
   TimeOffRequest,
-  SnapshotMeta,
   ShiftNote,
   ShiftNoteCategory,
   Store,
@@ -384,20 +383,6 @@ export const api = {
   setScheduleWeek: (storeId: number, weekStart: string) =>
     sendJSON<{ weekStart: string }>('/schedule/week', 'PUT', { storeId, weekStart }),
   getMyShifts: () => getJSON<MyShiftsResponse>('/shifts/mine'),
-
-  // --- schedule history (per-store snapshots) ---
-  saveSnapshot: (storeId: number, label?: string) =>
-    sendJSON<SnapshotMeta & { shiftCount: number }>('/schedule/snapshots', 'POST', { storeId, label }),
-  getSnapshots: (storeId: number) =>
-    getJSON<SnapshotMeta[]>(`/schedule/snapshots?storeId=${storeId}`),
-  getSnapshot: (storeId: number, id: number) =>
-    getJSON<SnapshotDetail>(`/schedule/snapshots/${id}?storeId=${storeId}`),
-  restoreSnapshot: (storeId: number, id: number) =>
-    sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', {
-      storeId,
-    }),
-  deleteSnapshot: (storeId: number, id: number) =>
-    request<{ message: string }>(`/schedule/snapshots/${id}?storeId=${storeId}`, { method: 'DELETE' }),
 
   /** Reassign and/or shorten/extend an existing shift row (undefined fields are left alone). */
   updateShift: (shiftId: number, patch: { employeeId?: number; start?: string; end?: string }) =>

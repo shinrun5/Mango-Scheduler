@@ -9,7 +9,6 @@ import { Availability } from './pages/Availability'
 import { Chat } from './pages/Chat'
 import { Notes } from './pages/Notes'
 import { Dashboard } from './pages/Dashboard'
-import { History } from './pages/History'
 import { Login } from './pages/Login'
 import { Marketplace } from './pages/Marketplace'
 import { MyAvailability } from './pages/MyAvailability'
@@ -55,7 +54,6 @@ export default function App() {
             <Route path="/requests" element={<Requests />} />
             <Route path="/stores" element={<Stores />} />
             <Route path="/my-availability" element={<MyAvailability />} />
-            <Route path="/history" element={<History />} />
             <Route path="/account" element={<Profile />} />
           </Route>
         </Route>

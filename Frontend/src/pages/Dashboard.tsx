@@ -94,7 +94,6 @@ export function Dashboard() {
   const [pastWeeks, setPastWeeks] = useState<string[]>([])
   const [pastView, setPastView] = useState<SnapshotDetail | null>(null)
   const [pastLoading, setPastLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
   const { storeId, stores } = useStore()
 
   useEffect(() => {
@@ -266,20 +265,6 @@ export function Dashboard() {
       setBoard(await loadBoard())
     } catch (e) {
       setError(String(e))
-    }
-  }
-
-  async function saveToHistory() {
-    if (storeId == null) return
-    setSaving(true)
-    setError(null)
-    try {
-      const label = window.prompt('Label this saved schedule (optional):') ?? undefined
-      await api.saveSnapshot(storeId, label || undefined)
-    } catch (e) {
-      setError(String(e))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -596,8 +581,6 @@ export function Dashboard() {
         gapCount={solved ? totalShort : null}
         generating={generating}
         onGenerate={handleGenerate}
-        onSave={solved ? () => void saveToHistory() : undefined}
-        saving={saving}
         publishedAt={publishedAt}
         workersSeeWeek={!publishedAt ? postedWeekStart : null}
         onPublish={() => void togglePublish(true)}
