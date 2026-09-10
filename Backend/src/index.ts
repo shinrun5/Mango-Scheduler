@@ -76,5 +76,10 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log('Server listening on port', PORT);
+  console.log(
+    process.env.RESEND_API_KEY
+      ? `[email] Resend key set · from "${process.env.EMAIL_FROM || 'Fruit Crew <onboarding@resend.dev>'}"`
+      : '[email] no RESEND_API_KEY — emails are logged and skipped',
+  );
   startCron();
 });

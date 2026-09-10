@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
+import { emailShell, sendEmail } from '../lib/email.js';
 
 const router = Router();
 
@@ -43,6 +44,23 @@ router.post('/read-all', requireAuth, async (req, res) => {
     data: { readAt: new Date() },
   });
   res.json({ ok: true, updated: count });
+});
+
+// POST /notifications/test-email — sends a real email to the caller's own
+// address so they can confirm Resend is wired up. Returns whatever Resend said.
+router.post('/test-email', requireAuth, async (req, res) => {
+  const email = req.user!.email;
+  if (!email) return res.status(400).json({ ok: false, error: 'Your account has no email address' });
+  const r = await sendEmail({
+    to: email,
+    subject: 'Fruit Crew test email',
+    html: emailShell(
+      'Test email',
+      '<p>If you can read this, Resend is set up correctly and Fruit Crew can email your crew.</p>',
+    ),
+    text: 'If you can read this, Resend is set up correctly.',
+  });
+  res.json({ ok: r.ok, sentTo: email, ...(r.error ? { error: r.error } : {}) });
 });
 
 export default router;

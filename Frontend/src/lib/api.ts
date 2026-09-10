@@ -151,6 +151,8 @@ export const api = {
   markNotificationRead: (id: number) =>
     sendJSON<{ ok: true }>(`/notifications/${id}/read`, 'POST', {}),
   markAllNotificationsRead: () => sendJSON<{ ok: true }>('/notifications/read-all', 'POST', {}),
+  sendTestEmail: () =>
+    sendJSON<{ ok: boolean; sentTo: string; error?: string }>('/notifications/test-email', 'POST', {}),
 
   // --- shift-change requests ---
   getOpenShifts: () => getJSON<Shift[]>('/shifts/open'),

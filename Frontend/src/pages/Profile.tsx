@@ -451,6 +451,8 @@ function AlertPrefs({
 }) {
   const t = useT()
   const [busy, setBusy] = useState(false)
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
+  const [testMsg, setTestMsg] = useState('')
 
   async function save(patch: {
     availabilityUpdates?: boolean
@@ -466,6 +468,24 @@ function AlertPrefs({
       onError(err instanceof Error ? err.message : 'Could not save your alert settings')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function sendTest() {
+    setTestState('sending')
+    setTestMsg('')
+    try {
+      const r = await api.sendTestEmail()
+      if (r.ok) {
+        setTestState('sent')
+        setTestMsg(`Sent to ${r.sentTo} — check your inbox (and spam).`)
+      } else {
+        setTestState('failed')
+        setTestMsg(r.error ?? 'Resend rejected it — check RESEND_API_KEY and EMAIL_FROM.')
+      }
+    } catch (err) {
+      setTestState('failed')
+      setTestMsg(err instanceof Error ? err.message : 'Request failed')
     }
   }
 
@@ -504,6 +524,25 @@ function AlertPrefs({
           </>
         }
       />
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t-2 border-ink/10 pt-3">
+        <button
+          type="button"
+          disabled={testState === 'sending'}
+          onClick={() => void sendTest()}
+          className="rounded-full border-2 border-ink bg-paper px-3 py-1 font-heading text-[11px] font-bold text-ink disabled:opacity-50"
+        >
+          {testState === 'sending' ? 'Sending…' : 'Send me a test email'}
+        </button>
+        {testMsg && (
+          <span
+            className={`font-body text-[11px] font-bold ${
+              testState === 'sent' ? 'text-green-dark' : 'text-coral-dark'
+            }`}
+          >
+            {testMsg}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
