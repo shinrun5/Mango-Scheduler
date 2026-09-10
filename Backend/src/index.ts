@@ -55,6 +55,15 @@ const distDir = resolve(
 );
 if (existsSync(distDir)) {
   const indexHtml = join(distDir, 'index.html');
+  const landingHtml = join(distDir, 'landing.html');
+
+  // A fresh visit to the root shows the public landing page (crawlable, no JS).
+  // The SPA still owns "/" internally — a logged-in user routing there client-side
+  // is bounced to their dashboard.
+  if (existsSync(landingHtml)) {
+    app.get('/', (_req: Request, res: Response) => res.sendFile(landingHtml));
+  }
+
   app.use(express.static(distDir));
   // SPA fallback: any non-/api GET that didn't match a file returns index.html
   // so client-side routes (/schedule, /my-shifts, …) work on a hard refresh.
