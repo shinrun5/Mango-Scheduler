@@ -19,6 +19,14 @@ const to12 = (d: Date) => {
 const DAY_TITLE: Record<string, string> = {
   MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun',
 };
+const DAY_ORDER = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const;
+
+/** Midnight-UTC date of `day` within the week starting at `weekStart`. */
+function shiftDate(weekStart: Date, day: string): Date {
+  const d = new Date(weekStart);
+  d.setUTCDate(d.getUTCDate() + DAY_ORDER.indexOf(day as (typeof DAY_ORDER)[number]));
+  return d;
+}
 
 /** guard for approve/deny — the request's shift must be at a store the caller manages */
 async function requireManagerOfRequest(req: Request, res: Response, next: NextFunction) {
@@ -180,15 +188,28 @@ router.post('/', requireAuth, async (req, res) => {
     }
   }
 
-  // no swaps/drops/pickups while the schedule for that store is only a draft
+  // no swaps/pickups while the schedule for that store is only a draft
   const sched = await prisma.schedule.findUnique({
     where: { storeId: shift.storeId },
-    select: { publishedAt: true },
+    select: { publishedAt: true, weekStart: true },
   });
   if (!sched?.publishedAt) {
     return res
       .status(409)
       .json({ error: "This week's schedule isn't live right now — changes are paused while it's being finalised." });
+  }
+
+  // no changes to a shift that's already been worked. Times are stored wall-clock
+  // with no timezone, so a day-granularity check against today's UTC date is the
+  // safe comparison — it never trips on today's or a future shift.
+  if (sched.weekStart) {
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    if (shiftDate(sched.weekStart, shift.day).getTime() < todayUTC) {
+      return res
+        .status(409)
+        .json({ error: "That shift has already passed — ask a manager if it still needs sorting out." });
+    }
   }
 
   const openPending = await prisma.shiftChangeRequest.findFirst({ where: { shiftId, status: 'PENDING' } });
@@ -336,6 +357,19 @@ router.post('/:id/claim', requireAuth, async (req, res) => {
   if (r.requestedById === me) return res.status(400).json({ error: "That's your own shift" });
   if (!(await linkExists(me, r.shift.storeId))) {
     return res.status(400).json({ error: "You don't work at this store" });
+  }
+
+  // can't claim a shift whose day has already passed
+  const sched = await prisma.schedule.findUnique({
+    where: { storeId: r.shift.storeId },
+    select: { weekStart: true },
+  });
+  if (sched?.weekStart) {
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    if (shiftDate(sched.weekStart, r.shift.day).getTime() < todayUTC) {
+      return res.status(409).json({ error: 'That shift has already passed' });
+    }
   }
 
   const wStart = r.handoffStart ?? r.shift.start;

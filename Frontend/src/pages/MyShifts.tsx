@@ -90,6 +90,19 @@ export function MyShifts() {
       .sort((a, b) => a.start.localeCompare(b.start)),
   })).filter((d) => d.shifts.length > 0)
 
+  // how many days into the posted week we are (0 = Monday). Shifts on an earlier
+  // day are already worked — no change requests / pickups for those.
+  const now = new Date()
+  const todayIdx = data.weekStart
+    ? Math.floor(
+        (Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+          new Date(data.weekStart).getTime()) /
+          86_400_000,
+      )
+    : -1
+  const dayPassed = (day: string) => DAYS.indexOf(day as (typeof DAYS)[number]) < todayIdx
+  const pickable = openShifts.filter((s) => !dayPassed(s.day))
+
   const totalHours = Math.round(
     data.shifts.reduce(
       (sum, s) => sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 3_600_000,
@@ -194,6 +207,10 @@ export function MyShifts() {
                               {pending.openOffer ? t('myshifts.withdraw') : t('common.cancel')}
                             </button>
                           </span>
+                        ) : dayPassed(day) ? (
+                          <span className="shrink-0 font-body text-[11px] font-semibold text-muted-ink">
+                            {t('myshifts.worked')}
+                          </span>
                         ) : (
                           <button
                             onClick={() => setExpanded((e) => (e === s.id ? null : s.id))}
@@ -204,7 +221,7 @@ export function MyShifts() {
                         )}
                       </div>
                       {s.coworkers.length > 0 && <CoworkerRow people={s.coworkers} label={t('myshifts.workingWith')} />}
-                      {data.live && expanded === s.id && !pending && (
+                      {data.live && !dayPassed(day) && expanded === s.id && !pending && (
                         <RequestPanel
                           shift={{ id: s.id, start: s.start, end: s.end }}
                           onSubmit={(input) =>
@@ -221,11 +238,11 @@ export function MyShifts() {
         </div>
       )}
 
-      {data.live && openShifts.length > 0 && (
+      {data.live && pickable.length > 0 && (
         <>
           <h2 className="mt-6 font-heading text-sm font-bold text-ink">{t('myshifts.openShifts.title')}</h2>
           <div className="mt-2 flex flex-col gap-1.5">
-            {openShifts.map((s) => {
+            {pickable.map((s) => {
               const pending = pendingFor(s.id)
               return (
                 <div
