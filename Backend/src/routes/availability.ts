@@ -215,6 +215,47 @@ router.get('/mine/week', requireAuth, async (req, res) => {
   });
 });
 
+// GET /availability/mine/pending-weeks — every week currently "on the board" for a
+// store the caller works, each with whether they've confirmed it yet. A worker at
+// stores whose schedules aren't on the same week (one advanced, one hasn't) gets
+// one entry per distinct week instead of a single guessed "next week".
+router.get('/mine/pending-weeks', requireAuth, async (req, res) => {
+  const employeeId = req.user?.employeeId;
+  if (!employeeId) return res.json({ weeks: [] });
+
+  const links = await prisma.employeeStore.findMany({
+    where: { employeeId },
+    include: { store: { select: { name: true, schedule: { select: { weekStart: true } } } } },
+  });
+  const byWeek = new Map<string, string[]>();
+  for (const l of links) {
+    const ws = l.store.schedule?.weekStart;
+    if (!ws) continue;
+    const key = ws.toISOString().slice(0, 10);
+    (byWeek.get(key) ?? byWeek.set(key, []).get(key)!).push(l.store.name);
+  }
+  const weekStarts = [...byWeek.keys()].sort();
+  if (weekStarts.length === 0) return res.json({ weeks: [] });
+
+  const confirms = await prisma.availabilityConfirmation.findMany({
+    where: { employeeId, weekStart: { in: weekStarts.map((s) => new Date(`${s}T00:00:00.000Z`)) } },
+    select: { weekStart: true },
+  });
+  const overrides = await prisma.weekAvailability.findMany({
+    where: { employeeId, weekStart: { in: weekStarts.map((s) => new Date(`${s}T00:00:00.000Z`)) } },
+    select: { weekStart: true },
+  });
+  const done = new Set([...confirms, ...overrides].map((c) => c.weekStart.toISOString().slice(0, 10)));
+
+  res.json({
+    weeks: weekStarts.map((weekStart) => ({
+      weekStart,
+      stores: [...new Set(byWeek.get(weekStart))],
+      confirmed: done.has(weekStart),
+    })),
+  });
+});
+
 // POST /availability/mine/confirm  { weekStart } — "my hours are right for this week"
 router.post('/mine/confirm', requireAuth, async (req, res) => {
   const employeeId = req.user?.employeeId;

@@ -350,6 +350,13 @@ export const api = {
   /** "My hours are right for this week" — no override needed. */
   confirmMyWeekAvailability: (weekStart: string) =>
     sendJSON<{ weekStart: string; confirmed: true }>('/availability/mine/confirm', 'POST', { weekStart }),
+  /** Every week currently on the board across the stores the caller works, and
+   * whether they've confirmed/overridden it — one entry per store usually, but
+   * split when stores' schedules aren't on the same week. */
+  getMyPendingWeeks: () =>
+    getJSON<{ weeks: { weekStart: string; stores: string[]; confirmed: boolean }[] }>(
+      '/availability/mine/pending-weeks',
+    ),
   /** Manager: every one-week override for `weekStart`, for employees at their stores. */
   getWeekAvailability: (weekStart: string) =>
     getJSON<{
