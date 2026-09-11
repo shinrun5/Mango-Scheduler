@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { AvailabilityExtras } from '../components/AvailabilityExtras'
 import { AvailabilityPanel } from '../components/AvailabilityPanel'
 import { Button } from '../components/Button'
-import { FruitPicker } from '../components/FruitPicker'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -40,9 +39,6 @@ export function MyAvailability() {
 
       {linked ? (
         <>
-          <div className="mb-4 rounded-2xl border-[2.5px] border-ink bg-paper p-4 shadow-[3px_3px_0_var(--color-ink)]">
-            <FruitPicker />
-          </div>
           <AvailabilityPanel barClass="bottom-4" />
           <AvailabilityExtras onError={setError} />
         </>
