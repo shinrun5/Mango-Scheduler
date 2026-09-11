@@ -105,9 +105,9 @@ export function startCron(): void {
     console.log('[cron] disabled (set CRON_ENABLED=1 to enable)');
     return;
   }
-  // Availability reminder: Friday 08:00 (one weekly nudge before the weekend build).
-  // Change the hour in '0 8 * * 5' to move it earlier/later; add ',6' for a Sat catch-up.
-  cron.schedule('0 8 * * 5', () => void availabilityReminder().catch((e) => console.error('[cron] reminder', e)), {
+  // Availability reminder: Friday 12:00 (one weekly nudge before the weekend build).
+  // Change the hour in '0 12 * * 5' to move it earlier/later; add ',6' for a Sat catch-up.
+  cron.schedule('0 12 * * 5', () => void availabilityReminder().catch((e) => console.error('[cron] reminder', e)), {
     timezone: TZ,
   });
   // Auto-generate next week's draft: Sat & Sun 08:00 (the second day is a catch-up).
