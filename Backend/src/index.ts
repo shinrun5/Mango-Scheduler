@@ -117,5 +117,10 @@ app.listen(PORT, () => {
       ? `[email] Resend key set · from "${process.env.EMAIL_FROM || 'Fruit Crew <onboarding@resend.dev>'}"`
       : '[email] no RESEND_API_KEY — emails are logged and skipped',
   );
+  console.log(
+    process.env.APP_URL
+      ? `[email] links point at ${process.env.APP_URL}`
+      : '[email] no APP_URL set — email buttons/links are omitted',
+  );
   startCron();
 });
