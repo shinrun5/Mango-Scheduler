@@ -213,7 +213,7 @@ function AlertPrefs({
   onError,
 }: {
   isManager: boolean
-  alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean }
+  alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean; mentions: boolean }
   onSaved: () => void | Promise<void>
   onError: (m: string | null) => void
 }) {
@@ -226,6 +226,7 @@ function AlertPrefs({
     availabilityUpdates?: boolean
     chatMessages?: boolean
     marketplacePosts?: boolean
+    mentions?: boolean
   }) {
     onError(null)
     setBusy(true)
@@ -272,6 +273,16 @@ function AlertPrefs({
           }
         />
       )}
+      <AlertToggle
+        on={alerts.mentions}
+        busy={busy}
+        onClick={() => void save({ mentions: !alerts.mentions })}
+        label={
+          <>
+            <b>{t('profile.alert.mention')}</b> — {t('profile.alert.mentionHint')}
+          </>
+        }
+      />
       <AlertToggle
         on={alerts.marketplacePosts}
         busy={busy}

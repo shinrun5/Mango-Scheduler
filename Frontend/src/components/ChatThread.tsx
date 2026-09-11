@@ -11,9 +11,14 @@ const POLL_MS = 3000
 
 export interface ThreadIO {
   fetchPage: (opts?: { after?: number; before?: number }) => Promise<{ messages: ChatMessage[]; hasMore: boolean }>
-  send: (body: string, mentions: number[]) => Promise<{ message: ChatMessage }>
+  send: (body: string, mentions: number[], mentionAll?: boolean) => Promise<{ message: ChatMessage }>
   markRead: () => Promise<unknown>
 }
+
+/** matches "@all" as a whole word — same boundary rule as lib/mentions. */
+const ALL_RE = /(?:^|\s)@all(?![\p{L}\p{N}_])/iu
+
+type MentionOption = { kind: 'all' } | { kind: 'member'; member: ChatMember }
 
 /** One open conversation — store channel or DM. Polls while visible; resets when
  * `convKey` changes. `io` may be a fresh closure each render (read via a ref). */
@@ -26,6 +31,7 @@ export function ChatThread({
   onBack,
   onActivity,
   members = [],
+  canMentionAll = false,
 }: {
   convKey: string
   io: ThreadIO
@@ -36,6 +42,8 @@ export function ChatThread({
   onActivity?: () => void
   /** channel members — enables @-mentions (store threads only) */
   members?: ChatMember[]
+  /** managers/owners get an "@all" option that pings the whole channel */
+  canMentionAll?: boolean
 }) {
   const t = useT()
   const ioRef = useRef(io)
@@ -56,13 +64,17 @@ export function ChatThread({
   const taRef = useRef<HTMLTextAreaElement>(null)
   const [menu, setMenu] = useState<{ q: string; at: number } | null>(null)
   const [menuIdx, setMenuIdx] = useState(0)
-  const matches =
-    menu && members.length > 0
-      ? members.filter((m) => m.name.toLowerCase().includes(menu.q.toLowerCase())).slice(0, 6)
-      : []
+  const options: MentionOption[] = menu
+    ? [
+        ...(canMentionAll && 'all'.startsWith(menu.q.toLowerCase()) ? [{ kind: 'all' as const }] : []),
+        ...members
+          .filter((m) => m.name.toLowerCase().includes(menu.q.toLowerCase()))
+          .map((member) => ({ kind: 'member' as const, member })),
+      ].slice(0, 6)
+    : []
 
   function syncMenu(el: HTMLTextAreaElement) {
-    if (members.length === 0) return
+    if (members.length === 0 && !canMentionAll) return
     const caret = el.selectionStart ?? el.value.length
     const m = /(?:^|\s)@(\S*)$/.exec(el.value.slice(0, caret))
     if (m) {
@@ -73,11 +85,11 @@ export function ChatThread({
     }
   }
 
-  function pickMention(mem: ChatMember) {
+  function insertMention(name: string) {
     const el = taRef.current
     const caret = el?.selectionStart ?? draft.length
     const at = menu?.at ?? caret
-    const insert = `@${mem.name} `
+    const insert = `@${name} `
     const next = draft.slice(0, at) + insert + draft.slice(caret)
     setDraft(next)
     setMenu(null)
@@ -86,6 +98,10 @@ export function ChatThread({
       el?.focus()
       el?.setSelectionRange(pos, pos)
     })
+  }
+
+  function pickOption(opt: MentionOption) {
+    insertMention(opt.kind === 'all' ? 'all' : opt.member.name)
   }
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -165,7 +181,8 @@ export function ChatThread({
     setSending(true)
     setError(null)
     try {
-      const { message } = await ioRef.current.send(body, deriveMentions(body, members))
+      const mentionAll = canMentionAll && ALL_RE.test(body)
+      const { message } = await ioRef.current.send(body, deriveMentions(body, members), mentionAll)
       setDraft('')
       setMenu(null)
       stick.current = true
@@ -214,32 +231,40 @@ export function ChatThread({
             <MessageList
               messages={messages}
               peerName={peerName}
-              memberNames={members.map((m) => m.name)}
+              memberNames={members.length > 0 ? [...members.map((m) => m.name), 'all'] : []}
             />
           </>
         )}
       </div>
       <div className="flex items-end gap-2 border-t-2 border-ink/10 p-2.5">
         <div className="relative flex-1">
-          {matches.length > 0 && (
+          {options.length > 0 && (
             <ul className="absolute bottom-full left-0 z-10 mb-1 max-h-52 w-56 overflow-y-auto rounded-xl border-2 border-ink bg-paper shadow-[3px_3px_0_var(--color-ink)]">
-              {matches.map((m, i) => (
-                <li key={m.userId}>
+              {options.map((opt, i) => (
+                <li key={opt.kind === 'all' ? 'all' : opt.member.userId}>
                   <button
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault()
-                      pickMention(m)
+                      pickOption(opt)
                     }}
                     className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-body text-sm ${
                       i === menuIdx ? 'bg-cream' : ''
                     }`}
                   >
-                    <FruitAvatar
-                      kind={fruitForPerson({ employeeId: m.avatarKey, avatarFruit: m.avatarFruit })}
-                      size={20}
-                    />
-                    <span className="truncate text-ink">{m.name}</span>
+                    {opt.kind === 'all' ? (
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-orange text-[11px]">
+                        📣
+                      </span>
+                    ) : (
+                      <FruitAvatar
+                        kind={fruitForPerson({ employeeId: opt.member.avatarKey, avatarFruit: opt.member.avatarFruit })}
+                        size={20}
+                      />
+                    )}
+                    <span className="truncate text-ink">
+                      {opt.kind === 'all' ? t('chat.mentionAll') : opt.member.name}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -259,20 +284,20 @@ export function ChatThread({
               }
             }}
             onKeyDown={(e) => {
-              if (matches.length > 0) {
+              if (options.length > 0) {
                 if (e.key === 'ArrowDown') {
                   e.preventDefault()
-                  setMenuIdx((i) => (i + 1) % matches.length)
+                  setMenuIdx((i) => (i + 1) % options.length)
                   return
                 }
                 if (e.key === 'ArrowUp') {
                   e.preventDefault()
-                  setMenuIdx((i) => (i - 1 + matches.length) % matches.length)
+                  setMenuIdx((i) => (i - 1 + options.length) % options.length)
                   return
                 }
                 if (e.key === 'Enter' || e.key === 'Tab') {
                   e.preventDefault()
-                  pickMention(matches[menuIdx])
+                  pickOption(options[menuIdx])
                   return
                 }
                 if (e.key === 'Escape') {

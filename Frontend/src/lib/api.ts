@@ -138,13 +138,16 @@ export const api = {
     sendJSON<{ ok: true }>('/auth/profile', 'PUT', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     sendJSON<{ ok: true }>('/auth/change-password', 'POST', { currentPassword, newPassword }),
-  /** Toggle notification opt-ins (availability changes / new chat messages). */
-  setAlerts: (patch: { availabilityUpdates?: boolean; chatMessages?: boolean; marketplacePosts?: boolean }) =>
-    sendJSON<{ alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean } }>(
-      '/auth/alerts',
-      'PUT',
-      patch,
-    ),
+  /** Toggle notification opt-ins (availability changes / new chat messages / mentions). */
+  setAlerts: (patch: {
+    availabilityUpdates?: boolean
+    chatMessages?: boolean
+    marketplacePosts?: boolean
+    mentions?: boolean
+  }) =>
+    sendJSON<{
+      alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean; mentions: boolean }
+    }>('/auth/alerts', 'PUT', patch),
 
   // --- notifications ---
   getNotifications: () =>
@@ -422,8 +425,8 @@ export const api = {
     const q = opts?.after != null ? `?after=${opts.after}` : opts?.before != null ? `?before=${opts.before}` : ''
     return getJSON<{ messages: ChatMessage[]; hasMore: boolean }>(`/chat/${storeId}/messages${q}`)
   },
-  sendChatMessage: (storeId: number, body: string, mentions: number[] = []) =>
-    sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body, mentions }),
+  sendChatMessage: (storeId: number, body: string, mentions: number[] = [], mentionAll = false) =>
+    sendJSON<{ message: ChatMessage }>(`/chat/${storeId}/messages`, 'POST', { body, mentions, mentionAll }),
   getChatMembers: (storeId: number) =>
     getJSON<{ members: ChatMember[] }>(`/chat/${storeId}/members`),
   markChatRead: (storeId: number) =>

@@ -184,6 +184,7 @@ const en = {
   'chat.loadEarlier': 'Load earlier',
   'chat.everyone': '← everyone',
   'chat.dmPlaceholder': 'Message {name}…',
+  'chat.mentionAll': 'Everyone',
 
   // Profile
   'profile.title': 'Profile',
@@ -211,6 +212,8 @@ const en = {
   'profile.alert.availability': 'Availability updates',
   'profile.alert.availabilityHint':
     "email + notify me when a worker changes a future week's hours",
+  'profile.alert.mention': 'Mentions',
+  'profile.alert.mentionHint': 'email me when someone @-mentions me in chat',
   'profile.alert.marketplace': 'Marketplace posts',
   'profile.alert.marketplaceHint': 'email me when a coworker puts a shift up for grabs',
   'profile.alert.chat': 'Chat messages',
@@ -417,6 +420,7 @@ const zh: Partial<Record<Key, string>> = {
   'chat.loadEarlier': '加载更早的消息',
   'chat.everyone': '← 全部',
   'chat.dmPlaceholder': '给 {name} 发消息…',
+  'chat.mentionAll': '所有人',
 
   'profile.title': '个人资料',
   'profile.worksAt': '工作门店',
@@ -442,6 +446,8 @@ const zh: Partial<Record<Key, string>> = {
   'profile.alerts': '提醒',
   'profile.alert.availability': '可上班时间更新',
   'profile.alert.availabilityHint': '有员工更改未来某周的时间时，邮件加通知提醒我',
+  'profile.alert.mention': '被提及',
+  'profile.alert.mentionHint': '有人在聊天里 @我 时邮件提醒我',
   'profile.alert.marketplace': '换班区发布',
   'profile.alert.marketplaceHint': '有同事把班放到换班区时邮件提醒我',
   'profile.alert.chat': '聊天消息',

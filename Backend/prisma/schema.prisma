@@ -271,6 +271,9 @@ model User {
   notifyOnMarketplacePost    Boolean @default(true)
   // opt-in: email me when there are new store-chat messages I haven't seen
   notifyOnChatMessage Boolean  @default(false)
+  // opt-out: email me when someone @-mentions me in chat (default on — it's
+  // directed at you specifically, unlike the general chat nudge above)
+  notifyOnMention     Boolean  @default(true)
   lastChatEmailAt     DateTime? // rate-limits the chat digest email
   org        Org?     @relation(fields: [orgId], references: [id])
   orgId      Int?

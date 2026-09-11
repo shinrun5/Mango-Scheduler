@@ -229,6 +229,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       notifyOnAvailabilityUpdate: true,
       notifyOnChatMessage: true,
       notifyOnMarketplacePost: true,
+      notifyOnMention: true,
     },
   });
   let employee = null;
@@ -266,6 +267,7 @@ router.get('/profile', requireAuth, async (req, res) => {
       availabilityUpdates: account?.notifyOnAvailabilityUpdate ?? false,
       chatMessages: account?.notifyOnChatMessage ?? false,
       marketplacePosts: account?.notifyOnMarketplacePost ?? true,
+      mentions: account?.notifyOnMention ?? true,
     },
     employee,
   });
@@ -278,6 +280,7 @@ router.put('/alerts', requireAuth, async (req, res) => {
     notifyOnAvailabilityUpdate?: boolean;
     notifyOnChatMessage?: boolean;
     notifyOnMarketplacePost?: boolean;
+    notifyOnMention?: boolean;
   } = {};
   if (req.body?.availabilityUpdates !== undefined) {
     if (typeof req.body.availabilityUpdates !== 'boolean') {
@@ -297,6 +300,12 @@ router.put('/alerts', requireAuth, async (req, res) => {
     }
     data.notifyOnMarketplacePost = req.body.marketplacePosts;
   }
+  if (req.body?.mentions !== undefined) {
+    if (typeof req.body.mentions !== 'boolean') {
+      return res.status(400).json({ error: 'mentions must be true or false' });
+    }
+    data.notifyOnMention = req.body.mentions;
+  }
   if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
   const updated = await prisma.user.update({ where: { id: u.id }, data });
@@ -305,6 +314,7 @@ router.put('/alerts', requireAuth, async (req, res) => {
       availabilityUpdates: updated.notifyOnAvailabilityUpdate,
       chatMessages: updated.notifyOnChatMessage,
       marketplacePosts: updated.notifyOnMarketplacePost,
+      mentions: updated.notifyOnMention,
     },
   });
 });

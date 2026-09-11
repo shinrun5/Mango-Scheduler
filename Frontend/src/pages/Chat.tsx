@@ -3,6 +3,7 @@ import { ChatThread, type ThreadIO } from '../components/ChatThread'
 import { FruitAvatar } from '../components/FruitAvatar'
 import { ChatIcon } from '../components/icons'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { fruitForPerson } from '../lib/fruit'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/time'
@@ -16,6 +17,8 @@ const LIST_POLL_MS = 12_000
 
 export function Chat() {
   const t = useT()
+  const { user } = useAuth()
+  const canMentionAll = user?.role === 'MANAGER' || user?.role === 'OWNER'
   const [convos, setConvos] = useState<Conversation[] | null>(null)
   const [open, setOpen] = useState<Open | null>(null)
   const [picking, setPicking] = useState(false)
@@ -84,6 +87,7 @@ export function Chat() {
               onBack={back}
               onActivity={load}
               members={members}
+              canMentionAll={canMentionAll}
               placeholder={t('chat.messagePlaceholder')}
               header={
                 <span className="flex min-w-0 items-center gap-2">
@@ -98,7 +102,7 @@ export function Chat() {
               io={
                 {
                   fetchPage: (o) => api.getChatMessages(open.storeId, o),
-                  send: (b, mentions) => api.sendChatMessage(open.storeId, b, mentions),
+                  send: (b, mentions, mentionAll) => api.sendChatMessage(open.storeId, b, mentions, mentionAll),
                   markRead: () => api.markChatRead(open.storeId),
                 } satisfies ThreadIO
               }

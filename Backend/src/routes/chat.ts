@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import prisma from '../lib/prisma.js';
-import { requireAuth } from '../lib/auth.js';
+import { canManageStore, requireAuth } from '../lib/auth.js';
 import { notify } from '../lib/notify.js';
 
 const router = Router();
@@ -142,12 +142,18 @@ router.post('/:storeId/messages', requireAuth, async (req, res) => {
   const me = req.user!;
   const authorName = me.name ?? me.email;
 
+  // @all — only a manager/owner of this store can ping the whole channel;
+  // silently ignored from anyone else (their message still sends normally)
+  const wantsAll = req.body?.mentionAll === true && canManageStore(me, storeId);
+
   // keep only real channel members, drop the sender and dups
   const claimed: number[] = Array.isArray(req.body?.mentions)
     ? req.body.mentions.filter((n: unknown): n is number => Number.isInteger(n))
     : [];
   let mentions: number[] = [];
-  if (claimed.length > 0) {
+  if (wantsAll) {
+    mentions = (await storeMemberUserIds(storeId)).filter((id) => id !== me.id);
+  } else if (claimed.length > 0) {
     const memberIds = new Set(await storeMemberUserIds(storeId));
     mentions = [...new Set(claimed)].filter((id) => id !== me.id && memberIds.has(id));
   }
@@ -336,8 +342,9 @@ async function storeMemberUserIds(storeId: number): Promise<number[]> {
   return users.map((u) => u.id);
 }
 
-/** In-app + email each @-mentioned member. Higher-signal than the nudge, so it
- * ignores the cooldown; still respects the chat-email opt-out for the email. */
+/** In-app + email each @-mentioned member. Being tagged is directed at you
+ * specifically, so it's opt-OUT (notifyOnMention, default on) — separate from the
+ * opt-in "new chat messages" nudge — and it ignores that nudge's cooldown. */
 async function notifyMentions(
   storeId: number,
   senderName: string,
@@ -348,7 +355,7 @@ async function notifyMentions(
   const optedIn = new Set(
     (
       await prisma.user.findMany({
-        where: { id: { in: mentionedUserIds }, notifyOnChatMessage: true },
+        where: { id: { in: mentionedUserIds }, notifyOnMention: true },
         select: { id: true },
       })
     ).map((u) => u.id),

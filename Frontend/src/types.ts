@@ -166,7 +166,7 @@ export interface Profile {
   phone: string | null
   role: Role
   /** notification opt-ins */
-  alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean }
+  alerts: { availabilityUpdates: boolean; chatMessages: boolean; marketplacePosts: boolean; mentions: boolean }
   employee: {
     id: number
     name: string
