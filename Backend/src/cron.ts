@@ -54,6 +54,74 @@ async function availabilityReminder(): Promise<void> {
   console.log(`[cron] availability reminder sent to ${users.length} workers for ${key}`);
 }
 
+// --- daily (except Fri, which has the reminder above): nag whoever still
+// hasn't confirmed availability for an upcoming week. Self-limiting — once a
+// week actually starts it drops out of the "future" query below, so nobody
+// gets nagged about a week that's already begun. ---
+async function dailyConfirmReminder(): Promise<void> {
+  const key = ymd(new Date()); // real calendar day -> actually runs once per day
+  if (!(await claim('daily-confirm-reminder', key))) return;
+
+  const thisMonday = mondayUTC();
+  // every store whose board is pointed at a genuinely future week
+  const schedules = await prisma.schedule.findMany({
+    where: { weekStart: { gt: thisMonday } },
+    select: { storeId: true, weekStart: true },
+  });
+  if (schedules.length === 0) return;
+
+  // employeeId -> the week range(s) they still haven't dealt with
+  const pending = new Map<number, Set<string>>();
+  for (const sched of schedules) {
+    const weekStart = sched.weekStart;
+    if (!weekStart) continue;
+    const links = await prisma.employeeStore.findMany({
+      where: { storeId: sched.storeId },
+      select: { employeeId: true },
+    });
+    const empIds = links.map((l) => l.employeeId);
+    if (empIds.length === 0) continue;
+
+    const [confirms, overrides] = await Promise.all([
+      prisma.availabilityConfirmation.findMany({
+        where: { weekStart, employeeId: { in: empIds } },
+        select: { employeeId: true },
+      }),
+      prisma.weekAvailability.findMany({
+        where: { weekStart, employeeId: { in: empIds } },
+        select: { employeeId: true },
+      }),
+    ]);
+    const done = new Set([...confirms, ...overrides].map((c) => c.employeeId));
+    const range = weekRange(weekStart);
+    for (const id of empIds) {
+      if (done.has(id)) continue;
+      (pending.get(id) ?? pending.set(id, new Set<string>()).get(id)!).add(range);
+    }
+  }
+  if (pending.size === 0) return;
+
+  const users = await prisma.user.findMany({
+    where: { employeeId: { in: [...pending.keys()] } },
+    select: { id: true, employeeId: true },
+  });
+  let sent = 0;
+  for (const u of users) {
+    const ranges = u.employeeId != null ? pending.get(u.employeeId) : undefined;
+    if (!ranges || ranges.size === 0) continue;
+    const list = [...ranges].join(', ');
+    await notifyMany([u.id], {
+      kind: 'AVAILABILITY_REMINDER',
+      title: `Still need your availability — ${list}`,
+      body: `You haven't confirmed your hours are right for ${list} yet — do it on the Availability screen before that week starts.`,
+      link: '/availability',
+      email: true,
+    });
+    sent++;
+  }
+  console.log(`[cron] daily confirm reminder sent to ${sent} workers for ${key}`);
+}
+
 // --- Sat/Sun: auto-generate next week's schedule as a draft for each store ---
 async function autoGenerate(): Promise<void> {
   const monday = nextMondayUTC();
@@ -114,8 +182,15 @@ export function startCron(): void {
   cron.schedule('0 8 * * 6,0', () => void autoGenerate().catch((e) => console.error('[cron] autogen', e)), {
     timezone: TZ,
   });
+  // Daily nag for anyone still unconfirmed on an upcoming week — every day
+  // except Friday (already covered above), 09:00.
+  cron.schedule(
+    '0 9 * * 0,1,2,3,4,6',
+    () => void dailyConfirmReminder().catch((e) => console.error('[cron] daily-confirm', e)),
+    { timezone: TZ },
+  );
   console.log(`[cron] started (timezone ${TZ})`);
 }
 
 // exported for manual/testing invocation
-export const _jobs = { availabilityReminder, autoGenerate };
+export const _jobs = { availabilityReminder, autoGenerate, dailyConfirmReminder };
