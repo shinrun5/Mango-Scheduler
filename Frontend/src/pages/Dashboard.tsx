@@ -15,6 +15,7 @@ import {
   DAY_LABEL,
   dayDate,
   shiftWeekYMD,
+  thisMondayYMD,
   timeRange,
   to12Hour,
   toHHMM24,
@@ -94,6 +95,10 @@ export function Dashboard() {
   const [pastWeeks, setPastWeeks] = useState<string[]>([])
   const [pastView, setPastView] = useState<SnapshotDetail | null>(null)
   const [pastLoading, setPastLoading] = useState(false)
+  // the board's own week has already ended, calendar-wise, but nobody's
+  // advanced past it yet — still editable, just stale
+  const [liveWeekStale, setLiveWeekStale] = useState(false)
+  const [resuming, setResuming] = useState(false)
   const { storeId, stores } = useStore()
 
   useEffect(() => {
@@ -108,10 +113,30 @@ export function Dashboard() {
         setWeekStart(s.weekStart)
         setPostedWeekStart(s.postedWeekStart)
         setPastWeeks(s.pastWeeks)
+        setLiveWeekStale(s.liveWeekStale)
         setViewWeek((v) => (resetView || v == null ? s.weekStart : v))
       })
       .catch(() => {})
   }, [])
+
+  // Bring a saved week back onto the live board — the backend only allows this
+  // while that week's own calendar dates haven't passed, regardless of whether
+  // the board (or even a later week's publish) has since moved past it.
+  async function resumeWeek(id: number) {
+    if (storeId == null) return
+    setResuming(true)
+    setError(null)
+    try {
+      const { weekStart: restored } = await api.restoreSnapshot(storeId, id)
+      setViewWeek(restored)
+      await loadStatus(storeId, true)
+      setBoard(await loadBoard())
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setResuming(false)
+    }
+  }
 
   useEffect(() => {
     if (storeId == null) return
@@ -253,7 +278,7 @@ export function Dashboard() {
     // on the live week -> advance to next week
     if (
       !window.confirm(
-        'Start next week? This week’s schedule gets locked — you won’t be able to edit or restore it after.',
+        'Start next week? This week moves into history — you can still come back and edit it (‹) until its dates actually pass.',
       )
     )
       return
@@ -531,8 +556,10 @@ export function Dashboard() {
     )
   }
 
-  // browsing a locked past week — read-only roster, no editing tools
+  // browsing a saved past week — read-only roster; still editable-again (via
+  // Resume) as long as its own calendar week hasn't ended yet
   if (isPast) {
+    const locked = !!viewWeek && viewWeek.slice(0, 10) < thisMondayYMD()
     return (
       <>
         <Header
@@ -543,7 +570,14 @@ export function Dashboard() {
           onGenerate={() => {}}
           readOnly
         />
-        <PastWeekBody snap={pastView} loading={pastLoading} storeId={storeId} />
+        <PastWeekBody
+          snap={pastView}
+          loading={pastLoading}
+          storeId={storeId}
+          locked={locked}
+          resuming={resuming}
+          onResume={pastView && !locked ? () => void resumeWeek(pastView.id) : undefined}
+        />
       </>
     )
   }
@@ -587,6 +621,12 @@ export function Dashboard() {
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
       />
+
+      {liveWeekStale && (
+        <div className="flex flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink sm:px-8">
+          <span>This week&rsquo;s dates have already passed — start next week (›) when you&rsquo;re ready.</span>
+        </div>
+      )}
 
       {openNotes.count > 0 && (
         <Link
@@ -941,10 +981,16 @@ function PastWeekBody({
   snap,
   loading,
   storeId,
+  locked,
+  resuming,
+  onResume,
 }: {
   snap: SnapshotDetail | null
   loading: boolean
   storeId: number
+  locked: boolean
+  resuming: boolean
+  onResume?: () => void
 }) {
   if (loading) {
     return <p className="p-4 font-body text-sm text-muted-ink sm:p-8">Loading…</p>
@@ -959,10 +1005,26 @@ function PastWeekBody({
   const rows = snap.shifts.filter((s) => s.storeId === storeId)
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-8">
-      <p className="mb-3 font-body text-xs text-muted-ink">
-        This week is locked. It&rsquo;s here for reference only — go forward with › to get back to
-        the live schedule.
-      </p>
+      {locked ? (
+        <p className="mb-3 font-body text-xs text-muted-ink">
+          This week is locked — its dates have passed, so it&rsquo;s here for reference only.
+        </p>
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border-2 border-ink/20 bg-cream px-3 py-2">
+          <p className="flex-1 font-body text-xs text-ink">
+            This week&rsquo;s dates haven&rsquo;t passed yet — you can bring it back to keep editing.
+          </p>
+          {onResume && (
+            <button
+              onClick={onResume}
+              disabled={resuming}
+              className="shrink-0 rounded-full border-2 border-ink bg-green px-3 py-1 font-heading text-[11px] font-bold text-white disabled:opacity-50"
+            >
+              {resuming ? 'Resuming…' : 'Resume editing'}
+            </button>
+          )}
+        </div>
+      )}
       {rows.length === 0 ? (
         <p className="font-body text-sm text-muted-ink">No shifts were scheduled that week.</p>
       ) : (

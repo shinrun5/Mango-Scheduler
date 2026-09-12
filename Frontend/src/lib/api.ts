@@ -389,12 +389,21 @@ export const api = {
       publishedAt: string | null
       weekStart: string
       postedWeekStart: string | null
-      /** earlier weeks with a frozen roster to look back at (locked, read-only) */
+      /** every week with a frozen roster to look back at (any past week, not just
+       * the ones before the board's current pointer) */
       pastWeeks: string[]
+      /** the board's own week has already ended, calendar-wise, but nobody's
+       * advanced past it yet */
+      liveWeekStale: boolean
     }>(`/schedule/status?storeId=${storeId}`),
-  /** frozen roster for a past week (posted or archived) — read-only */
+  /** frozen roster for a past week (posted, archived, or frozen on first view) — read-only */
   getScheduleWeekView: (storeId: number, weekStart: string) =>
     getJSON<SnapshotDetail>(`/schedule/week-view?storeId=${storeId}&weekStart=${weekStart}`),
+  /** Bring a saved week back onto the live board — allowed as long as that
+   * week's own calendar dates haven't passed yet, even if the board has since
+   * moved on to (or published) a later week. */
+  restoreSnapshot: (storeId: number, id: number) =>
+    sendJSON<{ restored: number; weekStart: string }>(`/schedule/snapshots/${id}/restore`, 'POST', { storeId }),
   publishSchedule: (storeId: number) =>
     sendJSON<{ publishedAt: string | null }>('/schedule/publish', 'POST', { storeId }),
   unpublishSchedule: (storeId: number) =>

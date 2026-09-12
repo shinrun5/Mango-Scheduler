@@ -27,30 +27,45 @@ router.get('/status', requireAuth, async (req, res) => {
   }
   const schedule = await prisma.schedule.findUnique({ where: { storeId } });
   const curWeek = schedule?.weekStart ?? mondayUTC();
+  const today = mondayUTC();
   const postedSnap = schedule?.postedSnapshotId
     ? await prisma.scheduleSnapshot.findUnique({
         where: { id: schedule.postedSnapshotId },
         select: { weekStart: true },
       })
     : null;
-  // earlier weeks that have a frozen roster to look back at (locked — read-only)
-  const pastRows = await prisma.scheduleSnapshot.findMany({
-    where: { storeId, weekStart: { lt: curWeek } },
+  // Every week that has ever been frozen (published, archived on advance, or
+  // manually saved) — a manager can look back at any of them, not just the ones
+  // before wherever the board's pointer happens to be right now.
+  const snapRows = await prisma.scheduleSnapshot.findMany({
+    where: { storeId },
     orderBy: { weekStart: 'desc' },
     distinct: ['weekStart'],
     select: { weekStart: true },
   });
+  const weeks = new Set(snapRows.map((r) => r.weekStart.getTime()));
+  // The board's own week counts as "past" too once its calendar week has
+  // actually ended, even if nobody has advanced past it yet — it'll be frozen
+  // on first view (see /week-view below).
+  const curWeekIsStale = curWeek.getTime() < today.getTime();
+  if (curWeekIsStale) weeks.add(curWeek.getTime());
+  const pastWeeks = [...weeks].sort((a, b) => b - a).map((t) => new Date(t));
+
   res.json({
     publishedAt: schedule?.publishedAt ?? null,
     weekStart: curWeek,
     // the week workers currently see (may lag the working week while a draft is in progress)
     postedWeekStart: postedSnap?.weekStart ?? null,
-    pastWeeks: pastRows.map((r) => r.weekStart),
+    pastWeeks,
+    // the board is showing a week whose dates have already passed — nobody's
+    // advanced it yet, so it's stale even though nothing has "locked" it
+    liveWeekStale: curWeekIsStale,
   });
 });
 
 // GET /schedule/week-view?storeId=&weekStart=YYYY-MM-DD
-// The frozen roster for a past week (posted or archived) — read-only display only.
+// The frozen roster for a past week (posted, archived, or the live board itself
+// once its calendar week has ended) — read-only display only.
 router.get('/week-view', ...manageStore, async (req, res) => {
   const storeId = storeIdFrom(req);
   const parsed = parseYMD(req.query.weekStart);
@@ -60,8 +75,20 @@ router.get('/week-view', ...manageStore, async (req, res) => {
     where: { storeId, weekStart },
     orderBy: { savedAt: 'desc' },
   });
-  if (!snap) return res.status(404).json({ error: 'No saved schedule for that week' });
-  res.json(snap);
+  if (snap) return res.json(snap);
+
+  // No snapshot yet — if this is the store's own current week and its calendar
+  // week has already ended, freeze it now instead of saying "nothing here".
+  const schedule = await prisma.schedule.findUnique({ where: { storeId }, select: { weekStart: true } });
+  const isLiveWeek = !!schedule?.weekStart && schedule.weekStart.getTime() === weekStart.getTime();
+  if (!isLiveWeek || weekStart.getTime() >= mondayUTC().getTime()) {
+    return res.status(404).json({ error: 'No saved schedule for that week' });
+  }
+  const shifts = await freezeShifts(storeId);
+  const fresh = await prisma.scheduleSnapshot.create({
+    data: { storeId, weekStart, label: null, savedById: req.user!.id, shifts },
+  });
+  res.json(fresh);
 });
 
 router.post('/publish', ...manageStore, async (req, res) => {
@@ -133,21 +160,29 @@ router.put('/week', ...manageStore, async (req, res) => {
   const prevWeek = cur?.weekStart ?? null;
   const changed = !prevWeek || prevWeek.getTime() !== weekStart.getTime();
 
-  // Moving to a different week freezes the outgoing one: archive its roster (once)
-  // so it stays viewable and locked in history, and clear the 'posted' flag so
-  // workers keep seeing the last posted week until the new one is posted.
+  // Moving to a different week freezes the outgoing one: archive its roster so
+  // it stays viewable in history, and clear the 'posted' flag so workers keep
+  // seeing the last posted week until the new one is posted. Archived even with
+  // zero shifts, so a blank week doesn't just vanish from history. If it was
+  // already archived (e.g. the manager restored this week to fix something and
+  // is now moving on again), refresh it with the latest edits instead of
+  // silently keeping the stale copy.
   if (changed && prevWeek) {
+    const shifts = await freezeShifts(storeId);
     const already = await prisma.scheduleSnapshot.findFirst({
       where: { storeId, weekStart: prevWeek },
+      orderBy: { savedAt: 'desc' },
       select: { id: true },
     });
-    if (!already) {
-      const shifts = await freezeShifts(storeId);
-      if (shifts.length > 0) {
-        await prisma.scheduleSnapshot.create({
-          data: { storeId, weekStart: prevWeek, label: null, savedById: req.user!.id, shifts },
-        });
-      }
+    if (already) {
+      await prisma.scheduleSnapshot.update({
+        where: { id: already.id },
+        data: { shifts, savedAt: new Date(), savedById: req.user!.id },
+      });
+    } else {
+      await prisma.scheduleSnapshot.create({
+        data: { storeId, weekStart: prevWeek, label: null, savedById: req.user!.id, shifts },
+      });
     }
   }
 
@@ -218,10 +253,13 @@ router.post('/snapshots/:id/restore', ...manageStore, async (req, res) => {
   if (snap.storeId !== storeId) {
     return res.status(400).json({ error: 'That snapshot belongs to a different store' });
   }
-  const cur = await prisma.schedule.findUnique({ where: { storeId }, select: { weekStart: true } });
-  if (cur?.weekStart && snap.weekStart.getTime() < cur.weekStart.getTime()) {
+  // Locked only once its calendar week has actually ended — not merely because
+  // the board has moved on to a later week. A manager who got ahead and started
+  // (or even posted) next week's schedule can still come back and fix this one
+  // right up until its own week is over.
+  if (snap.weekStart.getTime() < mondayUTC().getTime()) {
     return res.status(409).json({
-      error: "That week is locked — you've moved on to a later week. Use Generate for the current week instead.",
+      error: 'That week is locked — its dates have already passed.',
     });
   }
 
