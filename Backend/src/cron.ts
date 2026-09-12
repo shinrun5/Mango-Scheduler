@@ -55,17 +55,17 @@ async function availabilityReminder(): Promise<void> {
 }
 
 // --- daily (except Fri, which has the reminder above): nag whoever still
-// hasn't confirmed availability for an upcoming week. Self-limiting — once a
-// week actually starts it drops out of the "future" query below, so nobody
-// gets nagged about a week that's already begun. ---
+// hasn't confirmed availability for the week a store is currently building.
+// Stops the moment that store's schedule is posted — not when the week
+// starts — so an early publish quiets it down and a late one keeps it going. ---
 async function dailyConfirmReminder(): Promise<void> {
   const key = ymd(new Date()); // real calendar day -> actually runs once per day
   if (!(await claim('daily-confirm-reminder', key))) return;
 
   const thisMonday = mondayUTC();
-  // every store whose board is pointed at a genuinely future week
+  // every store whose board is on this week or later and hasn't been posted yet
   const schedules = await prisma.schedule.findMany({
-    where: { weekStart: { gt: thisMonday } },
+    where: { weekStart: { gte: thisMonday }, publishedAt: null },
     select: { storeId: true, weekStart: true },
   });
   if (schedules.length === 0) return;
@@ -182,8 +182,8 @@ export function startCron(): void {
   cron.schedule('0 8 * * 6,0', () => void autoGenerate().catch((e) => console.error('[cron] autogen', e)), {
     timezone: TZ,
   });
-  // Daily nag for anyone still unconfirmed on an upcoming week — every day
-  // except Friday (already covered above), 09:00.
+  // Daily nag for anyone still unconfirmed, until that store's schedule is
+  // posted — every day except Friday (already covered above), 09:00.
   cron.schedule(
     '0 9 * * 0,1,2,3,4,6',
     () => void dailyConfirmReminder().catch((e) => console.error('[cron] daily-confirm', e)),
