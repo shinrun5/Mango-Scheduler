@@ -80,6 +80,10 @@ interface PickerState {
 
 export function Dashboard() {
   const [board, setBoard] = useState<BoardData | null>(null)
+  // fatal — the board itself never loaded, so there's nothing to show at all
+  const [loadError, setLoadError] = useState<string | null>(null)
+  // everything else (generate/publish/restore/etc. failing) — shown as a
+  // dismissible banner over the board, which stays usable underneath
   const [error, setError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [lastResult, setLastResult] = useState<GenerateScheduleResult | null>(null)
@@ -102,7 +106,7 @@ export function Dashboard() {
   const { storeId, stores } = useStore()
 
   useEffect(() => {
-    loadBoard().then(setBoard).catch((e) => setError(String(e)))
+    loadBoard().then(setBoard).catch((e) => setLoadError(String(e)))
   }, [])
 
   const loadStatus = useCallback((storeId: number, resetView = false) => {
@@ -532,10 +536,10 @@ export function Dashboard() {
     }
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <div className="flex h-dvh items-center justify-center font-body text-coral-dark">
-        Couldn't load the schedule: {error}
+        Couldn't load the schedule: {loadError}
       </div>
     )
   }
@@ -570,6 +574,7 @@ export function Dashboard() {
           onGenerate={() => {}}
           readOnly
         />
+        {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
         <PastWeekBody
           snap={pastView}
           loading={pastLoading}
@@ -621,6 +626,8 @@ export function Dashboard() {
         onUnpublish={() => void togglePublish(false)}
         publishBusy={publishBusy}
       />
+
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {liveWeekStale && (
         <div className="flex flex-wrap items-center gap-2 border-b-2 border-ink/10 bg-orange/10 px-4 py-2 font-body text-[11px] font-bold text-ink sm:px-8">
@@ -977,6 +984,19 @@ export function Dashboard() {
 }
 
 /** Read-only roster for a locked past week — a frozen snapshot, current store only. */
+/** A failed action (generate, publish, restore, …) — dismissible, and doesn't
+ * take over the page like the fatal "board never loaded" error does. */
+function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="flex items-start gap-2 border-b-2 border-ink/10 bg-coral-bg px-4 py-2 font-body text-[11px] font-bold text-coral-dark sm:px-8">
+      <span className="min-w-0 flex-1 break-words">{message}</span>
+      <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 leading-none text-coral-dark/70 hover:text-coral-dark">
+        ✕
+      </button>
+    </div>
+  )
+}
+
 function PastWeekBody({
   snap,
   loading,
